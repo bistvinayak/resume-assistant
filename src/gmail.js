@@ -6,7 +6,7 @@ const { simpleParser } = require('mailparser');
 
 /**
  * Fetch unread LinkedIn job alert emails from Gmail via IMAP.
- * Returns array of { job_id, title, company, jd_text, emailText }
+ * Returns array of { job_id, title, company, jd_text, emailText, jobUrls }
  */
 async function fetchLinkedInJobs() {
   return new Promise((resolve, reject) => {
@@ -19,7 +19,6 @@ async function fetchLinkedInJobs() {
       tlsOptions: { rejectUnauthorized: false },
     });
 
-    const jobs = [];
     const parsePromises = [];
 
     imap.once('ready', () => {
@@ -44,8 +43,22 @@ async function fetchLinkedInJobs() {
 
                   const subject = parsed.subject || '';
                   const text = parsed.text || '';
+                  const html = parsed.html || '';
 
-                  // LinkedIn alert subjects: "5 new jobs for Product Manager in New York"
+                  // Extract LinkedIn job URLs from both plain text and HTML
+                  const combined = text + ' ' + html;
+                  const urlRegex = /https?:\/\/[^\s<>"]+linkedin\.com\/jobs\/view\/[^\s<>"&)]+/gi;
+                  const rawUrls = combined.match(urlRegex) || [];
+                  // Dedupe and clean
+                  const jobUrls = [...new Set(rawUrls.map(u => u.split('?')[0]))];
+
+                  // Also extract tracking URLs that redirect to LinkedIn jobs
+                  const trackingRegex = /https?:\/\/[^\s<>"]*linkedin[^\s<>"]*(?:trk|jobAlert)[^\s<>"&)]+/gi;
+                  const trackingUrls = combined.match(trackingRegex) || [];
+
+                  const allUrls = [...new Set([...jobUrls, ...trackingUrls])];
+
+                  // Extract title from subject
                   const titleMatch = subject.match(/jobs?\s+for\s+(.+?)\s+in\s+/i);
                   const title = titleMatch ? titleMatch[1].trim() : subject.slice(0, 80);
 
@@ -54,12 +67,15 @@ async function fetchLinkedInJobs() {
 
                   const job_id = `linkedin_${Date.now()}_${title.toLowerCase().replace(/\s+/g, '_').slice(0, 30)}`;
 
+                  console.log(`· Email "${subject.slice(0,50)}" — found ${allUrls.length} job URL(s)`);
+
                   res({
                     job_id,
                     title,
                     company,
                     jd_text: text.slice(0, 3000),
-                    emailText: text, // full email text for URL extraction
+                    emailText: text,
+                    jobUrls: allUrls,
                   });
                 });
               });

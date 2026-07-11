@@ -8,28 +8,29 @@ const { renderResumeDocx } = require('./renderDocx');
 const { sendResumeEmail } = require('./mailer');
 const { scrapeJobsFromEmail } = require('./scraper');
 
-/**
- * Full per-job flow: dedupe -> scrape JD -> tailor -> ATS score -> render .docx -> email -> persist.
- */
 async function processJob(job) {
   const alreadySeen = await seenJobBefore(job);
   if (alreadySeen) return { skipped: true };
 
-  // If we have email text, try to scrape full JD from LinkedIn URLs
   let jobToProcess = { ...job };
-  if (job.emailText) {
-    const scraped = await scrapeJobsFromEmail(job.emailText, job.title, job.company);
-    if (scraped && scraped.length > 0) {
-      // Use the first scraped job's full JD
-      jobToProcess = {
-        ...jobToProcess,
-        title: scraped[0].title || job.title,
-        company: scraped[0].company || job.company,
-        jd_text: scraped[0].jd_text,
-        url: scraped[0].url,
-      };
-      console.log(`✓ Scraped full JD for ${jobToProcess.company} — ${jobToProcess.jd_text.length} chars`);
-    }
+
+  // Try to scrape full JD from LinkedIn URLs in the email
+  const scraped = await scrapeJobsFromEmail(
+    job.emailText || '',
+    job.jobUrls || [],
+    job.title,
+    job.company
+  );
+
+  if (scraped && scraped.length > 0) {
+    jobToProcess = {
+      ...jobToProcess,
+      title: scraped[0].title || job.title,
+      company: scraped[0].company || job.company,
+      jd_text: scraped[0].jd_text,
+      url: scraped[0].url,
+    };
+    console.log(`✓ Scraped full JD for ${jobToProcess.company} — ${jobToProcess.jd_text.length} chars`);
   }
 
   const profile = await getProfile();
