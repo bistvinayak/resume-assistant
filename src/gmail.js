@@ -56,7 +56,15 @@ async function fetchLinkedInJobs() {
                   const trackingRegex = /https?:\/\/[^\s<>"]*linkedin[^\s<>"]*(?:trk|jobAlert)[^\s<>"&)]+/gi;
                   const trackingUrls = combined.match(trackingRegex) || [];
 
-                  const allUrls = [...new Set([...jobUrls, ...trackingUrls])];
+                  // Only keep URLs with a job ID (contains /jobs/view/ followed by numbers)
+  const jobIdRegex = /linkedin.com(?:/comm)?/jobs/view/(\d+)/gi;
+  const jobIdUrls = [];
+  let m;
+  const searchText = text + ' ' + html;
+  while ((m = jobIdRegex.exec(searchText)) !== null) {
+    jobIdUrls.push('https://www.linkedin.com/jobs/view/' + m[1]);
+  }
+  const allUrls = [...new Set(jobIdUrls)].slice(0, 5); // max 5 per email
 
                   // Extract title from subject
                   const titleMatch = subject.match(/jobs?\s+for\s+(.+?)\s+in\s+/i);
