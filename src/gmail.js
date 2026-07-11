@@ -47,7 +47,7 @@ async function fetchLinkedInJobs() {
 
                   // Extract LinkedIn job URLs from both plain text and HTML
                   const combined = text + ' ' + html;
-                  const urlRegex = /https?:\/\/[^\s<>"]+linkedin\.com\/jobs\/view\/[^\s<>"&)]+/gi;
+                  const urlRegex = /https?:\/\/[^\s<>"]+linkedin.com\/(?:comm\/)?jobs\/view\/[^\s<>"&)]+/gi;
                   const rawUrls = combined.match(urlRegex) || [];
                   // Dedupe and clean
                   const jobUrls = [...new Set(rawUrls.map(u => u.split('?')[0]))];
