@@ -150,11 +150,7 @@ async function calculateAtsScore(resume, job) {
   const user =
     `JOB TITLE: ${job.title}\nCOMPANY: ${job.company}\n` +
     `JOB DESCRIPTION:\n${job.jd_text || ''}\n\n` +
-    `RESUME SUMMARY: ${resume.summary}\n` +
-    `SKILLS: ${(resume.skills_ranked || []).join(', ')}\n` +
-    `EXPERIENCE BULLETS:\n${(resume.experience || [])
-      .flatMap((e) => e.bullets || [])
-      .join('\n')}`;
+    `FULL RESUME (JSON):\n${JSON.stringify(resume)}`;
 
   return askJson(system, user, 'ats_score', {
     job_id: job.job_id,
