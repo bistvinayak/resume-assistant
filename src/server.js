@@ -58,7 +58,7 @@ app.post('/jobs/process', async (req, res, next) => {
 // Manually trigger Gmail batch (no need to wait for cron).
 app.post('/jobs/run-batch', async (req, res, next) => {
   try {
-    await runBatch();
+    runBatch().catch(console.error); // run in background
     res.json({ ok: true, message: 'Batch triggered — check server logs' });
   } catch (e) { next(e); }
 });
