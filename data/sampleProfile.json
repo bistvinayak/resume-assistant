@@ -1,0 +1,64 @@
+{
+  "contact": {
+    "name": "Vinayak Bist",
+    "email": "bistvinayak@gmail.com",
+    "phone": "+91 9639929094",
+    "links": ["Portfolio", "LinkedIn"]
+  },
+  "summary": "Data-driven B2B Product Manager specializing in scalable platforms, growth-driven innovation, and workflow optimization across insurance & annuities, retail, e-commerce, and supply chain.",
+  "skills": [
+    "Product Management", "Product Strategy", "Requirement Gathering", "Agile", "Scrum",
+    "Data Analytics", "A/B Testing", "API Integration", "Generative AI", "RAG", "LLM", "MCP", "Wireframing"
+  ],
+  "experience": [
+    {
+      "id": "exp_zinnia",
+      "company": "Zinnia",
+      "title": "Product Manager",
+      "location": "Noida",
+      "dates": "Apr 2025 - Present",
+      "bullets": [
+        "Owned multi-quarter strategy and roadmap for the transaction automation portfolio serving ops and business personas.",
+        "Defined APIs for orchestration and document ingestion supporting 10K+ transactions/month.",
+        "Defined event-based transaction workflows reducing time-to-completion by 90%.",
+        "Built self-service transaction flow reducing ops-assisted requests by 40%.",
+        "Shipped automated leakage detection preventing $1M+ in annuity transaction loss annually."
+      ]
+    },
+    {
+      "id": "exp_i2o",
+      "company": "I2O Retail",
+      "title": "Product Manager",
+      "dates": "Jun 2022 - Apr 2025",
+      "bullets": [
+        "Defined roadmap for the Content Management Tool generating $2M in upselling revenue.",
+        "Led UI/UX improvements increasing engagement by 15%.",
+        "Revamped Digital Shelf Analytics Tool, increasing revenue by 5%.",
+        "Integrated marketplace data from Amazon and Walmart."
+      ]
+    },
+    {
+      "id": "exp_shiprocket",
+      "company": "Shiprocket",
+      "title": "Analyst",
+      "dates": "Dec 2020 - Feb 2022",
+      "bullets": [
+        "Built analytics frameworks reducing insight turnaround time by 50%.",
+        "Led vendor negotiations lowering cost per shipment by 12%.",
+        "Created 20+ automation scripts saving 200+ manual hours weekly."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "id": "proj_chanakya",
+      "name": "Chanakya",
+      "description": "AI architecture advisory platform recommending production-ready AI system designs with cost models and roadmaps. Multi-agent pipeline via OpenRouter, Langfuse observability, React frontend on AWS.",
+      "tags": ["Generative AI", "Multi-agent", "AWS"]
+    }
+  ],
+  "education": [
+    { "school": "DIT University", "degree": "B.Tech, Computer Science", "dates": "2015 - 2019" }
+  ],
+  "custom_facts": []
+}
