@@ -4,9 +4,8 @@ require('dotenv').config();
 const { Pool } = require('pg');
 
 const pool = new Pool({
-  family: 4,
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.PGSSL === "true" ? { rejectUnauthorized: false } : false,
+  ssl: { rejectUnauthorized: false },
 });
 
 const PROFILE_KEY = 'me';
