@@ -4,10 +4,6 @@ require('dotenv').config();
 const Imap = require('imap');
 const { simpleParser } = require('mailparser');
 
-/**
- * Fetch unread LinkedIn job alert emails from Gmail via IMAP.
- * Returns array of { job_id, title, company, jd_text, emailText, jobUrls }
- */
 async function fetchLinkedInJobs() {
   return new Promise((resolve, reject) => {
     const imap = new Imap({
@@ -44,38 +40,28 @@ async function fetchLinkedInJobs() {
                   const subject = parsed.subject || '';
                   const text = parsed.text || '';
                   const html = parsed.html || '';
-
-                  // Extract LinkedIn job URLs from both plain text and HTML
                   const combined = text + ' ' + html;
-                  const urlRegex = /https?:\/\/[^\s<>"]+linkedin.com\/(?:comm\/)?jobs\/view\/[^\s<>"&)]+/gi;
-                  const rawUrls = combined.match(urlRegex) || [];
-                  // Dedupe and clean
-                  const jobUrls = [...new Set(rawUrls.map(u => u.split('?')[0]))];
 
-                  // Also extract tracking URLs that redirect to LinkedIn jobs
-                  const trackingRegex = /https?:\/\/[^\s<>"]*linkedin[^\s<>"]*(?:trk|jobAlert)[^\s<>"&)]+/gi;
-                  const trackingUrls = combined.match(trackingRegex) || [];
+                  // Extract unique job IDs from LinkedIn URLs
+                  const jobIds = new Set();
+                  const jobUrls = [];
+                  const pattern = /linkedin\.com(?:\/comm)?\/jobs\/view\/(\d+)/g;
+                  let match;
+                  while ((match = pattern.exec(combined)) !== null) {
+                    const jobId = match[1];
+                    if (!jobIds.has(jobId)) {
+                      jobIds.add(jobId);
+                      jobUrls.push('https://www.linkedin.com/jobs/view/' + jobId);
+                    }
+                  }
 
-                  // Only keep URLs with a job ID (contains /jobs/view/ followed by numbers)
-  const jobIdRegex = /linkedin.com(?:/comm)?/jobs/view/(\d+)/gi;
-  const jobIdUrls = [];
-  let m;
-  const searchText = text + ' ' + html;
-  while ((m = jobIdRegex.exec(searchText)) !== null) {
-    jobIdUrls.push('https://www.linkedin.com/jobs/view/' + m[1]);
-  }
-  const allUrls = [...new Set(jobIdUrls)]; // all unique jobs, Postgres dedupes
-
-                  // Extract title from subject
                   const titleMatch = subject.match(/jobs?\s+for\s+(.+?)\s+in\s+/i);
                   const title = titleMatch ? titleMatch[1].trim() : subject.slice(0, 80);
-
                   const companyMatch = text.match(/at\s+([A-Z][a-zA-Z\s&.,]+?)[\n\r,]/);
                   const company = companyMatch ? companyMatch[1].trim() : 'LinkedIn Alert';
-
                   const job_id = `linkedin_${Date.now()}_${title.toLowerCase().replace(/\s+/g, '_').slice(0, 30)}`;
 
-                  console.log(`· Email "${subject.slice(0,50)}" — found ${allUrls.length} job URL(s)`);
+                  console.log(`· Email "${subject.slice(0, 60)}" — found ${jobUrls.length} job(s)`);
 
                   res({
                     job_id,
@@ -83,7 +69,7 @@ async function fetchLinkedInJobs() {
                     company,
                     jd_text: text.slice(0, 3000),
                     emailText: text,
-                    jobUrls: allUrls,
+                    jobUrls,
                   });
                 });
               });
