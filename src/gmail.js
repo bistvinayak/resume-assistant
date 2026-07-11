@@ -64,7 +64,7 @@ async function fetchLinkedInJobs() {
   while ((m = jobIdRegex.exec(searchText)) !== null) {
     jobIdUrls.push('https://www.linkedin.com/jobs/view/' + m[1]);
   }
-  const allUrls = [...new Set(jobIdUrls)].slice(0, 5); // max 5 per email
+  const allUrls = [...new Set(jobIdUrls)]; // all unique jobs, Postgres dedupes
 
                   // Extract title from subject
                   const titleMatch = subject.match(/jobs?\s+for\s+(.+?)\s+in\s+/i);
