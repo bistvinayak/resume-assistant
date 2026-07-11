@@ -43,7 +43,7 @@ async function askJson(system, user, traceName, traceMetadata = {}) {
       ],
     });
 
-    const parsed = JSON.parse(res.choices[0].message.content);
+    let parsed; try { parsed = JSON.parse(res.choices[0].message.content); } catch(e) { console.error("JSON parse failed:", res.choices[0].message.content.slice(0,200)); throw new Error("LLM returned invalid JSON"); }
 
     generation.end({
       output: parsed,
