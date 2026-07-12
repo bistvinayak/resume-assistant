@@ -6,49 +6,36 @@ const { getProfile, seenJobBefore, saveTailored, markDelivered } = require('./db
 const { tailorResume, calculateAtsScore } = require('./llm');
 const { renderResumeDocx } = require('./renderDocx');
 const { sendResumeEmail } = require('./mailer');
-const { scrapeJobsFromEmail } = require('./scraper');
 
+/**
+ * Process a single job — already has scraped JD, title, company, url.
+ * No scraping here — cron.js handles that now.
+ */
 async function processJob(job) {
   const alreadySeen = await seenJobBefore(job);
   if (alreadySeen) return { skipped: true };
 
-  let jobToProcess = { ...job };
-
-  // Try to scrape full JD from LinkedIn URLs in the email
-  const scraped = await scrapeJobsFromEmail(
-    job.emailText || '',
-    job.jobUrls || [],
-    job.title,
-    job.company
-  );
-
-  if (scraped && scraped.length > 0) {
-    jobToProcess = {
-      ...jobToProcess,
-      title: scraped[0].title || job.title,
-      company: scraped[0].company || job.company,
-      jd_text: scraped[0].jd_text,
-      url: scraped[0].url,
-    };
-    console.log(`✓ Scraped full JD for ${jobToProcess.company} — ${jobToProcess.jd_text.length} chars`);
+  if (!job.jd_text || job.jd_text.trim().length < 50) {
+    console.log(`· Skipping ${job.job_id} — no JD available`);
+    return { skipped: true };
   }
 
   const profile = await getProfile();
-  const resume = await tailorResume(profile, jobToProcess);
-  const ats = await calculateAtsScore(resume, jobToProcess);
+  const resume = await tailorResume(profile, job);
+  const ats = await calculateAtsScore(resume, job);
 
-  console.log(`✓ ATS Score for ${jobToProcess.company}: ${ats.score}/100`);
+  console.log(`✓ ATS Score for ${job.company}: ${ats.score}/100`);
 
   const safe = (s) => String(s || 'x').replace(/[^a-z0-9]+/gi, '_');
-  const fileName = `resume_${safe(jobToProcess.company)}_${safe(jobToProcess.title)}.docx`;
+  const fileName = `resume_${safe(job.company)}_${safe(job.title)}.docx`;
   const filePath = path.join(os.tmpdir(), fileName);
   await renderResumeDocx(resume, filePath);
 
   const tailoredId = await saveTailored(job.job_id, resume, filePath);
 
   await sendResumeEmail({
-    subject: `[ATS ${ats.score}/100] ${jobToProcess.title} @ ${jobToProcess.company}`,
-    text: buildEmailBody({ job: jobToProcess, ats }),
+    subject: `[ATS ${ats.score}/100] ${job.title} @ ${job.company}`,
+    text: buildEmailBody({ job, ats }),
     attachmentPath: filePath,
     attachmentName: fileName,
   });
