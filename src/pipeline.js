@@ -3,14 +3,10 @@
 const path = require('path');
 const os = require('os');
 const { getProfile, seenJobBefore, saveTailored, markDelivered } = require('./db');
-const { tailorResume, calculateAtsScore } = require('./llm');
+const { tailorResume, calculateAtsScore, createJobTrace } = require('./llm');
 const { renderResumeDocx } = require('./renderDocx');
 const { sendResumeEmail } = require('./mailer');
 
-/**
- * Process a single job — already has scraped JD, title, company, url.
- * No scraping here — cron.js handles that now.
- */
 async function processJob(job) {
   const alreadySeen = await seenJobBefore(job);
   if (alreadySeen) return { skipped: true };
@@ -20,9 +16,12 @@ async function processJob(job) {
     return { skipped: true };
   }
 
+  // One trace per job — groups tailor_resume + ats_score together
+  const trace = createJobTrace(job);
+
   const profile = await getProfile();
-  const resume = await tailorResume(profile, job);
-  const ats = await calculateAtsScore(resume, job);
+  const resume = await tailorResume(profile, job, trace);
+  const ats = await calculateAtsScore(resume, job, trace);
 
   console.log(`✓ ATS Score for ${job.company}: ${ats.score}/100`);
 
@@ -41,6 +40,12 @@ async function processJob(job) {
   });
 
   await markDelivered(tailoredId);
+
+  // Update trace with final result
+  trace.update({
+    output: { ats_score: ats.score, resume_file: fileName },
+  });
+
   return { skipped: false, filePath, tailoredId, atsScore: ats.score };
 }
 

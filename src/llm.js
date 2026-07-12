@@ -10,21 +10,18 @@ const client = new OpenAI({
 });
 const MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 
-// Langfuse client
 const langfuse = new Langfuse({
   secretKey: process.env.LANGFUSE_SECRET_KEY,
   publicKey: process.env.LANGFUSE_PUBLIC_KEY,
   baseUrl: process.env.LANGFUSE_BASE_URL || 'https://us.cloud.langfuse.com',
 });
 
-async function askJson(system, user, traceName, traceMetadata = {}) {
-  const trace = langfuse.trace({
-    name: traceName,
-    metadata: traceMetadata,
-  });
-
+/**
+ * Core LLM call — attaches to an existing trace if provided.
+ */
+async function askJson(system, user, generationName, trace) {
   const generation = trace.generation({
-    name: traceName,
+    name: generationName,
     model: MODEL,
     input: [
       { role: 'system', content: system },
@@ -43,7 +40,14 @@ async function askJson(system, user, traceName, traceMetadata = {}) {
       ],
     });
 
-    let parsed; try { parsed = JSON.parse(res.choices[0].message.content); } catch(e) { console.error("JSON parse failed:", res.choices[0].message.content.slice(0,200)); throw new Error("LLM returned invalid JSON"); }
+    const raw = res.choices[0].message.content;
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      console.error('JSON parse failed:', raw.slice(0, 200));
+      throw new Error('LLM returned invalid JSON');
+    }
 
     generation.end({
       output: parsed,
@@ -63,6 +67,21 @@ async function askJson(system, user, traceName, traceMetadata = {}) {
   }
 }
 
+/**
+ * Create a new Langfuse trace for one job pipeline run.
+ */
+function createJobTrace(job) {
+  return langfuse.trace({
+    name: 'process_job',
+    metadata: {
+      job_id: job.job_id,
+      title: job.title,
+      company: job.company,
+      url: job.url || null,
+    },
+  });
+}
+
 const PROFILE_SCHEMA = `
 Return ONLY JSON matching this shape (omit fields you found nothing for):
 {
@@ -78,17 +97,19 @@ Rules: "id" is a short lowercase slug (e.g. "exp_zinnia"). Put anything that doe
 not fit a known field into custom_facts as a plain string. Do NOT invent facts.`;
 
 async function extractFacts(rawText) {
+  const trace = langfuse.trace({ name: 'extract_facts' });
   const system =
     'You extract career facts from text into a structured profile. ' +
     'Only use information explicitly present in the text. ' + PROFILE_SCHEMA;
   return askJson(
     system,
     `Extract facts from the following:\n\n"""${rawText}"""`,
-    'extract_facts'
+    'extract_facts',
+    trace
   );
 }
 
-async function tailorResume(profile, job) {
+async function tailorResume(profile, job, trace) {
   const system =
     'You are a senior resume writer. Build a tailored resume for the target job using ONLY ' +
     'facts present in the candidate profile. Never invent experience, employers, ' +
@@ -125,18 +146,10 @@ async function tailorResume(profile, job) {
     `Description:\n${job.jd_text || '(only title/company available)'}\n\n` +
     `CANDIDATE PROFILE (JSON):\n${JSON.stringify(profile)}`;
 
-  return askJson(system, user, 'tailor_resume', {
-    job_id: job.job_id,
-    company: job.company,
-    title: job.title,
-  });
+  return askJson(system, user, 'tailor_resume', trace);
 }
 
-/**
- * Calculate ATS match score between resume and job description.
- * Returns { score: 0-100, matched_keywords: [], missing_keywords: [], summary: "" }
- */
-async function calculateAtsScore(resume, job) {
+async function calculateAtsScore(resume, job, trace) {
   const system =
     'You are an ATS (Applicant Tracking System) analyzer. ' +
     'Compare the resume to the job description and return ONLY JSON:\n' +
@@ -152,11 +165,7 @@ async function calculateAtsScore(resume, job) {
     `JOB DESCRIPTION:\n${job.jd_text || ''}\n\n` +
     `FULL RESUME (JSON):\n${JSON.stringify(resume)}`;
 
-  return askJson(system, user, 'ats_score', {
-    job_id: job.job_id,
-    company: job.company,
-    title: job.title,
-  });
+  return askJson(system, user, 'ats_score', trace);
 }
 
-module.exports = { extractFacts, tailorResume, calculateAtsScore };
+module.exports = { extractFacts, tailorResume, calculateAtsScore, createJobTrace };
