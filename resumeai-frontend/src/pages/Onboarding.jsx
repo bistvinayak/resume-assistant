@@ -1,0 +1,179 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { api } from '../api';
+import { auth } from '../firebase';
+
+export default function Onboarding() {
+  const navigate = useNavigate();
+  const [step, setStep] = useState(1);
+  const [bio, setBio] = useState('');
+  const [file, setFile] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const user = auth.currentUser;
+
+  const handleBioSubmit = async () => {
+    if (bio.trim().length < 50) return;
+    setLoading(true);
+    try {
+      await api.ingestText(bio);
+      setStep(2);
+    } catch (e) {
+      setError('Failed to save. Please try again.');
+    }
+    setLoading(false);
+  };
+
+  const handlePdfSubmit = async () => {
+    if (!file) { navigate('/dashboard'); return; }
+    setLoading(true);
+    try {
+      await api.ingestPdf(file);
+      navigate('/dashboard');
+    } catch (e) {
+      setError('PDF upload failed. Please try again.');
+    }
+    setLoading(false);
+  };
+
+  const card = {
+    width: '100%', maxWidth: '620px',
+    background: '#141413', border: '1px solid #2a2a27',
+    borderRadius: '16px', padding: '36px',
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+      {/* Logo */}
+      <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '20px', marginBottom: '40px' }}>
+        resumai<span style={{ color: '#f59e0b' }}>.</span>
+      </div>
+
+      {/* Progress */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
+        {[1, 2].map(n => (
+          <div key={n} style={{
+            width: n === step ? 24 : 8, height: 8, borderRadius: '4px',
+            background: n === step ? '#f59e0b' : n < step ? '#22c55e' : '#2a2a27',
+            transition: 'all 0.3s',
+          }} />
+        ))}
+      </div>
+
+      <div style={card}>
+        {step === 1 && (
+          <>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', letterSpacing: '0.1em', marginBottom: '10px' }}>
+              STEP 01 — TELL US ABOUT YOURSELF
+            </div>
+            <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '28px', marginBottom: '8px' }}>
+              Hi {user?.displayName?.split(' ')[0]} 👋
+            </h2>
+            <p style={{ fontSize: '14px', color: '#666', lineHeight: 1.6, marginBottom: '20px' }}>
+              Don't use resume format. Write like you're explaining your career to a friend —
+              roles, skills, achievements, tools, anything relevant.
+            </p>
+
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
+              {['I spent X years at...', 'I built a product that...', 'I know Python and...', 'I led a team of...'].map(eg => (
+                <span key={eg} style={{
+                  background: '#1a1a18', border: '1px solid #2a2a27',
+                  borderRadius: '100px', padding: '3px 12px',
+                  fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace",
+                }}>{eg}</span>
+              ))}
+            </div>
+
+            <textarea
+              value={bio}
+              onChange={e => setBio(e.target.value)}
+              placeholder="I'm a Product Manager with 6 years of experience. I've worked at Zinnia building transaction automation systems handling 100K+ monthly workflows. I'm strong at API integrations, roadmap strategy, AI products, and cross-functional collaboration..."
+              style={{
+                width: '100%', minHeight: '200px', background: '#0e0e0d',
+                border: `1px solid ${bio.length > 50 ? '#f59e0b44' : '#2a2a27'}`,
+                borderRadius: '8px', color: '#f0ede8',
+                fontFamily: "'DM Sans', sans-serif", fontSize: '14px',
+                lineHeight: 1.7, padding: '16px', resize: 'vertical', outline: 'none',
+                transition: 'border-color 0.3s',
+              }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
+              <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: bio.length >= 50 ? '#22c55e' : '#444' }}>
+                {bio.length < 50 ? `${50 - bio.length} more chars to unlock` : '✓ ready'}
+              </span>
+              <button
+                onClick={handleBioSubmit}
+                disabled={bio.trim().length < 50 || loading}
+                style={{
+                  background: bio.trim().length >= 50 ? '#f59e0b' : '#1f1f1c',
+                  color: bio.trim().length >= 50 ? '#0e0e0d' : '#444',
+                  border: 'none', padding: '10px 24px', borderRadius: '6px',
+                  fontSize: '13px', fontWeight: 600,
+                  opacity: loading ? 0.7 : 1,
+                }}
+              >
+                {loading ? 'Saving...' : 'Continue →'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', letterSpacing: '0.1em', marginBottom: '10px' }}>
+              STEP 02 — UPLOAD RESUME (OPTIONAL)
+            </div>
+            <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '28px', marginBottom: '8px' }}>
+              Got a resume PDF?
+            </h2>
+            <p style={{ fontSize: '14px', color: '#666', lineHeight: 1.6, marginBottom: '24px' }}>
+              Upload your existing resume and we'll extract all the details automatically.
+              You can skip this and add more info later.
+            </p>
+
+            <label style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center',
+              justifyContent: 'center', gap: '10px',
+              border: `2px dashed ${file ? '#22c55e44' : '#2a2a27'}`,
+              borderRadius: '10px', padding: '32px', cursor: 'pointer',
+              background: file ? '#0d1a0d' : '#0e0e0d',
+              transition: 'all 0.2s',
+            }}>
+              <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
+              <span style={{ fontSize: '28px' }}>{file ? '✅' : '📄'}</span>
+              <span style={{ fontSize: '13px', color: file ? '#22c55e' : '#555', fontFamily: "'DM Mono', monospace" }}>
+                {file ? file.name : 'Click to upload PDF'}
+              </span>
+            </label>
+
+            {error && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '10px' }}>{error}</p>}
+
+            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
+              <button
+                onClick={() => navigate('/dashboard')}
+                style={{
+                  flex: 1, background: 'transparent', border: '1px solid #2a2a27',
+                  color: '#555', padding: '12px', borderRadius: '6px', fontSize: '13px',
+                }}
+              >
+                Skip for now
+              </button>
+              <button
+                onClick={handlePdfSubmit}
+                disabled={loading}
+                style={{
+                  flex: 2, background: '#f59e0b', color: '#0e0e0d',
+                  border: 'none', padding: '12px', borderRadius: '6px',
+                  fontSize: '13px', fontWeight: 600, opacity: loading ? 0.7 : 1,
+                }}
+              >
+                {loading ? 'Processing...' : file ? 'Upload & go to dashboard →' : 'Go to dashboard →'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}

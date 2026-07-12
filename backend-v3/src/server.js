@@ -12,7 +12,6 @@ const { ingestText, ingestPdf } = require('./profile');
 const { processJob } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
 const { authMiddleware } = require('./auth');
-const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 
 const app = express();
@@ -128,8 +127,6 @@ app.post(['/jobs/run-batch', '/api/jobs/run-batch'], async (req, res, next) => {
     res.json({ ok: true, message: 'Batch triggered — check server logs' });
   } catch (e) { next(e); }
 });
-
-app.post(['/gmail/connect', '/api/gmail/connect'], async (req, res) => connectGmail(req, res));
 
 // ── SPA FALLBACK ──────────────────────────────────────────────────────────
 app.get('*', (req, res) => {
