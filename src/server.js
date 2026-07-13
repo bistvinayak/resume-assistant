@@ -32,7 +32,7 @@ app.use(express.json());
 const upload = multer({ dest: os.tmpdir() });
 
 // Serve built React frontend
-app.use(express.static(path.join(__dirname, '../public')));
+app.use('/projects/arjun', express.static(path.join(__dirname, '../public')));
 
 // Auth on all API routes
 app.use('/api', authMiddleware);
@@ -132,7 +132,7 @@ app.post(['/jobs/run-batch', '/api/jobs/run-batch'], async (req, res, next) => {
 app.post(['/gmail/connect', '/api/gmail/connect'], async (req, res) => connectGmail(req, res));
 
 // ── SPA FALLBACK ──────────────────────────────────────────────────────────
-app.get('*', (req, res) => {
+app.get(['/projects/arjun', '/projects/arjun/*'], (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));
 });
 
