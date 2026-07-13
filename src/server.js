@@ -165,8 +165,8 @@ app.get(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, g
 app.patch(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, updateSettings);
 
 // ── RESUME DOWNLOAD ────────────────────────────────────────────────────────
-const { renderResumeDocx } = require('./renderDocx');
-const { getProfile } = require('./db');
+
+
 
 app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, async (req, res) => {
   try {
