@@ -151,3 +151,65 @@ initSchema()
   .catch((e) => { console.error('startup failed:', e); process.exit(1); });
 
 module.exports = app;
+// ADD THESE ROUTES TO server.js after the existing routes
+// ── ADMIN ROUTES ──────────────────────────────────────────────────────────
+const { adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs: adminGetJobs, triggerCron, getSettings, updateSettings } = require('./admin');
+
+app.get(['/admin/stats', '/api/admin/stats'], authMiddleware, adminOnly, getStats);
+app.get(['/admin/users', '/api/admin/users'], authMiddleware, adminOnly, getUsers);
+app.patch(['/admin/users/:userId', '/api/admin/users/:userId'], authMiddleware, adminOnly, updateUser);
+app.delete(['/admin/users/:userId', '/api/admin/users/:userId'], authMiddleware, adminOnly, deleteUser);
+app.get(['/admin/jobs', '/api/admin/jobs'], authMiddleware, adminOnly, adminGetJobs);
+app.post(['/admin/cron/run', '/api/admin/cron/run'], authMiddleware, adminOnly, triggerCron);
+app.get(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, getSettings);
+app.patch(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, updateSettings);
+
+// ── RESUME DOWNLOAD ────────────────────────────────────────────────────────
+const { renderResumeDocx } = require('./renderDocx');
+const { getProfile } = require('./db');
+
+app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    const { rows } = await pool.query(
+      `SELECT t.resume_json, t.file_path, j.title, j.company 
+       FROM tailored_resume t 
+       JOIN jobs j ON j.job_id = t.job_id 
+       WHERE t.job_id = $1 AND t.user_id = $2 
+       ORDER BY t.created_at DESC LIMIT 1`,
+      [jobId, req.userId]
+    );
+
+    if (!rows.length) return res.status(404).json({ error: 'Resume not found' });
+
+    const { resume_json, title, company } = rows[0];
+    const safe = s => String(s || 'resume').replace(/[^a-z0-9]+/gi, '_');
+    const fileName = `arjun_${safe(company)}_${safe(title)}.docx`;
+    const filePath = require('path').join(require('os').tmpdir(), fileName);
+
+    await renderResumeDocx(resume_json, filePath);
+
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.sendFile(filePath);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GMAIL VERIFY ───────────────────────────────────────────────────────────
+// POST /api/gmail/verify — user claims they set up filter, we mark it pending
+app.post(['/gmail/verify', '/api/gmail/verify'], authMiddleware, async (req, res) => {
+  try {
+    await pool.query(
+      `UPDATE master_profile SET 
+        profile = jsonb_set(COALESCE(profile, '{}'), '{gmail_filter_pending}', 'true'),
+        updated_at = now()
+       WHERE user_id = $1`,
+      [req.userId]
+    );
+    res.json({ ok: true, message: 'Marked as pending — will verify on next email received' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
