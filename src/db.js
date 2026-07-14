@@ -57,6 +57,7 @@ async function initSchema() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS improved BOOLEAN DEFAULT false;
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS matched_keywords JSONB DEFAULT '[]';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS missing_keywords JSONB DEFAULT '[]';
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS substitutions JSONB DEFAULT '[]';
       ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'me';
     EXCEPTION WHEN others THEN NULL; END $$;
 
@@ -106,12 +107,13 @@ async function saveTailored(jobId, resumeJson, filePath, userId = 'me') {
 async function markDelivered(tailoredId, jobId, atsData) {
   await pool.query('UPDATE tailored_resume SET delivered = true WHERE id = $1', [tailoredId]);
   await pool.query(
-    `UPDATE jobs SET 
+    `UPDATE jobs SET
       status = 'delivered',
       ats_score = $2,
       matched_keywords = $3,
       missing_keywords = $4,
-      improved = $5
+      improved = $5,
+      substitutions = $6
      WHERE job_id = $1`,
     [
       jobId,
@@ -119,6 +121,7 @@ async function markDelivered(tailoredId, jobId, atsData) {
       JSON.stringify(atsData?.matched_keywords || []),
       JSON.stringify(atsData?.missing_keywords || []),
       atsData?.improved || false,
+      JSON.stringify(atsData?.substitutions || []),
     ]
   );
 }

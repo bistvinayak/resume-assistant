@@ -819,6 +819,20 @@ export default function Dashboard() {
                             </div>
                           </div>
 
+                          {(j.substitutions || []).length > 0 && (
+                            <div style={{ marginBottom: '14px' }}>
+                              <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>SYNONYM SUBSTITUTIONS ({j.substitutions.length})</div>
+                              {j.substitutions.map((s, si) => (
+                                <div key={si} style={{ fontSize: '11px', color: '#888', padding: '4px 0', borderBottom: '1px solid #1a1a18', lineHeight: 1.5 }}>
+                                  <span style={{ color: '#ef444488' }}>{s.original_phrase}</span>
+                                  <span style={{ color: '#555' }}> → </span>
+                                  <span style={{ color: '#22c55e88' }}>{s.new_phrase}</span>
+                                  <span style={{ color: '#333', fontSize: '10px' }}> (JD: {s.jd_keyword})</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                           <button
                             onClick={(e) => handleDownload(e, j.job_id)}
                             disabled={downloading === j.job_id}

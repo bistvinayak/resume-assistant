@@ -135,9 +135,12 @@ async function improveResume(resume, job, ats, trace) {
     '- Only rephrase existing bullets — never add new facts, experiences, or metrics\n' +
     '- Only use a missing keyword if the candidate genuinely has that experience under a different name\n' +
     '- If no equivalent exists, leave the bullet unchanged\n' +
-    '- This is ONE iteration only — return your best attempt\n' +
-    '- Return the same JSON structure as the input resume\n\n' +
-    'Return ONLY the improved resume JSON with the same structure.';
+    '- This is ONE iteration only — return your best attempt\n\n' +
+    'Return ONLY JSON with TWO keys:\n' +
+    '1. "resume" — the improved resume (same structure as input)\n' +
+    '2. "substitutions" — array of changes you made, each with:\n' +
+    '   { "jd_keyword": "the keyword from the JD", "original_phrase": "what the candidate had", "new_phrase": "what you changed it to", "bullet_context": "which bullet/role this was in" }\n' +
+    '   Only include actual changes, not unchanged bullets.\n';
 
   const user =
     `CURRENT ATS SCORE: ${ats.score}/100\n` +
