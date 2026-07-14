@@ -61,15 +61,18 @@ async function processJob(job, userId = 'me') {
   await renderResumeDocx(resume, filePath);
 
   const tailoredId = await saveTailored(job.job_id, resume, filePath, userId);
-
-  await sendResumeEmail({
-    subject: `[ATS ${ats.score}/100] ${job.title} @ ${job.company}`,
-    text: buildEmailBody({ job, ats, improved, substitutions }),
-    attachmentPath: filePath,
-    attachmentName: fileName,
-  });
-
   await markDelivered(tailoredId, job.job_id, { ...ats, improved, substitutions });
+
+  try {
+    await sendResumeEmail({
+      subject: `[ATS ${ats.score}/100] ${job.title} @ ${job.company}`,
+      text: buildEmailBody({ job, ats, improved, substitutions }),
+      attachmentPath: filePath,
+      attachmentName: fileName,
+    });
+  } catch (e) {
+    console.error(`⚠ Email failed for ${job.job_id} (resume still saved):`, e.message);
+  }
 
   trace.update({ output: { ats_score: ats.score, improved, substitutions_count: substitutions.length, resume_file: fileName } });
 
