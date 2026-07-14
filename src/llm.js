@@ -88,7 +88,18 @@ Return ONLY JSON matching this shape (omit fields you found nothing for):
 
 async function extractFacts(rawText) {
   const trace = langfuse.trace({ name: 'extract_facts' });
-  const system = 'You extract career facts from text into a structured profile. Only use information explicitly present in the text. ' + PROFILE_SCHEMA;
+  const system = `You extract career facts from text into a structured profile.
+
+SKILL EXTRACTION RULES:
+- Extract explicitly listed skills AND infer skills from experience bullets, project descriptions, and tools mentioned in context.
+- If a bullet says "Built dashboards in Tableau" → add "Tableau" to skills.
+- If a bullet says "Led cross-functional team of 8 engineers" → add "Cross-functional Leadership", "Team Management" to skills.
+- If a bullet says "Implemented CI/CD pipeline using Jenkins" → add "CI/CD", "Jenkins" to skills.
+- Extract tools, frameworks, methodologies, platforms, and soft skills.
+- Deduplicate: don't add "Python" twice.
+- Only use information present in the text — do not hallucinate skills the person doesn't demonstrate.
+
+` + PROFILE_SCHEMA;
   return askJson(system, `Extract facts from:\n\n"""${rawText}"""`, 'extract_facts', trace);
 }
 
@@ -112,8 +123,12 @@ async function tailorResume(profile, job, trace) {
       "skills_ai_tools": [],
       "experience": [ { "company":"", "tagline":"", "title":"", "location":"", "dates":"", "bullets":[] } ],
       "projects": [ { "name":"", "description":"" } ],
-      "education": [ { "school":"", "degree":"", "dates":"" } ]
-    }`;
+      "education": [ { "school":"", "degree":"", "dates":"" } ],
+      "tailoring_notes": [
+        "Short sentence explaining a key tailoring decision — e.g. why summary was rephrased, which bullets were rewritten to match JD keywords, why certain skills were prioritized"
+      ]
+    }\n` +
+    'tailoring_notes: 4-6 brief sentences explaining your most important decisions. Focus on WHAT you changed and WHY (which JD requirement it targets). Be specific — reference actual keywords and roles.';
 
   const user =
     `TARGET JOB:\nTitle: ${job.title}\nCompany: ${job.company}\nURL: ${job.url || 'N/A'}\n` +
@@ -176,7 +191,13 @@ async function chatEnrich(userMessage, currentProfile) {
   const system = `You are Arjun, an AI career assistant. Your ONLY job is to help the user build their career profile by extracting facts from what they tell you. You do NOT process job URLs, analyze job descriptions, or tailor resumes — that happens in a separate tab.
 
 STEP 1 — EXTRACT: Pull every career fact from the user's message into structured JSON.
-STEP 2 — REPLY: Write a short reply (2-3 sentences max).
+STEP 2 — INFER SKILLS: Beyond explicitly mentioned skills, also infer skills from experience bullets and context:
+  - "Built dashboards in Tableau" → add "Tableau" to skills
+  - "Led cross-functional team of 8" → add "Cross-functional Leadership", "Team Management"
+  - "Managed $2M budget" → add "Budget Management", "P&L"
+  - Extract tools, frameworks, methodologies, platforms, and demonstrated soft skills
+  - Deduplicate against skills already in the profile
+STEP 3 — REPLY: Write a short reply (2-3 sentences max).
 
 CRITICAL REPLY RULES:
 - If "extracted" has ANY data: your reply MUST start by naming what you indexed ("Indexed your PM role at Flipkart", "Added Python and SQL to your skills"). Be specific. NEVER say "didn't catch", "couldn't find", or "not sure what to extract" when extracted is non-empty.

@@ -117,26 +117,16 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
 
       const jobId = `url_${Buffer.from(url).toString('base64url').slice(0, 40)}`;
 
-      // Check if this job was already processed
+      // Check if this job is currently being processed
       const existing = await getJobByJobId(jobId, req.userId);
-      if (existing) {
-        if (existing.status === 'delivered') {
-          return res.json({
-            reply: `I've already processed this job! Here's your result for **${existing.title}** at **${existing.company}** — ATS score: **${existing.ats_score}/100**. Check the Job Activity tab for the full breakdown and download.`,
-            profile: currentProfile,
-            duplicate: true,
-            existingJob: existing,
-          });
-        }
-        if (existing.status === 'processing') {
-          return res.json({
-            reply: `This job is already being processed — hang tight! You'll see the result in the Job Activity tab once it's ready.`,
-            profile: currentProfile,
-            duplicate: true,
-          });
-        }
-        // status === 'failed' — allow retry, fall through
+      if (existing && existing.status === 'processing') {
+        return res.json({
+          reply: `This job is already being processed — hang tight! You'll see the result in the Job Activity tab once it's ready.`,
+          profile: currentProfile,
+          duplicate: true,
+        });
       }
+      // delivered or failed — allow re-tailoring (profile may have changed)
 
       const p = currentProfile;
       const skills = (p.skills || []).slice(0, 10).join(', ') || 'none listed';
@@ -243,11 +233,8 @@ app.post(['/jobs/submit-url', '/api/jobs/submit-url'], async (req, res, next) =>
 
     const job_id = `linkedin_${jobIdMatch[1]}`;
 
-    // Check for duplicate
+    // Block only if actively processing right now
     const existing = await getJobByJobId(job_id, req.userId);
-    if (existing && existing.status === 'delivered') {
-      return res.json({ ok: true, job_id, duplicate: true, message: 'This job was already processed — check Job Activity for results' });
-    }
     if (existing && existing.status === 'processing') {
       return res.json({ ok: true, job_id, duplicate: true, message: 'This job is already being processed' });
     }
@@ -331,11 +318,12 @@ app.patch(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly,
 app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, async (req, res) => {
   try {
     const { jobId } = req.params;
+    const format = (req.query.format || 'docx').toLowerCase();
     const { rows } = await pool.query(
-      `SELECT t.resume_json, t.file_path, j.title, j.company 
-       FROM tailored_resume t 
-       JOIN jobs j ON j.job_id = t.job_id 
-       WHERE t.job_id = $1 AND t.user_id = $2 
+      `SELECT t.resume_json, t.file_path, j.title, j.company
+       FROM tailored_resume t
+       JOIN jobs j ON j.job_id = t.job_id
+       WHERE t.job_id = $1 AND t.user_id = $2
        ORDER BY t.created_at DESC LIMIT 1`,
       [jobId, req.userId]
     );
@@ -344,14 +332,23 @@ app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, 
 
     const { resume_json, title, company } = rows[0];
     const safe = s => String(s || 'resume').replace(/[^a-z0-9]+/gi, '_');
-    const fileName = `arjun_${safe(company)}_${safe(title)}.docx`;
-    const filePath = require('path').join(require('os').tmpdir(), fileName);
 
-    await renderResumeDocx(resume_json, filePath);
-
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-    res.sendFile(filePath);
+    if (format === 'pdf') {
+      const { renderResumePdf } = require('./renderPdf');
+      const fileName = `arjun_${safe(company)}_${safe(title)}.pdf`;
+      const filePath = require('path').join(require('os').tmpdir(), fileName);
+      await renderResumePdf(resume_json, filePath);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.sendFile(filePath);
+    } else {
+      const fileName = `arjun_${safe(company)}_${safe(title)}.docx`;
+      const filePath = require('path').join(require('os').tmpdir(), fileName);
+      await renderResumeDocx(resume_json, filePath);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.sendFile(filePath);
+    }
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

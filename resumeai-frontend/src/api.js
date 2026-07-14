@@ -121,15 +121,16 @@ export const api = {
     return res.json();
   },
 
-  async downloadResume(jobId) {
+  async downloadResume(jobId, format = 'docx') {
     const user = await waitForAuth();
     const token = await user.getIdToken(true);
-    const res = await fetch(`${BASE}/jobs/${jobId}/download`, {
+    const res = await fetch(`${BASE}/jobs/${jobId}/download?format=${format}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!res.ok) throw new Error('Download failed');
     const blob = await res.blob();
-    const filename = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'resume.docx';
+    const fallback = format === 'pdf' ? 'resume.pdf' : 'resume.docx';
+    const filename = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || fallback;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

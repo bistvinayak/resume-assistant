@@ -22,7 +22,10 @@ async function processJob(job, userId = 'me', { source = 'app' } = {}) {
   const profile = await getProfile(userId);
 
   // First tailoring pass
-  let resume = await tailorResume(profile, job, trace);
+  const tailorResult = await tailorResume(profile, job, trace);
+  const tailoringNotes = tailorResult.tailoring_notes || [];
+  delete tailorResult.tailoring_notes;
+  let resume = tailorResult;
   let ats = await calculateAtsScore(resume, job, trace);
   let improved = false;
   let substitutions = [];
@@ -61,7 +64,7 @@ async function processJob(job, userId = 'me', { source = 'app' } = {}) {
   await renderResumeDocx(resume, filePath);
 
   const tailoredId = await saveTailored(job.job_id, resume, filePath, userId);
-  await markDelivered(tailoredId, job.job_id, { ...ats, improved, substitutions });
+  await markDelivered(tailoredId, job.job_id, { ...ats, improved, substitutions, tailoring_notes: tailoringNotes });
 
   if (source === 'cron') {
     const userEmail = profile.contact?.email || null;
@@ -83,7 +86,7 @@ async function processJob(job, userId = 'me', { source = 'app' } = {}) {
 
   trace.update({ output: { ats_score: ats.score, improved, substitutions_count: substitutions.length, resume_file: fileName } });
 
-  return { skipped: false, filePath, tailoredId, atsScore: ats.score, improved, substitutions };
+  return { skipped: false, filePath, tailoredId, atsScore: ats.score, improved, substitutions, tailoringNotes };
 }
 
 function buildEmailBody({ job, ats, improved, substitutions }) {

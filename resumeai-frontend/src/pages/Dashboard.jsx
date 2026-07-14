@@ -31,6 +31,59 @@ const ProgressBar = ({ value, label, sublabel }) => {
   );
 };
 
+const ThinkingSection = ({ job }) => {
+  const notes = job.tailoring_notes || [];
+  const subs = job.substitutions || [];
+  if (!notes.length && !subs.length) return null;
+  return (
+    <div style={{ marginBottom: '14px', background: '#fafaf9', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '12px' }}>
+      <div style={{ fontSize: '10px', color: '#8b5cf6', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '8px' }}>
+        WHAT ARJUN DID
+      </div>
+      {notes.map((note, ni) => (
+        <div key={ni} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '11px', color: '#57534e', lineHeight: 1.5 }}>
+          <span style={{ color: '#8b5cf6', flexShrink: 0 }}>→</span>
+          <span>{note}</span>
+        </div>
+      ))}
+      {subs.length > 0 && (
+        <div style={{ marginTop: notes.length ? '8px' : 0, borderTop: notes.length ? '1px solid #e7e5e4' : 'none', paddingTop: notes.length ? '8px' : 0 }}>
+          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>
+            REWRITES ({subs.length})
+          </div>
+          {subs.map((s, si) => (
+            <div key={si} style={{ fontSize: '11px', color: '#57534e', padding: '3px 0', lineHeight: 1.5 }}>
+              <span style={{ color: '#ef444488', textDecoration: 'line-through' }}>{s.original_phrase}</span>
+              <span style={{ color: '#78716c' }}> → </span>
+              <span style={{ color: '#22c55e', fontWeight: 500 }}>{s.new_phrase}</span>
+              {s.jd_keyword && <span style={{ color: '#a8a29e', fontSize: '10px' }}> (JD: {s.jd_keyword})</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const DownloadButtons = ({ jobId, downloading, onDownload }) => (
+  <div style={{ display: 'flex', gap: '8px' }}>
+    <button
+      onClick={(e) => onDownload(e, jobId, 'docx')}
+      disabled={downloading === `${jobId}_docx`}
+      style={{ flex: 1, background: '#f59e0b', color: '#1c1917', border: 'none', padding: '10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === `${jobId}_docx` ? 0.7 : 1 }}
+    >
+      {downloading === `${jobId}_docx` ? 'Downloading...' : '↓ Download .docx'}
+    </button>
+    <button
+      onClick={(e) => onDownload(e, jobId, 'pdf')}
+      disabled={downloading === `${jobId}_pdf`}
+      style={{ flex: 1, background: '#ffffff', color: '#1c1917', border: '1px solid #d6d3d1', padding: '10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === `${jobId}_pdf` ? 0.7 : 1 }}
+    >
+      {downloading === `${jobId}_pdf` ? 'Downloading...' : '↓ Download .pdf'}
+    </button>
+  </div>
+);
+
 export default function Dashboard() {
   const navigate = useNavigate();
   const user = auth.currentUser;
@@ -58,11 +111,11 @@ export default function Dashboard() {
   const chatEndRef = useRef(null);
   const tailorEndRef = useRef(null);
 
-  const handleDownload = async (e, jobId) => {
+  const handleDownload = async (e, jobId, format = 'docx') => {
     e.stopPropagation();
-    setDownloading(jobId);
+    setDownloading(`${jobId}_${format}`);
     try {
-      await api.downloadResume(jobId);
+      await api.downloadResume(jobId, format);
     } catch (err) {
       console.error('Download failed:', err);
     }
@@ -945,27 +998,9 @@ export default function Dashboard() {
                             </div>
                           </div>
 
-                          {(j.substitutions || []).length > 0 && (
-                            <div style={{ marginBottom: '14px' }}>
-                              <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>SYNONYM SUBSTITUTIONS ({j.substitutions.length})</div>
-                              {j.substitutions.map((s, si) => (
-                                <div key={si} style={{ fontSize: '11px', color: '#57534e', padding: '4px 0', borderBottom: '1px solid #e7e5e4', lineHeight: 1.5 }}>
-                                  <span style={{ color: '#ef444488' }}>{s.original_phrase}</span>
-                                  <span style={{ color: '#78716c' }}> → </span>
-                                  <span style={{ color: '#22c55e88' }}>{s.new_phrase}</span>
-                                  <span style={{ color: '#c4c0bc', fontSize: '10px' }}> (JD: {s.jd_keyword})</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          <ThinkingSection job={j} />
 
-                          <button
-                            onClick={(e) => handleDownload(e, j.job_id)}
-                            disabled={downloading === j.job_id}
-                            style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '10px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: downloading === j.job_id ? 0.7 : 1 }}
-                          >
-                            {downloading === j.job_id ? 'Downloading...' : 'Download Tailored Resume (.docx)'}
-                          </button>
+                          <DownloadButtons jobId={j.job_id} downloading={downloading} onDownload={handleDownload} />
                         </div>
                       </div>
                     );
@@ -1120,9 +1155,14 @@ export default function Dashboard() {
                         {job.improved && <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#f59e0b', background: '#f59e0b11', border: '1px solid #f59e0b33', borderRadius: '4px', padding: '2px 8px' }}>2nd run</span>}
                         <span style={{ fontSize: '11px', color: '#c4c0bc', fontFamily: "'DM Mono', monospace" }}>{new Date(job.created_at || job.seen_at).toLocaleDateString()}</span>
                         {job.status === 'delivered' ? (
-                          <button onClick={(e) => handleDownload(e, job.job_id)} disabled={downloading === job.job_id} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: downloading === job.job_id ? '#f59e0b' : '#888', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'color 0.2s' }}>
-                            {downloading === job.job_id ? '...' : '↓ docx'}
-                          </button>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            <button onClick={(e) => handleDownload(e, job.job_id, 'docx')} disabled={downloading === `${job.job_id}_docx`} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: downloading === `${job.job_id}_docx` ? '#f59e0b' : '#888', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                              {downloading === `${job.job_id}_docx` ? '...' : '↓ docx'}
+                            </button>
+                            <button onClick={(e) => handleDownload(e, job.job_id, 'pdf')} disabled={downloading === `${job.job_id}_pdf`} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: downloading === `${job.job_id}_pdf` ? '#f59e0b' : '#888', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                              {downloading === `${job.job_id}_pdf` ? '...' : '↓ pdf'}
+                            </button>
+                          </div>
                         ) : (
                           <span style={{ width: '60px' }} />
                         )}
@@ -1176,12 +1216,19 @@ export default function Dashboard() {
                             </div>
                           </div>
 
+                          <ThinkingSection job={job} />
+
                           {/* Download + meta row */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '8px' }}>
-                            <button onClick={(e) => handleDownload(e, job.job_id)} disabled={downloading === job.job_id} style={{ background: '#f59e0b', color: '#1c1917', border: 'none', padding: '8px 20px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === job.job_id ? 0.7 : 1, whiteSpace: 'nowrap' }}>
-                              {downloading === job.job_id ? 'Downloading...' : 'Download Resume (.docx)'}
-                            </button>
-                            <div style={{ flex: 1, display: 'flex', gap: '16px', fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>
+                          <div style={{ padding: '12px', background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '8px' }}>
+                            <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                              <button onClick={(e) => handleDownload(e, job.job_id, 'docx')} disabled={downloading === `${job.job_id}_docx`} style={{ flex: 1, background: '#f59e0b', color: '#1c1917', border: 'none', padding: '8px 16px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === `${job.job_id}_docx` ? 0.7 : 1, whiteSpace: 'nowrap' }}>
+                                {downloading === `${job.job_id}_docx` ? '...' : '↓ .docx'}
+                              </button>
+                              <button onClick={(e) => handleDownload(e, job.job_id, 'pdf')} disabled={downloading === `${job.job_id}_pdf`} style={{ flex: 1, background: '#ffffff', color: '#1c1917', border: '1px solid #d6d3d1', padding: '8px 16px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === `${job.job_id}_pdf` ? 0.7 : 1, whiteSpace: 'nowrap' }}>
+                                {downloading === `${job.job_id}_pdf` ? '...' : '↓ .pdf'}
+                              </button>
+                            </div>
+                            <div style={{ display: 'flex', gap: '16px', fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>
                               {job.ats_score && <span>ATS: {job.ats_score}</span>}
                               <span>Matched: {(job.matched_keywords || []).length}</span>
                               <span>Missing: {(job.missing_keywords || []).length}</span>
@@ -1204,7 +1251,7 @@ export default function Dashboard() {
             <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '700px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)' }}>
               <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Tailor Resume</h2>
               <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '20px', lineHeight: 1.6 }}>
-                Paste a job URL and Arjun will scrape the JD, tailor your resume, calculate ATS score, and deliver the .docx.
+                Paste a job URL and Arjun will scrape the JD, tailor your resume, calculate ATS score, and deliver it in .docx and .pdf.
               </p>
 
               <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
@@ -1290,27 +1337,9 @@ export default function Dashboard() {
                             </div>
                           </div>
 
-                          {(j.substitutions || []).length > 0 && (
-                            <div style={{ marginBottom: '14px' }}>
-                              <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>SYNONYM SUBSTITUTIONS ({j.substitutions.length})</div>
-                              {j.substitutions.map((s, si) => (
-                                <div key={si} style={{ fontSize: '11px', color: '#57534e', padding: '4px 0', borderBottom: '1px solid #e7e5e4', lineHeight: 1.5 }}>
-                                  <span style={{ color: '#ef444488' }}>{s.original_phrase}</span>
-                                  <span style={{ color: '#78716c' }}> → </span>
-                                  <span style={{ color: '#22c55e88' }}>{s.new_phrase}</span>
-                                  <span style={{ color: '#a8a29e', fontSize: '10px' }}> (JD: {s.jd_keyword})</span>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          <ThinkingSection job={j} />
 
-                          <button
-                            onClick={(e) => handleDownload(e, j.job_id)}
-                            disabled={downloading === j.job_id}
-                            style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '10px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: downloading === j.job_id ? 0.7 : 1 }}
-                          >
-                            {downloading === j.job_id ? 'Downloading...' : 'Download Tailored Resume (.docx)'}
-                          </button>
+                          <DownloadButtons jobId={j.job_id} downloading={downloading} onDownload={handleDownload} />
                         </div>
                       </div>
                     );

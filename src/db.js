@@ -58,6 +58,7 @@ async function initSchema() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS matched_keywords JSONB DEFAULT '[]';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS missing_keywords JSONB DEFAULT '[]';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS substitutions JSONB DEFAULT '[]';
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tailoring_notes JSONB DEFAULT '[]';
       ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'me';
     EXCEPTION WHEN others THEN NULL; END $$;
 
@@ -118,7 +119,8 @@ async function markDelivered(tailoredId, jobId, atsData) {
       matched_keywords = $3,
       missing_keywords = $4,
       improved = $5,
-      substitutions = $6
+      substitutions = $6,
+      tailoring_notes = $7
      WHERE job_id = $1`,
     [
       jobId,
@@ -127,6 +129,7 @@ async function markDelivered(tailoredId, jobId, atsData) {
       JSON.stringify(atsData?.missing_keywords || []),
       atsData?.improved || false,
       JSON.stringify(atsData?.substitutions || []),
+      JSON.stringify(atsData?.tailoring_notes || []),
     ]
   );
 }
@@ -148,7 +151,7 @@ async function insertJobProcessing(job, userId = 'me') {
     `INSERT INTO jobs (job_id, user_id, title, company, url, status)
      VALUES ($1, $2, $3, $4, $5, 'processing')
      ON CONFLICT (job_id) DO UPDATE SET status = 'processing', seen_at = now()
-     WHERE jobs.status = 'failed'
+     WHERE jobs.status IN ('failed', 'delivered')
      RETURNING job_id`,
     [job.job_id, userId, job.title || null, job.company || null, job.url || null]
   );
