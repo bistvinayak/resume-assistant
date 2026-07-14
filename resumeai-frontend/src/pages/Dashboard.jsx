@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, signOutUser } from '../firebase';
 import { api } from '../api';
@@ -44,6 +44,11 @@ export default function Dashboard() {
   const [submitMsg, setSubmitMsg] = useState('');
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(null);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+  const [pdfUploading, setPdfUploading] = useState(false);
+  const chatEndRef = useRef(null);
 
   const handleDownload = async (e, jobId) => {
     e.stopPropagation();
@@ -82,6 +87,53 @@ export default function Dashboard() {
     }
     setSubmitting(false);
   };
+
+  const handleChatSend = async () => {
+    const msg = chatInput.trim();
+    if (!msg || chatSending) return;
+    setChatInput('');
+    setChatMessages(prev => [...prev, { role: 'user', text: msg }]);
+    setChatSending(true);
+    try {
+      const res = await api.chat(msg);
+      setChatMessages(prev => [...prev, { role: 'arjun', text: res.reply }]);
+      if (res.profile) setProfile(res.profile);
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'arjun', text: 'Something went wrong. Try again.' }]);
+    }
+    setChatSending(false);
+  };
+
+  const handleChatPdf = async (file) => {
+    if (!file) return;
+    setPdfUploading(true);
+    setChatMessages(prev => [...prev, { role: 'user', text: `Uploading: ${file.name}` }]);
+    try {
+      const updated = await api.ingestPdf(file);
+      setProfile(updated);
+      setChatMessages(prev => [...prev, { role: 'arjun', text: `Got it — extracted details from ${file.name} and merged into your profile. What else would you like to add?` }]);
+    } catch {
+      setChatMessages(prev => [...prev, { role: 'arjun', text: 'PDF upload failed. Please try again.' }]);
+    }
+    setPdfUploading(false);
+  };
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages]);
+
+  useEffect(() => {
+    if (tab === 'chat' && chatMessages.length === 0) {
+      const missing = [];
+      if (!profile?.contact?.phone) missing.push('phone number');
+      if (!profile?.contact?.location) missing.push('location');
+      if ((profile?.experience?.length || 0) < 2) missing.push('more work experience');
+      if ((profile?.projects?.length || 0) === 0) missing.push('projects');
+      if ((profile?.education?.length || 0) === 0) missing.push('education');
+      const hint = missing.length > 0 ? ` I noticed you're missing: ${missing.slice(0, 3).join(', ')}. Want to start there?` : ' What would you like to add?';
+      setChatMessages([{ role: 'arjun', text: `Hey ${user?.displayName?.split(' ')[0] || 'there'}! Tell me anything about your career — skills, experience, projects, certifications — and I'll index it into your profile.${hint}` }]);
+    }
+  }, [tab]);
 
   const allSkills = profile ? [
     ...(profile.skills || []),
@@ -172,6 +224,7 @@ export default function Dashboard() {
           {/* Nav tabs */}
           {[
             { id: 'profile', label: 'Profile Index' },
+            { id: 'chat', label: 'Add Info' },
             { id: 'jobs', label: 'Job Activity' },
             { id: 'submit', label: 'Submit Job URL' },
             { id: 'gaps', label: 'Skill Gaps' },
@@ -209,10 +262,10 @@ export default function Dashboard() {
             <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px', lineHeight: 1.5 }}>
               Auto-process job alerts every 2 hours
             </div>
-            {profile?.gmail_connected ? (
+            {profile?.gmail_connected || profile?.gmail_filter_pending ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#22c55e', fontFamily: "'DM Mono', monospace" }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
-                Connected
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+                {profile?.gmail_connected ? 'Connected' : 'Filter pending'}
               </div>
             ) : (
               <button
@@ -282,19 +335,33 @@ export default function Dashboard() {
                 <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                   <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>EXPERIENCE</div>
                   {profile.experience.map((exp, i) => (
-                    <div key={exp.company || i} style={{ display: 'flex', gap: '14px', paddingBottom: '14px', borderBottom: i < profile.experience.length - 1 ? '1px solid #1a1a18' : 'none', marginBottom: i < profile.experience.length - 1 ? '14px' : 0 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: '8px', background: '#1f1f1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, color: '#f59e0b', flexShrink: 0 }}>
-                        {(exp.company || '?')[0]}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                          <span style={{ fontSize: '13px', fontWeight: 500 }}>{exp.title} · {exp.company}</span>
-                          <span style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace" }}>{exp.dates}</span>
+                    <div key={exp.company || i} style={{ paddingBottom: '14px', borderBottom: i < profile.experience.length - 1 ? '1px solid #1a1a18' : 'none', marginBottom: i < profile.experience.length - 1 ? '14px' : 0 }}>
+                      <div style={{ display: 'flex', gap: '14px' }}>
+                        <div style={{ width: 34, height: 34, borderRadius: '8px', background: '#1f1f1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, color: '#f59e0b', flexShrink: 0 }}>
+                          {(exp.company || '?')[0]}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace" }}>
-                          {exp.location} · {(exp.bullets || []).length} bullets
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 500 }}>{exp.title} · {exp.company}</span>
+                            <span style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace" }}>{exp.dates}</span>
+                          </div>
+                          {exp.location && (
+                            <div style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>
+                              {exp.location}
+                            </div>
+                          )}
                         </div>
                       </div>
+                      {(exp.bullets || []).length > 0 && (
+                        <div style={{ marginTop: '8px', paddingLeft: '48px' }}>
+                          {exp.bullets.map((b, bi) => (
+                            <div key={bi} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '12px', color: '#888', lineHeight: 1.5 }}>
+                              <span style={{ color: '#333', flexShrink: 0 }}>·</span>
+                              <span>{b}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -310,6 +377,75 @@ export default function Dashboard() {
                     </button>
                   ))}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── ADD INFO (CHAT) ── */}
+          {tab === 'chat' && (
+            <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '700px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)' }}>
+              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Add Info</h2>
+              <p style={{ fontSize: '13px', color: '#555', marginBottom: '20px', lineHeight: 1.6 }}>
+                Tell Arjun about your career — type anything or upload a PDF. It gets indexed into your profile automatically.
+              </p>
+
+              <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
+                {chatMessages.map((msg, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
+                    <div style={{
+                      maxWidth: '85%', padding: '12px 16px', borderRadius: '12px',
+                      background: msg.role === 'user' ? '#f59e0b' : '#141413',
+                      color: msg.role === 'user' ? '#0e0e0d' : '#c0bdb8',
+                      border: msg.role === 'user' ? 'none' : '1px solid #2a2a27',
+                      fontSize: '13px', lineHeight: 1.6,
+                    }}>
+                      {msg.role === 'arjun' && (
+                        <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>ARJUN</div>
+                      )}
+                      {msg.text}
+                    </div>
+                  </div>
+                ))}
+                {chatSending && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#141413', border: '1px solid #2a2a27', fontSize: '13px', color: '#555' }}>
+                      <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>ARJUN</div>
+                      Thinking...
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <label style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', flexShrink: 0, opacity: pdfUploading ? 0.5 : 1 }}>
+                  <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { handleChatPdf(e.target.files[0]); e.target.value = ''; }} disabled={pdfUploading} />
+                  <span style={{ fontSize: '14px' }}>{pdfUploading ? '...' : '📄'}</span>
+                </label>
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleChatSend()}
+                  placeholder="I have 3 years of experience at Google as a PM..."
+                  disabled={chatSending}
+                  style={{
+                    flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27',
+                    borderRadius: '8px', color: '#f0ede8', fontFamily: "'DM Sans', sans-serif",
+                    fontSize: '13px', padding: '12px 16px', outline: 'none',
+                  }}
+                />
+                <button
+                  onClick={handleChatSend}
+                  disabled={!chatInput.trim() || chatSending}
+                  style={{
+                    background: chatInput.trim() ? '#f59e0b' : '#1f1f1c',
+                    color: chatInput.trim() ? '#0e0e0d' : '#444',
+                    border: 'none', padding: '10px 20px', borderRadius: '8px',
+                    fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0,
+                  }}
+                >
+                  Send
+                </button>
               </div>
             </div>
           )}

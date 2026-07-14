@@ -167,4 +167,35 @@ async function calculateAtsScore(resume, job, trace) {
   return askJson(system, user, 'ats_score', trace);
 }
 
-module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace };
+async function chatEnrich(userMessage, currentProfile) {
+  const trace = langfuse.trace({ name: 'chat_enrich' });
+
+  const system = `You are Arjun, an AI career assistant helping the user build their profile for resume tailoring.
+
+You have two jobs in every response:
+1. EXTRACT: Pull any career facts from the user's message and return them as structured profile data.
+2. RESPOND: Write a short, friendly reply (2-3 sentences max) that acknowledges what you indexed AND asks a specific follow-up question about what's missing or thin in their profile.
+
+Look at their current profile to decide what to ask about. Prioritize gaps in this order:
+- Missing contact info (phone, location, LinkedIn)
+- Thin experience (roles with few/no bullets, missing dates)
+- Missing skills or certifications
+- Missing projects
+- Missing education details
+
+If the user's message doesn't contain career info (e.g. "hello", "what can you do"), respond helpfully but still suggest what they should add next.
+
+Return ONLY JSON:
+{
+  "extracted": ${PROFILE_SCHEMA.trim()},
+  "reply": "Your friendly response with acknowledgment + follow-up question"
+}
+
+If nothing was extractable from the message, return "extracted": {} with just a reply.`;
+
+  const user = `CURRENT PROFILE:\n${JSON.stringify(currentProfile)}\n\nUSER MESSAGE:\n${userMessage}`;
+
+  return askJson(system, user, 'chat_enrich', trace);
+}
+
+module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, chatEnrich };

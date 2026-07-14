@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile } = require('./db');
 const { ingestText, ingestPdf } = require('./profile');
 const { processJob } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
@@ -15,6 +15,8 @@ const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { renderResumeDocx } = require('./renderDocx');
+const { chatEnrich } = require('./llm');
+const { mergeProfile } = require('./profile');
 
 const app = express();
 
@@ -63,6 +65,24 @@ app.post(['/ingest/pdf', '/api/ingest/pdf'], upload.single('file'), async (req, 
   try {
     if (!req.file) return res.status(400).json({ error: 'file required' });
     res.json(await ingestPdf(req.file.path, req.userId));
+  } catch (e) { next(e); }
+});
+
+// ── CHAT ENRICH ──────────────────────────────────────────────────────────
+app.post(['/chat', '/api/chat'], async (req, res, next) => {
+  try {
+    const { message } = req.body || {};
+    if (!message) return res.status(400).json({ error: 'message required' });
+
+    const currentProfile = await getProfile(req.userId);
+    const result = await chatEnrich(message, currentProfile);
+
+    if (result.extracted && Object.keys(result.extracted).length > 0) {
+      const merged = mergeProfile(currentProfile, result.extracted);
+      await saveProfile(merged, req.userId);
+    }
+
+    res.json({ reply: result.reply, profile: await getProfile(req.userId) });
   } catch (e) { next(e); }
 });
 

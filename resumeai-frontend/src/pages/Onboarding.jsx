@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { auth } from '../firebase';
@@ -18,6 +18,16 @@ export default function Onboarding() {
   const [copied, setCopied] = useState(false);
 
   const user = auth.currentUser;
+
+  useEffect(() => {
+    if (searchParams.get('step') === 'gmail') {
+      api.getProfile().then(p => {
+        if (p?.gmail_connected || p?.gmail_filter_pending) {
+          navigate('/dashboard');
+        }
+      }).catch(() => {});
+    }
+  }, []);
 
   const handleVerifyFilter = async () => {
     setVerifying(true);

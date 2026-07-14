@@ -66,6 +66,15 @@ export const api = {
     return this.ingestText(`I have experience with ${keyword}`);
   },
 
+  async chat(message) {
+    const res = await fetch(`${BASE}/chat`, {
+      method: 'POST',
+      headers: await getHeaders(),
+      body: JSON.stringify({ message }),
+    });
+    return res.json();
+  },
+
   async connectGmail(code) {
     const res = await fetch(`${BASE}/gmail/connect`, {
       method: 'POST',
