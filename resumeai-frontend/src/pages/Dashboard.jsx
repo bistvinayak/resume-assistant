@@ -88,6 +88,49 @@ export default function Dashboard() {
     setSubmitting(false);
   };
 
+  const handleConfirmChanges = async (msgIndex, changes) => {
+    setChatMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, confirmState: 'saving' } : m));
+    try {
+      const res = await api.confirmChanges(changes);
+      if (res.profile) setProfile(res.profile);
+      setChatMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, confirmState: 'confirmed' } : m));
+    } catch {
+      setChatMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, confirmState: null } : m));
+    }
+  };
+
+  const handleRejectChanges = (msgIndex) => {
+    setChatMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, confirmState: 'rejected' } : m));
+  };
+
+  const formatChanges = (changes) => {
+    const parts = [];
+    if (changes.contact && Object.keys(changes.contact).length) {
+      Object.entries(changes.contact).forEach(([k, v]) => {
+        if (v) parts.push({ section: 'Contact', detail: `${k}: ${Array.isArray(v) ? v.join(', ') : v}` });
+      });
+    }
+    if (changes.summary) parts.push({ section: 'Summary', detail: changes.summary.slice(0, 100) + (changes.summary.length > 100 ? '...' : '') });
+    if (changes.skills?.length) parts.push({ section: 'Skills', detail: changes.skills.join(', ') });
+    if (changes.experience?.length) {
+      changes.experience.forEach(exp => {
+        const line = [exp.title, exp.company, exp.dates].filter(Boolean).join(' · ');
+        parts.push({ section: 'Experience', detail: line || 'New role' });
+        if (exp.bullets?.length) exp.bullets.forEach(b => parts.push({ section: '', detail: `  · ${b}` }));
+      });
+    }
+    if (changes.projects?.length) {
+      changes.projects.forEach(p => parts.push({ section: 'Project', detail: p.name || p.description || 'New project' }));
+    }
+    if (changes.education?.length) {
+      changes.education.forEach(e => parts.push({ section: 'Education', detail: [e.degree, e.school].filter(Boolean).join(' — ') }));
+    }
+    if (changes.custom_facts?.length) {
+      changes.custom_facts.forEach(f => parts.push({ section: 'Fact', detail: f }));
+    }
+    return parts;
+  };
+
   const handleChatSend = async () => {
     const msg = chatInput.trim();
     if (!msg || chatSending) return;
@@ -96,7 +139,18 @@ export default function Dashboard() {
     setChatSending(true);
     try {
       const res = await api.chat(msg);
-      setChatMessages(prev => [...prev, { role: 'arjun', text: res.reply }]);
+
+      if (res.pendingChanges && Object.keys(res.pendingChanges).length > 0) {
+        setChatMessages(prev => [...prev, {
+          role: 'arjun',
+          text: res.reply,
+          pendingChanges: res.pendingChanges,
+          confirmState: null,
+        }]);
+      } else {
+        setChatMessages(prev => [...prev, { role: 'arjun', text: res.reply }]);
+      }
+
       if (res.profile) setProfile(res.profile);
 
       if (res.scraping) {
@@ -423,6 +477,49 @@ export default function Dashboard() {
                         <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>ARJUN</div>
                       )}
                       {msg.text}
+
+                      {msg.pendingChanges && (
+                        <div style={{ marginTop: '12px', background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '8px', padding: '12px', fontSize: '12px' }}>
+                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em', marginBottom: '10px' }}>
+                            PROPOSED CHANGES
+                          </div>
+                          {formatChanges(msg.pendingChanges).map((item, ci) => (
+                            <div key={ci} style={{ display: 'flex', gap: '8px', padding: '4px 0', borderBottom: '1px solid #1a1a18' }}>
+                              {item.section && (
+                                <span style={{ fontSize: '10px', color: '#555', fontFamily: "'DM Mono', monospace", minWidth: 70, flexShrink: 0, textTransform: 'uppercase' }}>{item.section}</span>
+                              )}
+                              <span style={{ color: '#c0bdb8', fontSize: '12px' }}>{item.detail}</span>
+                            </div>
+                          ))}
+
+                          {!msg.confirmState && (
+                            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+                              <button
+                                onClick={() => handleConfirmChanges(i, msg.pendingChanges)}
+                                style={{ flex: 1, background: '#22c55e', color: '#0e0e0d', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                              >
+                                Confirm & Save
+                              </button>
+                              <button
+                                onClick={() => handleRejectChanges(i)}
+                                style={{ flex: 1, background: 'transparent', color: '#888', border: '1px solid #2a2a27', padding: '8px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+                              >
+                                Discard
+                              </button>
+                            </div>
+                          )}
+
+                          {msg.confirmState === 'saving' && (
+                            <div style={{ marginTop: '10px', fontSize: '11px', color: '#f59e0b', fontFamily: "'DM Mono', monospace" }}>Saving...</div>
+                          )}
+                          {msg.confirmState === 'confirmed' && (
+                            <div style={{ marginTop: '10px', fontSize: '11px', color: '#22c55e', fontFamily: "'DM Mono', monospace" }}>✓ Saved to profile</div>
+                          )}
+                          {msg.confirmState === 'rejected' && (
+                            <div style={{ marginTop: '10px', fontSize: '11px', color: '#888', fontFamily: "'DM Mono', monospace" }}>Changes discarded</div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

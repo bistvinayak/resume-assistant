@@ -103,6 +103,15 @@ export const api = {
     return res.json();
   },
 
+  async confirmChanges(changes) {
+    const res = await fetch(`${BASE}/chat/confirm`, {
+      method: 'POST',
+      headers: await getHeaders(),
+      body: JSON.stringify({ changes }),
+    });
+    return res.json();
+  },
+
   async downloadResume(jobId) {
     const user = await waitForAuth();
     const token = await user.getIdToken(true);

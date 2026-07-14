@@ -126,12 +126,27 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
 
     const result = await chatEnrich(message, currentProfile);
 
-    if (result.extracted && Object.keys(result.extracted).length > 0) {
-      const merged = mergeProfile(currentProfile, result.extracted);
-      await saveProfile(merged, req.userId);
-    }
+    const hasExtracted = result.extracted && Object.keys(result.extracted).length > 0;
 
-    res.json({ reply: result.reply, profile: await getProfile(req.userId) });
+    res.json({
+      reply: result.reply,
+      profile: currentProfile,
+      ...(hasExtracted ? { pendingChanges: result.extracted } : {}),
+    });
+  } catch (e) { next(e); }
+});
+
+// ── CHAT CONFIRM ─────────────────────────────────────────────────────────
+app.post(['/chat/confirm', '/api/chat/confirm'], async (req, res, next) => {
+  try {
+    const { changes } = req.body || {};
+    if (!changes) return res.status(400).json({ error: 'changes required' });
+
+    const currentProfile = await getProfile(req.userId);
+    const merged = mergeProfile(currentProfile, changes);
+    await saveProfile(merged, req.userId);
+
+    res.json({ ok: true, profile: merged });
   } catch (e) { next(e); }
 });
 
