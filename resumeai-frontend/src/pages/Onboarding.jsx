@@ -8,7 +8,7 @@ const FORWARD_EMAIL = 'arjun.resumeai@gmail.com';
 export default function Onboarding() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [step, setStep] = useState(searchParams.get('step') === 'gmail' ? 3 : 1);
+  const [step, setStep] = useState(searchParams.get('step') === 'gmail' ? 2 : 1);
   const [bio, setBio] = useState('');
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -46,30 +46,6 @@ export default function Onboarding() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleBioSubmit = async () => {
-    if (bio.trim().length < 50) return;
-    setLoading(true);
-    try {
-      await api.ingestText(bio);
-      setStep(2);
-    } catch (e) {
-      setError('Failed to save. Please try again.');
-    }
-    setLoading(false);
-  };
-
-  const handlePdfSubmit = async () => {
-    if (!file) { setStep(3); return; }
-    setLoading(true);
-    try {
-      await api.ingestPdf(file);
-      setStep(3);
-    } catch (e) {
-      setError('PDF upload failed. Please try again.');
-    }
-    setLoading(false);
-  };
-
   const card = {
     width: '100%', maxWidth: '620px',
     background: '#ffffff', border: '1px solid #d6d3d1',
@@ -85,7 +61,7 @@ export default function Onboarding() {
 
       {/* Progress */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
-        {[1, 2, 3].map(n => (
+        {[1, 2].map(n => (
           <div key={n} style={{
             width: n === step ? 24 : 8, height: 8, borderRadius: '4px',
             background: n === step ? '#f59e0b' : n < step ? '#22c55e' : '#d6d3d1',
@@ -104,9 +80,34 @@ export default function Onboarding() {
               Hi {user?.displayName?.split(' ')[0]} 👋
             </h2>
             <p style={{ fontSize: '14px', color: '#78716c', lineHeight: 1.6, marginBottom: '20px' }}>
-              Don't use resume format. Write like you're explaining your career to a friend —
-              roles, skills, achievements, tools, anything relevant.
+              Upload your resume or write about your career — roles, skills, achievements, tools.
             </p>
+
+            {/* Document upload */}
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: '14px',
+              border: `2px dashed ${file ? '#22c55e44' : '#d6d3d1'}`,
+              borderRadius: '10px', padding: '16px 20px', cursor: 'pointer',
+              background: file ? '#ecfdf5' : '#fafaf9',
+              transition: 'all 0.2s', marginBottom: '16px',
+            }}>
+              <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
+              <span style={{ fontSize: '24px', flexShrink: 0 }}>{file ? '✅' : '📄'}</span>
+              <div>
+                <div style={{ fontSize: '13px', fontWeight: 500, color: file ? '#22c55e' : '#1c1917' }}>
+                  {file ? file.name : 'Upload resume PDF'}
+                </div>
+                <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '2px' }}>
+                  {file ? 'Click to change' : 'We\'ll extract all your details automatically'}
+                </div>
+              </div>
+            </label>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div style={{ flex: 1, height: '1px', background: '#d6d3d1' }} />
+              <span style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>or write about yourself</span>
+              <div style={{ flex: 1, height: '1px', background: '#d6d3d1' }} />
+            </div>
 
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
               {['I spent X years at...', 'I built a product that...', 'I know Python and...', 'I led a team of...'].map(eg => (
@@ -121,9 +122,9 @@ export default function Onboarding() {
             <textarea
               value={bio}
               onChange={e => setBio(e.target.value)}
-              placeholder="I'm a Product Manager with 6 years of experience. I've worked at Zinnia building transaction automation systems handling 100K+ monthly workflows. I'm strong at API integrations, roadmap strategy, AI products, and cross-functional collaboration..."
+              placeholder="I'm a Product Manager with 6 years of experience. I've worked at Zinnia building transaction automation systems handling 100K+ monthly workflows..."
               style={{
-                width: '100%', minHeight: '200px', background: '#fafaf9',
+                width: '100%', minHeight: '160px', background: '#fafaf9',
                 border: `1px solid ${bio.length > 50 ? '#f59e0b44' : '#d6d3d1'}`,
                 borderRadius: '8px', color: '#1c1917',
                 fontFamily: "'DM Sans', sans-serif", fontSize: '14px',
@@ -132,82 +133,38 @@ export default function Onboarding() {
               }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
-              <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: bio.length >= 50 ? '#22c55e' : '#444' }}>
-                {bio.length < 50 ? `${50 - bio.length} more chars to unlock` : '✓ ready'}
+              <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: (file || bio.length >= 50) ? '#22c55e' : '#444' }}>
+                {file && bio.length >= 50 ? '✓ resume + bio ready' : file ? '✓ resume uploaded' : bio.length < 50 ? `${50 - bio.length} more chars or upload a PDF` : '✓ ready'}
               </span>
               <button
-                onClick={handleBioSubmit}
-                disabled={bio.trim().length < 50 || loading}
+                onClick={async () => {
+                  if (!file && bio.trim().length < 50) return;
+                  setLoading(true);
+                  try {
+                    if (bio.trim().length >= 50) await api.ingestText(bio);
+                    if (file) await api.ingestPdf(file);
+                    setStep(2);
+                  } catch (e) {
+                    setError('Failed to save. Please try again.');
+                  }
+                  setLoading(false);
+                }}
+                disabled={(!file && bio.trim().length < 50) || loading}
                 style={{
-                  background: bio.trim().length >= 50 ? '#f59e0b' : '#e7e5e4',
-                  color: bio.trim().length >= 50 ? '#1c1917' : '#78716c',
+                  background: (file || bio.trim().length >= 50) ? '#f59e0b' : '#e7e5e4',
+                  color: (file || bio.trim().length >= 50) ? '#1c1917' : '#78716c',
                   border: 'none', padding: '10px 24px', borderRadius: '6px',
                   fontSize: '13px', fontWeight: 600,
                   opacity: loading ? 0.7 : 1,
                 }}
               >
-                {loading ? 'Saving...' : 'Continue →'}
+                {loading ? 'Processing...' : 'Continue →'}
               </button>
             </div>
           </>
         )}
 
         {step === 2 && (
-          <>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', letterSpacing: '0.1em', marginBottom: '10px' }}>
-              STEP 02 — UPLOAD RESUME (OPTIONAL)
-            </div>
-            <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '28px', marginBottom: '8px' }}>
-              Got a resume PDF?
-            </h2>
-            <p style={{ fontSize: '14px', color: '#78716c', lineHeight: 1.6, marginBottom: '24px' }}>
-              Upload your existing resume and we'll extract all the details automatically.
-              You can skip this and add more info later.
-            </p>
-
-            <label style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center',
-              justifyContent: 'center', gap: '10px',
-              border: `2px dashed ${file ? '#22c55e44' : '#d6d3d1'}`,
-              borderRadius: '10px', padding: '32px', cursor: 'pointer',
-              background: file ? '#ecfdf5' : '#fafaf9',
-              transition: 'all 0.2s',
-            }}>
-              <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
-              <span style={{ fontSize: '28px' }}>{file ? '✅' : '📄'}</span>
-              <span style={{ fontSize: '13px', color: file ? '#22c55e' : '#555', fontFamily: "'DM Mono', monospace" }}>
-                {file ? file.name : 'Click to upload PDF'}
-              </span>
-            </label>
-
-            {error && <p style={{ color: '#ef4444', fontSize: '12px', marginTop: '10px' }}>{error}</p>}
-
-            <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-              <button
-                onClick={() => setStep(3)}
-                style={{
-                  flex: 1, background: 'transparent', border: '1px solid #d6d3d1',
-                  color: '#78716c', padding: '12px', borderRadius: '6px', fontSize: '13px',
-                }}
-              >
-                Skip for now
-              </button>
-              <button
-                onClick={handlePdfSubmit}
-                disabled={loading}
-                style={{
-                  flex: 2, background: '#f59e0b', color: '#1c1917',
-                  border: 'none', padding: '12px', borderRadius: '6px',
-                  fontSize: '13px', fontWeight: 600, opacity: loading ? 0.7 : 1,
-                }}
-              >
-                {loading ? 'Processing...' : file ? 'Upload & continue →' : 'Continue →'}
-              </button>
-            </div>
-          </>
-        )}
-
-        {step === 3 && (
           <div style={{ animation: 'fadeIn 0.3s ease' }}>
             {gmailVerified ? (
               <div style={{ textAlign: 'center' }}>

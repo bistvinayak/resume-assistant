@@ -114,6 +114,29 @@ async function renderResumePdf(resume, outPath) {
       }
     }
 
+    // Certifications
+    if (Array.isArray(resume.certifications) && resume.certifications.length) {
+      sectionHeading(doc, 'CERTIFICATIONS', pageWidth);
+      for (const cert of resume.certifications) {
+        const label = cert.issuer ? `${cert.name} — ${cert.issuer}` : cert.name;
+        doc.fontSize(10).font('Helvetica').text(`•  ${label}`, { indent: 12, lineGap: 1.5 });
+      }
+    }
+
+    // Activities
+    if (Array.isArray(resume.activities) && resume.activities.length) {
+      sectionHeading(doc, 'ACTIVITIES', pageWidth);
+      for (const a of resume.activities) {
+        doc.fontSize(10).font('Helvetica').text(`•  ${a}`, { indent: 12, lineGap: 1.5 });
+      }
+    }
+
+    // Interests
+    if (Array.isArray(resume.interests) && resume.interests.length) {
+      sectionHeading(doc, 'INTERESTS', pageWidth);
+      doc.fontSize(10).font('Helvetica').text(resume.interests.join('  •  '));
+    }
+
     doc.end();
     stream.on('finish', () => resolve(outPath));
     stream.on('error', reject);

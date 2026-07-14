@@ -34,6 +34,9 @@ function mergeProfile(base, incoming) {
   out.experience = upsertById(out.experience, incoming.experience, keyExp);
   out.projects = upsertById(out.projects, incoming.projects, keyProj);
   out.education = upsertById(out.education, incoming.education, keyEdu);
+  out.certifications = upsertById(out.certifications || [], incoming.certifications, keyCert);
+  out.activities = unionCI(out.activities || [], incoming.activities);
+  out.interests = unionCI(out.interests || [], incoming.interests);
 
   if (Array.isArray(incoming.custom_facts)) {
     const now = new Date().toISOString();
@@ -57,6 +60,7 @@ function mergeProfile(base, incoming) {
 const keyExp = (e) => (e.id || `${(e.company || '').toLowerCase()}|${(e.title || '').toLowerCase()}`);
 const keyProj = (p) => (p.id || (p.name || '').toLowerCase());
 const keyEdu = (e) => `${(e.school || '').toLowerCase()}|${(e.degree || '').toLowerCase()}`;
+const keyCert = (c) => (typeof c === 'string' ? c : (c.name || '')).toLowerCase();
 
 function unionCI(a = [], b = []) {
   const seen = new Set((a || []).map((s) => String(s).toLowerCase()));

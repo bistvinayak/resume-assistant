@@ -85,6 +85,26 @@ async function renderResumeDocx(resume, outPath) {
     }
   }
 
+  if (Array.isArray(resume.certifications) && resume.certifications.length) {
+    children.push(heading('Certifications'));
+    for (const cert of resume.certifications) {
+      const label = cert.issuer ? `${cert.name} — ${cert.issuer}` : (typeof cert === 'string' ? cert : cert.name);
+      children.push(new Paragraph({ text: label, bullet: { level: 0 } }));
+    }
+  }
+
+  if (Array.isArray(resume.activities) && resume.activities.length) {
+    children.push(heading('Activities'));
+    for (const a of resume.activities) {
+      children.push(new Paragraph({ text: a, bullet: { level: 0 } }));
+    }
+  }
+
+  if (Array.isArray(resume.interests) && resume.interests.length) {
+    children.push(heading('Interests'));
+    children.push(new Paragraph({ children: [new TextRun({ text: resume.interests.join('  •  '), size: 21 })] }));
+  }
+
   const doc = new Document({ sections: [{ children }] });
   const buffer = await Packer.toBuffer(doc);
   fs.writeFileSync(outPath, buffer);

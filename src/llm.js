@@ -83,6 +83,9 @@ Return ONLY JSON matching this shape (omit fields you found nothing for):
   "experience": [ { "id": "slug", "company": "", "title": "", "location": "", "dates": "", "bullets": [] } ],
   "projects": [ { "id": "slug", "name": "", "description": "", "tags": [] } ],
   "education": [ { "school": "", "degree": "", "dates": "" } ],
+  "certifications": [ { "name": "", "issuer": "" } ],
+  "activities": [],
+  "interests": [],
   "custom_facts": []
 }`;
 
@@ -124,6 +127,9 @@ async function tailorResume(profile, job, trace) {
       "experience": [ { "company":"", "tagline":"", "title":"", "location":"", "dates":"", "bullets":[] } ],
       "projects": [ { "name":"", "description":"" } ],
       "education": [ { "school":"", "degree":"", "dates":"" } ],
+      "certifications": [ { "name":"", "issuer":"" } ],
+      "activities": [],
+      "interests": [],
       "tailoring_notes": [
         "Short sentence explaining a key tailoring decision — e.g. why summary was rephrased, which bullets were rewritten to match JD keywords, why certain skills were prioritized"
       ]
