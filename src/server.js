@@ -18,6 +18,28 @@ const { renderResumeDocx } = require('./renderDocx');
 const { chatEnrich, chatJobAnalysis } = require('./llm');
 const { mergeProfile } = require('./profile');
 
+// Normalize LinkedIn URLs to direct job view format
+function normalizeJobUrl(rawUrl) {
+  try {
+    const u = new URL(rawUrl);
+    if (!u.hostname.includes('linkedin.com')) return rawUrl;
+
+    // Direct job view: linkedin.com/jobs/view/4437670563
+    const viewMatch = u.pathname.match(/\/jobs\/view\/(\d+)/);
+    if (viewMatch) return `https://www.linkedin.com/jobs/view/${viewMatch[1]}/`;
+
+    // Collection/search pages with currentJobId param:
+    // linkedin.com/jobs/collections/top-applicant/?currentJobId=4437670563
+    // linkedin.com/jobs/search/?currentJobId=4437670563
+    const currentJobId = u.searchParams.get('currentJobId');
+    if (currentJobId) return `https://www.linkedin.com/jobs/view/${currentJobId}/`;
+
+    return rawUrl;
+  } catch {
+    return rawUrl;
+  }
+}
+
 const app = express();
 
 // CORS — allow frontend domains
@@ -88,7 +110,11 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
     // Detect any job URL — but only process if mode is 'tailor' (not 'profile')
     const urlMatch = message.match(/https?:\/\/[^\s]+/);
     if (urlMatch && mode !== 'profile') {
-      const url = urlMatch[0].replace(/[)>\]]+$/, '');
+      let url = urlMatch[0].replace(/[)>\]]+$/, '');
+
+      // Normalize LinkedIn URLs — extract the actual job view URL
+      url = normalizeJobUrl(url);
+
       const jobId = `url_${Buffer.from(url).toString('base64url').slice(0, 40)}`;
 
       // Check if this job was already processed
@@ -206,12 +232,14 @@ app.post(['/jobs/process', '/api/jobs/process'], async (req, res, next) => {
 // Submit a LinkedIn job URL — scrape + process
 app.post(['/jobs/submit-url', '/api/jobs/submit-url'], async (req, res, next) => {
   try {
-    const { url } = req.body || {};
+    let { url } = req.body || {};
     if (!url) return res.status(400).json({ error: 'url required' });
+
+    url = normalizeJobUrl(url);
 
     // Extract job ID from URL
     const jobIdMatch = url.match(/\/jobs\/view\/(\d+)/);
-    if (!jobIdMatch) return res.status(400).json({ error: 'invalid LinkedIn job URL' });
+    if (!jobIdMatch) return res.status(400).json({ error: 'Could not find a job ID in this URL. Use a direct job link like linkedin.com/jobs/view/4437670563' });
 
     const job_id = `linkedin_${jobIdMatch[1]}`;
 

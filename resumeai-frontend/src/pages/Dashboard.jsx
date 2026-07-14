@@ -291,15 +291,11 @@ export default function Dashboard() {
       if (res.scraping) {
         const progressId = Date.now();
         const deliveredCountAtStart = jobs.filter(j => j.status === 'delivered').length;
-        setChatMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, stage: 0 }]);
+        setChatMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, startTime: Date.now() }]);
 
-        let stageIdx = 0;
-        const stageTimer = setInterval(() => {
-          stageIdx++;
-          if (stageIdx < 5) {
-            setChatMessages(prev => prev.map(m => m.id === progressId ? { ...m, stage: stageIdx } : m));
-          }
-        }, 8000);
+        const elapsedTimer = setInterval(() => {
+          setChatMessages(prev => prev.map(m => m.id === progressId ? { ...m, elapsed: Math.floor((Date.now() - m.startTime) / 1000) } : m));
+        }, 1000);
 
         let pollCount = 0;
         const pollJobs = setInterval(async () => {
@@ -312,7 +308,7 @@ export default function Dashboard() {
 
             if (deliveredJobs.length > deliveredCountAtStart) {
               clearInterval(pollJobs);
-              clearInterval(stageTimer);
+              clearInterval(elapsedTimer);
               setJobs(allJobs);
               const latest = deliveredJobs[0];
               setChatMessages(prev => [
@@ -321,7 +317,7 @@ export default function Dashboard() {
               ]);
             } else if (failedNew) {
               clearInterval(pollJobs);
-              clearInterval(stageTimer);
+              clearInterval(elapsedTimer);
               setJobs(allJobs);
               setChatMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
@@ -329,11 +325,11 @@ export default function Dashboard() {
               ]);
             } else if (pollCount >= 12) {
               clearInterval(pollJobs);
-              clearInterval(stageTimer);
+              clearInterval(elapsedTimer);
               setJobs(allJobs);
               setChatMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: 'The processing is taking longer than expected. Check the Job Activity tab — the result will appear there when ready.' },
+                { role: 'arjun', text: 'Still processing after 2 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
               ]);
             }
           } catch {}
@@ -383,15 +379,11 @@ export default function Dashboard() {
       if (res.scraping) {
         const progressId = Date.now();
         const deliveredCountAtStart = jobs.filter(j => j.status === 'delivered').length;
-        setTailorMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, stage: 0 }]);
+        setTailorMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, startTime: Date.now() }]);
 
-        let stageIdx = 0;
-        const stageTimer = setInterval(() => {
-          stageIdx++;
-          if (stageIdx < 5) {
-            setTailorMessages(prev => prev.map(m => m.id === progressId ? { ...m, stage: stageIdx } : m));
-          }
-        }, 8000);
+        const elapsedTimer = setInterval(() => {
+          setTailorMessages(prev => prev.map(m => m.id === progressId ? { ...m, elapsed: Math.floor((Date.now() - m.startTime) / 1000) } : m));
+        }, 1000);
 
         let pollCount = 0;
         const pollJobs = setInterval(async () => {
@@ -404,7 +396,7 @@ export default function Dashboard() {
 
             if (deliveredJobs.length > deliveredCountAtStart) {
               clearInterval(pollJobs);
-              clearInterval(stageTimer);
+              clearInterval(elapsedTimer);
               setJobs(allJobs);
               const latest = deliveredJobs[0];
               setTailorMessages(prev => [
@@ -413,7 +405,7 @@ export default function Dashboard() {
               ]);
             } else if (failedNew) {
               clearInterval(pollJobs);
-              clearInterval(stageTimer);
+              clearInterval(elapsedTimer);
               setJobs(allJobs);
               setTailorMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
@@ -421,11 +413,11 @@ export default function Dashboard() {
               ]);
             } else if (pollCount >= 12) {
               clearInterval(pollJobs);
-              clearInterval(stageTimer);
+              clearInterval(elapsedTimer);
               setJobs(allJobs);
               setTailorMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: 'The processing is taking longer than expected. Check the Job Activity tab — the result will appear there when ready.' },
+                { role: 'arjun', text: 'Still processing after 2 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
               ]);
             }
           } catch {}
@@ -858,40 +850,19 @@ export default function Dashboard() {
 
               <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
                 {chatMessages.map((msg, i) => {
-                  const progressStages = [
-                    'Opening job page in headless browser...',
-                    'Reading job description...',
-                    'Tailoring your resume with AI...',
-                    'Calculating ATS match score...',
-                    'Improving resume if needed...',
-                  ];
-
                   if (msg.type === 'progress') {
+                    const secs = msg.elapsed || 0;
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
                         <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
-                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>ARJUN — PROCESSING</div>
-                          {progressStages.map((stage, si) => {
-                            const done = si < msg.stage;
-                            const active = si === msg.stage;
-                            return (
-                              <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0', opacity: si > msg.stage ? 0.3 : 1 }}>
-                                <div style={{
-                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  background: done ? '#22c55e' : active ? '#f59e0b' : '#e7e5e4',
-                                  fontSize: '9px', color: '#1c1917', fontWeight: 700,
-                                }}>
-                                  {done ? '✓' : active ? (
-                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #fff', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
-                                  ) : (si + 1)}
-                                </div>
-                                <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#1c1917' : '#78716c', fontFamily: "'DM Mono', monospace" }}>
-                                  {stage}
-                                </span>
-                              </div>
-                            );
-                          })}
+                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '12px' }}>ARJUN — PROCESSING</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                            <div>
+                              <div style={{ fontSize: '13px', color: '#1c1917', fontWeight: 500, marginBottom: '2px' }}>Scraping & tailoring your resume...</div>
+                              <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{secs}s elapsed — typically takes 30–60s</div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );
@@ -1200,40 +1171,19 @@ export default function Dashboard() {
 
               <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
                 {tailorMessages.map((msg, i) => {
-                  const progressStages = [
-                    'Opening job page in headless browser...',
-                    'Reading job description...',
-                    'Tailoring your resume with AI...',
-                    'Calculating ATS match score...',
-                    'Improving resume if needed...',
-                  ];
-
                   if (msg.type === 'progress') {
+                    const secs = msg.elapsed || 0;
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
                         <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
-                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>ARJUN — PROCESSING</div>
-                          {progressStages.map((stage, si) => {
-                            const done = si < msg.stage;
-                            const active = si === msg.stage;
-                            return (
-                              <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0', opacity: si > msg.stage ? 0.3 : 1 }}>
-                                <div style={{
-                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  background: done ? '#22c55e' : active ? '#f59e0b' : '#e7e5e4',
-                                  fontSize: '9px', color: '#1c1917', fontWeight: 700,
-                                }}>
-                                  {done ? '✓' : active ? (
-                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #fff', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
-                                  ) : (si + 1)}
-                                </div>
-                                <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#1c1917' : '#78716c', fontFamily: "'DM Mono', monospace" }}>
-                                  {stage}
-                                </span>
-                              </div>
-                            );
-                          })}
+                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '12px' }}>ARJUN — PROCESSING</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <span style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
+                            <div>
+                              <div style={{ fontSize: '13px', color: '#1c1917', fontWeight: 500, marginBottom: '2px' }}>Scraping & tailoring your resume...</div>
+                              <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{secs}s elapsed — typically takes 30–60s</div>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );
