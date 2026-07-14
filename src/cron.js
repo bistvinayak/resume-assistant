@@ -59,7 +59,7 @@ async function runBatch(userId = 'me') {
         }
       }
 
-      const result = await processJob(job, userId);
+      const result = await processJob(job, userId, { source: 'cron' });
       console.log(result.skipped
         ? `· skipped ${job.job_id}`
         : `✓ ${job.company} — ${job.title} [ATS: ${result.atsScore}/100${result.improved ? ' improved' : ''}]`
