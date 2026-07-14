@@ -219,13 +219,32 @@ WHAT TO ASK ABOUT (priority order):
 
 IF THE USER SENDS A JOB URL: Do NOT process it. Reply: "To tailor a resume for a job, switch to the **Tailor Resume** tab and paste the URL there. This tab is just for building your profile."
 
+DELETION RULES:
+- If the user asks to remove, delete, or clear specific data (e.g. "remove my experience at SOTI", "delete Python from skills", "clear my projects"), populate the "deletions" field.
+- deletions.skills: array of skill strings to remove
+- deletions.experience_ids: array of company names or slugs to remove (match against company field, case-insensitive)
+- deletions.project_ids: array of project names to remove
+- deletions.certifications: array of certification names to remove
+- deletions.education_ids: array of school names to remove
+- deletions.clear_summary: true if user wants summary cleared
+- Only delete what the user explicitly asks to remove. Never delete proactively.
+
 Return ONLY JSON:
 {
   "extracted": ${PROFILE_SCHEMA.trim()},
+  "deletions": {
+    "skills": [],
+    "experience_ids": [],
+    "project_ids": [],
+    "certifications": [],
+    "education_ids": [],
+    "clear_summary": false
+  },
   "reply": "Your response"
 }
 
-If nothing was extractable, return "extracted": {}.`;
+If nothing was extractable, return "extracted": {}.
+If nothing to delete, return "deletions": {}.`;
 
   const user = `CURRENT PROFILE:\n${JSON.stringify(currentProfile)}\n\nUSER MESSAGE:\n${userMessage}`;
 

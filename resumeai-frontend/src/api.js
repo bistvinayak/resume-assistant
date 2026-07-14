@@ -16,21 +16,32 @@ function waitForAuth() {
 async function getHeaders() {
   const user = await waitForAuth();
   if (!user) throw new Error('Not authenticated');
-  const token = await user.getIdToken(true);
+  const token = await user.getIdToken().catch(() => null);
+  if (!token) throw new Error('Not authenticated');
   return {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`,
   };
 }
 
+async function checkedFetch(url, opts) {
+  const res = await fetch(url, opts);
+  if (res.status === 401) {
+    await auth.signOut();
+    window.location.href = '/';
+    throw new Error('Session expired');
+  }
+  return res;
+}
+
 export const api = {
   async getProfile() {
-    const res = await fetch(`${BASE}/profile`, { headers: await getHeaders() });
+    const res = await checkedFetch(`${BASE}/profile`, { headers: await getHeaders() });
     return res.json();
   },
 
   async updateProfile(profile) {
-    const res = await fetch(`${BASE}/profile`, {
+    const res = await checkedFetch(`${BASE}/profile`, {
       method: 'PUT',
       headers: await getHeaders(),
       body: JSON.stringify({ profile }),
@@ -39,7 +50,7 @@ export const api = {
   },
 
   async ingestText(text) {
-    const res = await fetch(`${BASE}/ingest/text`, {
+    const res = await checkedFetch(`${BASE}/ingest/text`, {
       method: 'POST',
       headers: await getHeaders(),
       body: JSON.stringify({ text }),
@@ -52,7 +63,7 @@ export const api = {
     const token = await user.getIdToken(true);
     const form = new FormData();
     form.append('file', file);
-    const res = await fetch(`${BASE}/ingest/pdf`, {
+    const res = await checkedFetch(`${BASE}/ingest/pdf`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` },
       body: form,
@@ -61,7 +72,7 @@ export const api = {
   },
 
   async submitJobUrl(url) {
-    const res = await fetch(`${BASE}/jobs/submit-url`, {
+    const res = await checkedFetch(`${BASE}/jobs/submit-url`, {
       method: 'POST',
       headers: await getHeaders(),
       body: JSON.stringify({ url }),
@@ -70,12 +81,12 @@ export const api = {
   },
 
   async getJobs() {
-    const res = await fetch(`${BASE}/jobs`, { headers: await getHeaders() });
+    const res = await checkedFetch(`${BASE}/jobs`, { headers: await getHeaders() });
     return res.json();
   },
 
   async runBatch() {
-    const res = await fetch(`${BASE}/jobs/run-batch`, {
+    const res = await checkedFetch(`${BASE}/jobs/run-batch`, {
       method: 'POST',
       headers: await getHeaders(),
     });
@@ -87,7 +98,7 @@ export const api = {
   },
 
   async chat(message, mode = 'profile') {
-    const res = await fetch(`${BASE}/chat`, {
+    const res = await checkedFetch(`${BASE}/chat`, {
       method: 'POST',
       headers: await getHeaders(),
       body: JSON.stringify({ message, mode }),
@@ -96,7 +107,7 @@ export const api = {
   },
 
   async connectGmail(code) {
-    const res = await fetch(`${BASE}/gmail/connect`, {
+    const res = await checkedFetch(`${BASE}/gmail/connect`, {
       method: 'POST',
       headers: await getHeaders(),
       body: JSON.stringify({ code }),
@@ -105,18 +116,18 @@ export const api = {
   },
 
   async verifyGmailFilter() {
-    const res = await fetch(`${BASE}/gmail/verify`, {
+    const res = await checkedFetch(`${BASE}/gmail/verify`, {
       method: 'POST',
       headers: await getHeaders(),
     });
     return res.json();
   },
 
-  async confirmChanges(changes) {
-    const res = await fetch(`${BASE}/chat/confirm`, {
+  async confirmChanges(changes, deletions) {
+    const res = await checkedFetch(`${BASE}/chat/confirm`, {
       method: 'POST',
       headers: await getHeaders(),
-      body: JSON.stringify({ changes }),
+      body: JSON.stringify({ changes, deletions }),
     });
     return res.json();
   },
@@ -124,7 +135,7 @@ export const api = {
   async downloadResume(jobId, format = 'docx') {
     const user = await waitForAuth();
     const token = await user.getIdToken(true);
-    const res = await fetch(`${BASE}/jobs/${jobId}/download?format=${format}`, {
+    const res = await checkedFetch(`${BASE}/jobs/${jobId}/download?format=${format}`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!res.ok) throw new Error('Download failed');
@@ -140,35 +151,35 @@ export const api = {
   },
 
   async adminGetStats() {
-    const res = await fetch(`${BASE}/admin/stats`, { headers: await getHeaders() });
+    const res = await checkedFetch(`${BASE}/admin/stats`, { headers: await getHeaders() });
     return res.json();
   },
   async adminGetUsers() {
-    const res = await fetch(`${BASE}/admin/users`, { headers: await getHeaders() });
+    const res = await checkedFetch(`${BASE}/admin/users`, { headers: await getHeaders() });
     return res.json();
   },
   async adminUpdateUser(userId, data) {
-    const res = await fetch(`${BASE}/admin/users/${userId}`, { method: 'PATCH', headers: await getHeaders(), body: JSON.stringify(data) });
+    const res = await checkedFetch(`${BASE}/admin/users/${userId}`, { method: 'PATCH', headers: await getHeaders(), body: JSON.stringify(data) });
     return res.json();
   },
   async adminDeleteUser(userId) {
-    const res = await fetch(`${BASE}/admin/users/${userId}`, { method: 'DELETE', headers: await getHeaders() });
+    const res = await checkedFetch(`${BASE}/admin/users/${userId}`, { method: 'DELETE', headers: await getHeaders() });
     return res.json();
   },
   async adminGetJobs() {
-    const res = await fetch(`${BASE}/admin/jobs`, { headers: await getHeaders() });
+    const res = await checkedFetch(`${BASE}/admin/jobs`, { headers: await getHeaders() });
     return res.json();
   },
   async adminTriggerCron() {
-    const res = await fetch(`${BASE}/admin/cron/run`, { method: 'POST', headers: await getHeaders() });
+    const res = await checkedFetch(`${BASE}/admin/cron/run`, { method: 'POST', headers: await getHeaders() });
     return res.json();
   },
   async adminGetSettings() {
-    const res = await fetch(`${BASE}/admin/settings`, { headers: await getHeaders() });
+    const res = await checkedFetch(`${BASE}/admin/settings`, { headers: await getHeaders() });
     return res.json();
   },
   async adminUpdateSettings(settings) {
-    const res = await fetch(`${BASE}/admin/settings`, { method: 'PATCH', headers: await getHeaders(), body: JSON.stringify(settings) });
+    const res = await checkedFetch(`${BASE}/admin/settings`, { method: 'PATCH', headers: await getHeaders(), body: JSON.stringify(settings) });
     return res.json();
   },
 };

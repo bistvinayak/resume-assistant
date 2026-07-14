@@ -82,4 +82,47 @@ function upsertById(existing = [], incoming = [], keyOf) {
   return out;
 }
 
-module.exports = { ingestText, ingestPdf, mergeProfile };
+function applyDeletions(profile, deletions) {
+  const out = JSON.parse(JSON.stringify(profile));
+  if (!deletions || typeof deletions !== 'object') return out;
+
+  if (deletions.clear_summary) out.summary = '';
+
+  if (Array.isArray(deletions.skills) && deletions.skills.length) {
+    const remove = new Set(deletions.skills.map(s => s.toLowerCase()));
+    out.skills = (out.skills || []).filter(s => !remove.has(s.toLowerCase()));
+  }
+
+  if (Array.isArray(deletions.experience_ids) && deletions.experience_ids.length) {
+    const remove = new Set(deletions.experience_ids.map(s => s.toLowerCase()));
+    out.experience = (out.experience || []).filter(e =>
+      !remove.has((e.company || '').toLowerCase()) && !remove.has((e.id || '').toLowerCase())
+    );
+  }
+
+  if (Array.isArray(deletions.project_ids) && deletions.project_ids.length) {
+    const remove = new Set(deletions.project_ids.map(s => s.toLowerCase()));
+    out.projects = (out.projects || []).filter(p =>
+      !remove.has((p.name || '').toLowerCase()) && !remove.has((p.id || '').toLowerCase())
+    );
+  }
+
+  if (Array.isArray(deletions.certifications) && deletions.certifications.length) {
+    const remove = new Set(deletions.certifications.map(s => s.toLowerCase()));
+    out.certifications = (out.certifications || []).filter(c => {
+      const name = typeof c === 'string' ? c : c.name || '';
+      return !remove.has(name.toLowerCase());
+    });
+  }
+
+  if (Array.isArray(deletions.education_ids) && deletions.education_ids.length) {
+    const remove = new Set(deletions.education_ids.map(s => s.toLowerCase()));
+    out.education = (out.education || []).filter(e =>
+      !remove.has((e.school || '').toLowerCase())
+    );
+  }
+
+  return out;
+}
+
+module.exports = { ingestText, ingestPdf, mergeProfile, applyDeletions };

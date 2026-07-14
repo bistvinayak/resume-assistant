@@ -269,10 +269,10 @@ export default function Dashboard() {
     setSubmitting(false);
   };
 
-  const handleConfirmChanges = async (msgIndex, changes) => {
+  const handleConfirmChanges = async (msgIndex, changes, deletions) => {
     setChatMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, confirmState: 'saving' } : m));
     try {
-      const res = await api.confirmChanges(changes);
+      const res = await api.confirmChanges(changes, deletions);
       if (res.profile) setProfile(res.profile);
       setChatMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, confirmState: 'confirmed' } : m));
     } catch {
@@ -284,30 +284,43 @@ export default function Dashboard() {
     setChatMessages(prev => prev.map((m, i) => i === msgIndex ? { ...m, confirmState: 'rejected' } : m));
   };
 
-  const formatChanges = (changes) => {
+  const formatChanges = (changes, deletions) => {
     const parts = [];
-    if (changes.contact && Object.keys(changes.contact).length) {
-      Object.entries(changes.contact).forEach(([k, v]) => {
-        if (v) parts.push({ section: 'Contact', detail: `${k}: ${Array.isArray(v) ? v.join(', ') : v}` });
-      });
+    if (changes) {
+      if (changes.contact && Object.keys(changes.contact).length) {
+        Object.entries(changes.contact).forEach(([k, v]) => {
+          if (v) parts.push({ section: 'Contact', detail: `${k}: ${Array.isArray(v) ? v.join(', ') : v}` });
+        });
+      }
+      if (changes.summary) parts.push({ section: 'Summary', detail: changes.summary.slice(0, 100) + (changes.summary.length > 100 ? '...' : '') });
+      if (changes.skills?.length) parts.push({ section: 'Skills', detail: changes.skills.join(', ') });
+      if (changes.experience?.length) {
+        changes.experience.forEach(exp => {
+          const line = [exp.title, exp.company, exp.dates].filter(Boolean).join(' · ');
+          parts.push({ section: 'Experience', detail: line || 'New role' });
+          if (exp.bullets?.length) exp.bullets.forEach(b => parts.push({ section: '', detail: `  · ${b}` }));
+        });
+      }
+      if (changes.projects?.length) {
+        changes.projects.forEach(p => parts.push({ section: 'Project', detail: p.name || p.description || 'New project' }));
+      }
+      if (changes.education?.length) {
+        changes.education.forEach(e => parts.push({ section: 'Education', detail: [e.degree, e.school].filter(Boolean).join(' — ') }));
+      }
+      if (changes.certifications?.length) {
+        changes.certifications.forEach(c => parts.push({ section: 'Certification', detail: typeof c === 'string' ? c : c.name }));
+      }
+      if (changes.custom_facts?.length) {
+        changes.custom_facts.forEach(f => parts.push({ section: 'Fact', detail: f }));
+      }
     }
-    if (changes.summary) parts.push({ section: 'Summary', detail: changes.summary.slice(0, 100) + (changes.summary.length > 100 ? '...' : '') });
-    if (changes.skills?.length) parts.push({ section: 'Skills', detail: changes.skills.join(', ') });
-    if (changes.experience?.length) {
-      changes.experience.forEach(exp => {
-        const line = [exp.title, exp.company, exp.dates].filter(Boolean).join(' · ');
-        parts.push({ section: 'Experience', detail: line || 'New role' });
-        if (exp.bullets?.length) exp.bullets.forEach(b => parts.push({ section: '', detail: `  · ${b}` }));
-      });
-    }
-    if (changes.projects?.length) {
-      changes.projects.forEach(p => parts.push({ section: 'Project', detail: p.name || p.description || 'New project' }));
-    }
-    if (changes.education?.length) {
-      changes.education.forEach(e => parts.push({ section: 'Education', detail: [e.degree, e.school].filter(Boolean).join(' — ') }));
-    }
-    if (changes.custom_facts?.length) {
-      changes.custom_facts.forEach(f => parts.push({ section: 'Fact', detail: f }));
+    if (deletions) {
+      if (deletions.skills?.length) parts.push({ section: 'Remove Skills', detail: deletions.skills.join(', '), isDelete: true });
+      if (deletions.experience_ids?.length) parts.push({ section: 'Remove Experience', detail: deletions.experience_ids.join(', '), isDelete: true });
+      if (deletions.project_ids?.length) parts.push({ section: 'Remove Projects', detail: deletions.project_ids.join(', '), isDelete: true });
+      if (deletions.certifications?.length) parts.push({ section: 'Remove Certifications', detail: deletions.certifications.join(', '), isDelete: true });
+      if (deletions.education_ids?.length) parts.push({ section: 'Remove Education', detail: deletions.education_ids.join(', '), isDelete: true });
+      if (deletions.clear_summary) parts.push({ section: 'Clear Summary', detail: 'Will be cleared', isDelete: true });
     }
     return parts;
   };
@@ -321,11 +334,14 @@ export default function Dashboard() {
     try {
       const res = await api.chat(msg, 'profile');
 
-      if (res.pendingChanges && Object.keys(res.pendingChanges).length > 0) {
+      const hasChanges = res.pendingChanges && Object.keys(res.pendingChanges).length > 0;
+      const hasDeletions = res.pendingDeletions && Object.keys(res.pendingDeletions).length > 0;
+      if (hasChanges || hasDeletions) {
         setChatMessages(prev => [...prev, {
           role: 'arjun',
           text: res.reply,
-          pendingChanges: res.pendingChanges,
+          ...(hasChanges ? { pendingChanges: res.pendingChanges } : {}),
+          ...(hasDeletions ? { pendingDeletions: res.pendingDeletions } : {}),
           confirmState: null,
         }]);
       } else {
@@ -1020,24 +1036,24 @@ export default function Dashboard() {
                       )}
                       {msg.text}
 
-                      {msg.pendingChanges && (
+                      {(msg.pendingChanges || msg.pendingDeletions) && (
                         <div style={{ marginTop: '12px', background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '8px', padding: '12px', fontSize: '12px' }}>
                           <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em', marginBottom: '10px' }}>
                             PROPOSED CHANGES
                           </div>
-                          {formatChanges(msg.pendingChanges).map((item, ci) => (
+                          {formatChanges(msg.pendingChanges, msg.pendingDeletions).map((item, ci) => (
                             <div key={ci} style={{ display: 'flex', gap: '8px', padding: '4px 0', borderBottom: '1px solid #e7e5e4' }}>
                               {item.section && (
-                                <span style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", minWidth: 70, flexShrink: 0, textTransform: 'uppercase' }}>{item.section}</span>
+                                <span style={{ fontSize: '10px', color: item.isDelete ? '#ef4444' : '#78716c', fontFamily: "'DM Mono', monospace", minWidth: 70, flexShrink: 0, textTransform: 'uppercase' }}>{item.section}</span>
                               )}
-                              <span style={{ color: '#57534e', fontSize: '12px' }}>{item.detail}</span>
+                              <span style={{ color: item.isDelete ? '#ef4444' : '#57534e', fontSize: '12px', textDecoration: item.isDelete ? 'line-through' : 'none' }}>{item.detail}</span>
                             </div>
                           ))}
 
                           {!msg.confirmState && (
                             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                               <button
-                                onClick={() => handleConfirmChanges(i, msg.pendingChanges)}
+                                onClick={() => handleConfirmChanges(i, msg.pendingChanges, msg.pendingDeletions)}
                                 style={{ flex: 1, background: '#22c55e', color: '#1c1917', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
                               >
                                 Confirm & Save

@@ -16,7 +16,7 @@ const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { renderResumeDocx } = require('./renderDocx');
 const { chatEnrich, chatJobAnalysis } = require('./llm');
-const { mergeProfile } = require('./profile');
+const { mergeProfile, applyDeletions } = require('./profile');
 
 // Normalize LinkedIn URLs to direct job view format
 function normalizeJobUrl(rawUrl) {
@@ -178,11 +178,13 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
     const result = await chatEnrich(message, currentProfile);
 
     const hasExtracted = result.extracted && Object.keys(result.extracted).length > 0;
+    const hasDeletions = result.deletions && Object.keys(result.deletions).length > 0;
 
     res.json({
       reply: result.reply,
       profile: currentProfile,
       ...(hasExtracted ? { pendingChanges: result.extracted } : {}),
+      ...(hasDeletions ? { pendingDeletions: result.deletions } : {}),
     });
   } catch (e) { next(e); }
 });
@@ -190,14 +192,19 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
 // ── CHAT CONFIRM ─────────────────────────────────────────────────────────
 app.post(['/chat/confirm', '/api/chat/confirm'], async (req, res, next) => {
   try {
-    const { changes } = req.body || {};
-    if (!changes) return res.status(400).json({ error: 'changes required' });
+    const { changes, deletions } = req.body || {};
+    if (!changes && !deletions) return res.status(400).json({ error: 'changes or deletions required' });
 
-    const currentProfile = await getProfile(req.userId);
-    const merged = mergeProfile(currentProfile, changes);
-    await saveProfile(merged, req.userId);
+    let currentProfile = await getProfile(req.userId);
+    if (changes && Object.keys(changes).length) {
+      currentProfile = mergeProfile(currentProfile, changes);
+    }
+    if (deletions && Object.keys(deletions).length) {
+      currentProfile = applyDeletions(currentProfile, deletions);
+    }
+    await saveProfile(currentProfile, req.userId);
 
-    res.json({ ok: true, profile: merged });
+    res.json({ ok: true, profile: currentProfile });
   } catch (e) { next(e); }
 });
 
