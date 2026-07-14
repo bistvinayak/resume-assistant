@@ -44,6 +44,13 @@ function mergeProfile(base, incoming) {
       }
     }
   }
+
+  // Fallback: if contact location is missing, use the most recent job's location
+  if (!out.contact?.location && out.experience?.length) {
+    const loc = out.experience.find(e => e.location)?.location;
+    if (loc) out.contact = { ...out.contact, location: loc };
+  }
+
   return out;
 }
 
