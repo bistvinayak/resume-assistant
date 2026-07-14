@@ -25,7 +25,21 @@ async function renderResumeDocx(resume, outPath) {
     children.push(new Paragraph({ children: [new TextRun({ text: resume.summary, size: 21 })] }));
   }
 
-  if (Array.isArray(resume.skills_ranked) && resume.skills_ranked.length) {
+  const skillGroups = [
+    { label: 'Product', items: resume.skills_product },
+    { label: 'Technical & Analytics', items: resume.skills_technical },
+    { label: 'AI & Tools', items: resume.skills_ai_tools },
+  ].filter(g => Array.isArray(g.items) && g.items.length);
+
+  if (skillGroups.length) {
+    children.push(heading('Skills'));
+    for (const g of skillGroups) {
+      children.push(new Paragraph({ children: [
+        new TextRun({ text: `${g.label}: `, bold: true, size: 21 }),
+        new TextRun({ text: g.items.join('  •  '), size: 21 }),
+      ]}));
+    }
+  } else if (Array.isArray(resume.skills_ranked) && resume.skills_ranked.length) {
     children.push(heading('Skills'));
     children.push(new Paragraph({ children: [new TextRun({ text: resume.skills_ranked.join('  •  '), size: 21 })] }));
   }

@@ -89,7 +89,12 @@ async function seenJobBefore(job, userId = 'me') {
   const res = await pool.query(
     `INSERT INTO jobs (job_id, user_id, title, company, jd_text, url)
      VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (job_id) DO NOTHING
+     ON CONFLICT (job_id) DO UPDATE SET
+       title = COALESCE(EXCLUDED.title, jobs.title),
+       company = COALESCE(EXCLUDED.company, jobs.company),
+       jd_text = COALESCE(EXCLUDED.jd_text, jobs.jd_text),
+       url = COALESCE(EXCLUDED.url, jobs.url)
+     WHERE jobs.status = 'processing'
      RETURNING job_id`,
     [job.job_id, userId, job.title || null, job.company || null, job.jd_text || null, job.url || null]
   );

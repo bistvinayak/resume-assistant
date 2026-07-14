@@ -852,16 +852,28 @@ export default function Dashboard() {
                 {chatMessages.map((msg, i) => {
                   if (msg.type === 'progress') {
                     const secs = msg.elapsed || 0;
+                    const progressStages = [
+                      'Scraping job page',
+                      'Reading job description',
+                      'Tailoring resume with AI',
+                      'Calculating ATS match score',
+                      'Improving resume if needed',
+                    ];
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
                         <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
-                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '12px' }}>ARJUN — PROCESSING</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <span style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
-                            <div>
-                              <div style={{ fontSize: '13px', color: '#1c1917', fontWeight: 500, marginBottom: '2px' }}>Scraping & tailoring your resume...</div>
-                              <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{secs}s elapsed — typically takes 30–60s</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                            <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace" }}>ARJUN — PROCESSING</div>
+                            <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{secs}s</div>
+                          </div>
+                          {progressStages.map((stage, si) => (
+                            <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0' }}>
+                              <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0, opacity: 0.5 }} />
+                              <span style={{ fontSize: '12px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{stage}</span>
                             </div>
+                          ))}
+                          <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '8px', borderTop: '1px solid #e7e5e4', paddingTop: '8px' }}>
+                            Typically takes 30–60 seconds
                           </div>
                         </div>
                       </div>
@@ -1173,16 +1185,28 @@ export default function Dashboard() {
                 {tailorMessages.map((msg, i) => {
                   if (msg.type === 'progress') {
                     const secs = msg.elapsed || 0;
+                    const progressStages = [
+                      'Scraping job page',
+                      'Reading job description',
+                      'Tailoring resume with AI',
+                      'Calculating ATS match score',
+                      'Improving resume if needed',
+                    ];
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
                         <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
-                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '12px' }}>ARJUN — PROCESSING</div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                            <span style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0 }} />
-                            <div>
-                              <div style={{ fontSize: '13px', color: '#1c1917', fontWeight: 500, marginBottom: '2px' }}>Scraping & tailoring your resume...</div>
-                              <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{secs}s elapsed — typically takes 30–60s</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                            <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace" }}>ARJUN — PROCESSING</div>
+                            <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{secs}s</div>
+                          </div>
+                          {progressStages.map((stage, si) => (
+                            <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0' }}>
+                              <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0, opacity: 0.5 }} />
+                              <span style={{ fontSize: '12px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{stage}</span>
                             </div>
+                          ))}
+                          <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '8px', borderTop: '1px solid #e7e5e4', paddingTop: '8px' }}>
+                            Typically takes 30–60 seconds
                           </div>
                         </div>
                       </div>
