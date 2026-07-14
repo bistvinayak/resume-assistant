@@ -137,4 +137,37 @@ export const api = {
     a.click();
     URL.revokeObjectURL(url);
   },
+
+  async adminGetStats() {
+    const res = await fetch(`${BASE}/admin/stats`, { headers: await getHeaders() });
+    return res.json();
+  },
+  async adminGetUsers() {
+    const res = await fetch(`${BASE}/admin/users`, { headers: await getHeaders() });
+    return res.json();
+  },
+  async adminUpdateUser(userId, data) {
+    const res = await fetch(`${BASE}/admin/users/${userId}`, { method: 'PATCH', headers: await getHeaders(), body: JSON.stringify(data) });
+    return res.json();
+  },
+  async adminDeleteUser(userId) {
+    const res = await fetch(`${BASE}/admin/users/${userId}`, { method: 'DELETE', headers: await getHeaders() });
+    return res.json();
+  },
+  async adminGetJobs() {
+    const res = await fetch(`${BASE}/admin/jobs`, { headers: await getHeaders() });
+    return res.json();
+  },
+  async adminTriggerCron() {
+    const res = await fetch(`${BASE}/admin/cron/run`, { method: 'POST', headers: await getHeaders() });
+    return res.json();
+  },
+  async adminGetSettings() {
+    const res = await fetch(`${BASE}/admin/settings`, { headers: await getHeaders() });
+    return res.json();
+  },
+  async adminUpdateSettings(settings) {
+    const res = await fetch(`${BASE}/admin/settings`, { method: 'PATCH', headers: await getHeaders(), body: JSON.stringify(settings) });
+    return res.json();
+  },
 };
