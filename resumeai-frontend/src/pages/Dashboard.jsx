@@ -48,6 +48,10 @@ export default function Dashboard() {
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
   const [pdfUploading, setPdfUploading] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editProfile, setEditProfile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [newSkill, setNewSkill] = useState('');
   const chatEndRef = useRef(null);
 
   const handleDownload = async (e, jobId) => {
@@ -67,6 +71,123 @@ export default function Dashboard() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  const startEditing = () => {
+    setEditProfile(JSON.parse(JSON.stringify(profile)));
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditProfile(null);
+    setEditing(false);
+    setNewSkill('');
+  };
+
+  const saveEditing = async () => {
+    setSaving(true);
+    try {
+      const updated = await api.updateProfile(editProfile);
+      setProfile(updated);
+      setEditing(false);
+      setEditProfile(null);
+      setNewSkill('');
+    } catch (e) {
+      console.error('Save failed:', e);
+    }
+    setSaving(false);
+  };
+
+  const updateContact = (field, value) => {
+    setEditProfile(p => ({ ...p, contact: { ...p.contact, [field]: value } }));
+  };
+
+  const updateExperience = (idx, field, value) => {
+    setEditProfile(p => {
+      const exp = [...(p.experience || [])];
+      exp[idx] = { ...exp[idx], [field]: value };
+      return { ...p, experience: exp };
+    });
+  };
+
+  const updateBullet = (expIdx, bulletIdx, value) => {
+    setEditProfile(p => {
+      const exp = [...(p.experience || [])];
+      const bullets = [...(exp[expIdx].bullets || [])];
+      bullets[bulletIdx] = value;
+      exp[expIdx] = { ...exp[expIdx], bullets };
+      return { ...p, experience: exp };
+    });
+  };
+
+  const removeBullet = (expIdx, bulletIdx) => {
+    setEditProfile(p => {
+      const exp = [...(p.experience || [])];
+      const bullets = [...(exp[expIdx].bullets || [])];
+      bullets.splice(bulletIdx, 1);
+      exp[expIdx] = { ...exp[expIdx], bullets };
+      return { ...p, experience: exp };
+    });
+  };
+
+  const addBullet = (expIdx) => {
+    setEditProfile(p => {
+      const exp = [...(p.experience || [])];
+      exp[expIdx] = { ...exp[expIdx], bullets: [...(exp[expIdx].bullets || []), ''] };
+      return { ...p, experience: exp };
+    });
+  };
+
+  const removeExperience = (idx) => {
+    setEditProfile(p => {
+      const exp = [...(p.experience || [])];
+      exp.splice(idx, 1);
+      return { ...p, experience: exp };
+    });
+  };
+
+  const addExperience = () => {
+    setEditProfile(p => ({
+      ...p,
+      experience: [...(p.experience || []), { company: '', title: '', dates: '', location: '', bullets: [''] }],
+    }));
+  };
+
+  const removeSkill = (idx) => {
+    setEditProfile(p => {
+      const skills = [...(p.skills || [])];
+      skills.splice(idx, 1);
+      return { ...p, skills };
+    });
+  };
+
+  const addSkill = () => {
+    if (!newSkill.trim()) return;
+    setEditProfile(p => ({ ...p, skills: [...(p.skills || []), newSkill.trim()] }));
+    setNewSkill('');
+  };
+
+  const updateEducation = (idx, field, value) => {
+    setEditProfile(p => {
+      const edu = [...(p.education || [])];
+      edu[idx] = { ...edu[idx], [field]: value };
+      return { ...p, education: edu };
+    });
+  };
+
+  const removeEducation = (idx) => {
+    setEditProfile(p => {
+      const edu = [...(p.education || [])];
+      edu.splice(idx, 1);
+      return { ...p, education: edu };
+    });
+  };
+
+  const addEducation = () => {
+    setEditProfile(p => ({
+      ...p,
+      education: [...(p.education || []), { school: '', degree: '', dates: '' }],
+    }));
+  };
 
   const handleAddKeyword = async (keyword) => {
     setAddedKeywords(prev => [...prev, keyword]);
@@ -362,96 +483,233 @@ export default function Dashboard() {
           {/* ── PROFILE INDEX ── */}
           {tab === 'profile' && (
             <div style={{ animation: 'fadeIn 0.3s ease' }}>
-              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Profile Index</h2>
-              <p style={{ fontSize: '13px', color: '#555', marginBottom: '28px' }}>Everything the system knows about you.</p>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                {/* Completeness */}
-                <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px' }}>
-                  <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>COMPLETENESS</div>
-                  <ProgressBar value={completeness.contact || 0} label="Contact info" />
-                  <ProgressBar value={completeness.summary || 0} label="Summary" sublabel={`${profile?.summary?.length || 0} chars`} />
-                  <ProgressBar value={completeness.skills || 0} label="Skills" sublabel={`${allSkills.length} indexed`} />
-                  <ProgressBar value={completeness.experience || 0} label="Experience" sublabel={`${profile?.experience?.length || 0} roles`} />
-                  <ProgressBar value={completeness.education || 0} label="Education" />
-                  <ProgressBar value={0} label="Certifications" sublabel="none added" />
-                  <ProgressBar value={completeness.projects || 0} label="Projects" />
-                </div>
-
-                {/* Contact */}
-                <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px' }}>
-                  <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>CONTACT</div>
-                  {profile?.contact && Object.entries(profile.contact).filter(([, v]) => v).map(([k, v]) => (
-                    <div key={k} style={{ display: 'flex', gap: '12px', padding: '7px 0', borderBottom: '1px solid #1a1a18' }}>
-                      <span style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", minWidth: 60, textTransform: 'capitalize' }}>{k}</span>
-                      <span style={{ fontSize: '12px', color: '#f0ede8' }}>{Array.isArray(v) ? v.join(', ') : String(v)}</span>
-                    </div>
-                  ))}
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px' }}>Profile Index</h2>
+                {!editing ? (
+                  <button onClick={startEditing} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: '#c0bdb8', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                    Edit Profile
+                  </button>
+                ) : (
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={cancelEditing} style={{ background: 'transparent', border: '1px solid #2a2a27', color: '#888', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                      Cancel
+                    </button>
+                    <button onClick={saveEditing} disabled={saving} style={{ background: '#22c55e', border: 'none', color: '#0e0e0d', padding: '7px 20px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+                      {saving ? 'Saving...' : 'Save Changes'}
+                    </button>
+                  </div>
+                )}
               </div>
+              <p style={{ fontSize: '13px', color: '#555', marginBottom: '28px' }}>
+                {editing ? 'Edit your profile details below. Click Save when done.' : 'Everything the system knows about you.'}
+              </p>
 
-              {/* Skills */}
-              {profile?.skills && profile.skills.length > 0 && (
-                <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                    <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>SKILLS — {profile.skills.length} TOTAL</div>
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                    {profile.skills.map(skill => (
-                      <span key={skill} style={{ background: '#1a1a18', border: '1px solid #2a2a27', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#c0bdb8', fontFamily: "'DM Mono', monospace" }}>{skill}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Experience */}
-              {profile?.experience && profile.experience.length > 0 && (
-                <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
-                  <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>EXPERIENCE</div>
-                  {profile.experience.map((exp, i) => (
-                    <div key={exp.company || i} style={{ paddingBottom: '14px', borderBottom: i < profile.experience.length - 1 ? '1px solid #1a1a18' : 'none', marginBottom: i < profile.experience.length - 1 ? '14px' : 0 }}>
-                      <div style={{ display: 'flex', gap: '14px' }}>
-                        <div style={{ width: 34, height: 34, borderRadius: '8px', background: '#1f1f1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, color: '#f59e0b', flexShrink: 0 }}>
-                          {(exp.company || '?')[0]}
+              {!editing ? (
+                <>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px' }}>
+                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>COMPLETENESS</div>
+                      <ProgressBar value={completeness.contact || 0} label="Contact info" />
+                      <ProgressBar value={completeness.summary || 0} label="Summary" sublabel={`${profile?.summary?.length || 0} chars`} />
+                      <ProgressBar value={completeness.skills || 0} label="Skills" sublabel={`${allSkills.length} indexed`} />
+                      <ProgressBar value={completeness.experience || 0} label="Experience" sublabel={`${profile?.experience?.length || 0} roles`} />
+                      <ProgressBar value={completeness.education || 0} label="Education" />
+                      <ProgressBar value={0} label="Certifications" sublabel="none added" />
+                      <ProgressBar value={completeness.projects || 0} label="Projects" />
+                    </div>
+                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px' }}>
+                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>CONTACT</div>
+                      {profile?.contact && Object.entries(profile.contact).filter(([, v]) => v).map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', gap: '12px', padding: '7px 0', borderBottom: '1px solid #1a1a18' }}>
+                          <span style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", minWidth: 60, textTransform: 'capitalize' }}>{k}</span>
+                          <span style={{ fontSize: '12px', color: '#f0ede8' }}>{Array.isArray(v) ? v.join(', ') : String(v)}</span>
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
-                            <span style={{ fontSize: '13px', fontWeight: 500 }}>{exp.title} · {exp.company}</span>
-                            <span style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace" }}>{exp.dates}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {profile?.skills && profile.skills.length > 0 && (
+                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>SKILLS — {profile.skills.length} TOTAL</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {profile.skills.map(skill => (
+                          <span key={skill} style={{ background: '#1a1a18', border: '1px solid #2a2a27', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#c0bdb8', fontFamily: "'DM Mono', monospace" }}>{skill}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {profile?.experience && profile.experience.length > 0 && (
+                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>EXPERIENCE</div>
+                      {profile.experience.map((exp, i) => (
+                        <div key={exp.company || i} style={{ paddingBottom: '14px', borderBottom: i < profile.experience.length - 1 ? '1px solid #1a1a18' : 'none', marginBottom: i < profile.experience.length - 1 ? '14px' : 0 }}>
+                          <div style={{ display: 'flex', gap: '14px' }}>
+                            <div style={{ width: 34, height: 34, borderRadius: '8px', background: '#1f1f1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, color: '#f59e0b', flexShrink: 0 }}>
+                              {(exp.company || '?')[0]}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
+                                <span style={{ fontSize: '13px', fontWeight: 500 }}>{exp.title} · {exp.company}</span>
+                                <span style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace" }}>{exp.dates}</span>
+                              </div>
+                              {exp.location && <div style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>{exp.location}</div>}
+                            </div>
                           </div>
-                          {exp.location && (
-                            <div style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>
-                              {exp.location}
+                          {(exp.bullets || []).length > 0 && (
+                            <div style={{ marginTop: '8px', paddingLeft: '48px' }}>
+                              {exp.bullets.map((b, bi) => (
+                                <div key={bi} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '12px', color: '#888', lineHeight: 1.5 }}>
+                                  <span style={{ color: '#333', flexShrink: 0 }}>·</span>
+                                  <span>{b}</span>
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
-                      </div>
-                      {(exp.bullets || []).length > 0 && (
-                        <div style={{ marginTop: '8px', paddingLeft: '48px' }}>
-                          {exp.bullets.map((b, bi) => (
-                            <div key={bi} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '12px', color: '#888', lineHeight: 1.5 }}>
-                              <span style={{ color: '#333', flexShrink: 0 }}>·</span>
-                              <span>{b}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                </div>
-              )}
+                  )}
 
-              {/* Missing */}
-              <div style={{ background: '#1a0a0a', border: '1px solid #3a1a1a', borderRadius: '12px', padding: '20px' }}>
-                <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '12px' }}>⚠ MISSING</div>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {['Certifications', 'Projects', 'Awards', 'LinkedIn URL'].map(item => (
-                    <button key={item} onClick={() => setTab('submit')} style={{ background: 'transparent', border: '1px dashed #3a1a1a', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', color: '#555', fontFamily: "'DM Sans', sans-serif" }}>
-                      + Add {item}
+                  {profile?.education && profile.education.length > 0 && (
+                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>EDUCATION</div>
+                      {profile.education.map((edu, i) => (
+                        <div key={i} style={{ padding: '7px 0', borderBottom: i < profile.education.length - 1 ? '1px solid #1a1a18' : 'none' }}>
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>{edu.degree}</div>
+                          <div style={{ fontSize: '12px', color: '#888' }}>{edu.school} {edu.dates ? `· ${edu.dates}` : ''}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div style={{ background: '#1a0a0a', border: '1px solid #3a1a1a', borderRadius: '12px', padding: '20px' }}>
+                    <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '12px' }}>⚠ MISSING</div>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {['Certifications', 'Projects', 'Awards', 'LinkedIn URL'].map(item => (
+                        <button key={item} onClick={() => setTab('chat')} style={{ background: 'transparent', border: '1px dashed #3a1a1a', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', color: '#555', fontFamily: "'DM Sans', sans-serif", cursor: 'pointer' }}>
+                          + Add {item}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : editProfile && (
+                <>
+                  {/* Edit: Contact */}
+                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>CONTACT</div>
+                    {['name', 'email', 'phone', 'location'].map(field => (
+                      <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
+                        <span style={{ fontSize: '10px', color: '#555', fontFamily: "'DM Mono', monospace", minWidth: 70, textTransform: 'capitalize' }}>{field}</span>
+                        <input
+                          value={editProfile.contact?.[field] || ''}
+                          onChange={e => updateContact(field, e.target.value)}
+                          placeholder={field}
+                          style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '13px', padding: '8px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Edit: Summary */}
+                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>SUMMARY</div>
+                    <textarea
+                      value={editProfile.summary || ''}
+                      onChange={e => setEditProfile(p => ({ ...p, summary: e.target.value }))}
+                      placeholder="A brief professional summary..."
+                      rows={3}
+                      style={{ width: '100%', background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '13px', padding: '10px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none', resize: 'vertical' }}
+                    />
+                  </div>
+
+                  {/* Edit: Skills */}
+                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>SKILLS</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                      {(editProfile.skills || []).map((skill, si) => (
+                        <span key={si} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#1a1a18', border: '1px solid #2a2a27', borderRadius: '4px', padding: '4px 8px 4px 10px', fontSize: '11px', color: '#c0bdb8', fontFamily: "'DM Mono', monospace" }}>
+                          {skill}
+                          <button onClick={() => removeSkill(si)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        value={newSkill}
+                        onChange={e => setNewSkill(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && addSkill()}
+                        placeholder="Add a skill..."
+                        style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', fontFamily: "'DM Mono', monospace", outline: 'none' }}
+                      />
+                      <button onClick={addSkill} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: '#c0bdb8', padding: '8px 14px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>+ Add</button>
+                    </div>
+                  </div>
+
+                  {/* Edit: Experience */}
+                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>EXPERIENCE</div>
+                      <button onClick={addExperience} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: '#c0bdb8', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add Role</button>
+                    </div>
+                    {(editProfile.experience || []).map((exp, ei) => (
+                      <div key={ei} style={{ paddingBottom: '16px', borderBottom: ei < (editProfile.experience || []).length - 1 ? '1px solid #1a1a18' : 'none', marginBottom: ei < (editProfile.experience || []).length - 1 ? '16px' : 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '6px', background: '#1f1f1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, color: '#f59e0b' }}>
+                            {(exp.company || '?')[0]}
+                          </div>
+                          <button onClick={() => removeExperience(ei)} style={{ background: 'none', border: '1px solid #3a1a1a', color: '#ef4444', padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>Remove</button>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                          <input value={exp.title || ''} onChange={e => updateExperience(ei, 'title', e.target.value)} placeholder="Title" style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                          <input value={exp.company || ''} onChange={e => updateExperience(ei, 'company', e.target.value)} placeholder="Company" style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                          <input value={exp.dates || ''} onChange={e => updateExperience(ei, 'dates', e.target.value)} placeholder="Dates (e.g. Jan 2022 - Dec 2024)" style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                          <input value={exp.location || ''} onChange={e => updateExperience(ei, 'location', e.target.value)} placeholder="Location" style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                        </div>
+                        <div style={{ fontSize: '10px', color: '#555', fontFamily: "'DM Mono', monospace", marginBottom: '6px', marginTop: '4px' }}>BULLETS</div>
+                        {(exp.bullets || []).map((b, bi) => (
+                          <div key={bi} style={{ display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'flex-start' }}>
+                            <span style={{ color: '#333', marginTop: '8px', flexShrink: 0 }}>·</span>
+                            <textarea
+                              value={b}
+                              onChange={e => updateBullet(ei, bi, e.target.value)}
+                              rows={1}
+                              style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#c0bdb8', fontSize: '12px', padding: '8px 10px', outline: 'none', resize: 'vertical', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}
+                            />
+                            <button onClick={() => removeBullet(ei, bi)} style={{ background: 'none', border: 'none', color: '#ef444488', fontSize: '16px', cursor: 'pointer', padding: '4px', lineHeight: 1 }}>×</button>
+                          </div>
+                        ))}
+                        <button onClick={() => addBullet(ei)} style={{ background: 'none', border: '1px dashed #2a2a27', color: '#555', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', marginTop: '4px' }}>+ Add bullet</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Edit: Education */}
+                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>EDUCATION</div>
+                      <button onClick={addEducation} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: '#c0bdb8', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add</button>
+                    </div>
+                    {(editProfile.education || []).map((edu, ei) => (
+                      <div key={ei} style={{ display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
+                        <input value={edu.degree || ''} onChange={e => updateEducation(ei, 'degree', e.target.value)} placeholder="Degree" style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                        <input value={edu.school || ''} onChange={e => updateEducation(ei, 'school', e.target.value)} placeholder="School" style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                        <input value={edu.dates || ''} onChange={e => updateEducation(ei, 'dates', e.target.value)} placeholder="Dates" style={{ width: 140, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                        <button onClick={() => removeEducation(ei)} style={{ background: 'none', border: 'none', color: '#ef444488', fontSize: '16px', cursor: 'pointer', padding: '4px', lineHeight: 1 }}>×</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Save/Cancel bottom bar */}
+                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '8px' }}>
+                    <button onClick={cancelEditing} style={{ background: 'transparent', border: '1px solid #2a2a27', color: '#888', padding: '10px 24px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={saveEditing} disabled={saving} style={{ background: '#22c55e', border: 'none', color: '#0e0e0d', padding: '10px 28px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+                      {saving ? 'Saving...' : 'Save Changes'}
                     </button>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

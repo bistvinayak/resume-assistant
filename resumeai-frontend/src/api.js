@@ -29,6 +29,15 @@ export const api = {
     return res.json();
   },
 
+  async updateProfile(profile) {
+    const res = await fetch(`${BASE}/profile`, {
+      method: 'PUT',
+      headers: await getHeaders(),
+      body: JSON.stringify({ profile }),
+    });
+    return res.json();
+  },
+
   async ingestText(text) {
     const res = await fetch(`${BASE}/ingest/text`, {
       method: 'POST',

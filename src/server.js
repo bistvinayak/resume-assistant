@@ -54,6 +54,15 @@ app.get(['/profile', '/api/profile'], async (req, res, next) => {
   try { res.json(await getProfile(req.userId)); } catch (e) { next(e); }
 });
 
+app.put(['/profile', '/api/profile'], async (req, res, next) => {
+  try {
+    const { profile } = req.body || {};
+    if (!profile) return res.status(400).json({ error: 'profile required' });
+    await saveProfile(profile, req.userId);
+    res.json(await getProfile(req.userId));
+  } catch (e) { next(e); }
+});
+
 app.post(['/ingest/text', '/api/ingest/text'], async (req, res, next) => {
   try {
     if (!req.body?.text) return res.status(400).json({ error: 'text required' });
