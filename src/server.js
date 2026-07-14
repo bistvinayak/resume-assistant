@@ -82,7 +82,25 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       const url = urlMatch[0].replace(/[)>\]]+$/, '');
       const jobId = `url_${Buffer.from(url).toString('base64url').slice(0, 40)}`;
 
-      res.json({ reply: `Scraping that job listing now — hang tight, this takes about 30 seconds...`, profile: currentProfile, scraping: true });
+      const p = currentProfile;
+      const skills = (p.skills || []).slice(0, 10).join(', ') || 'none listed';
+      const expCount = (p.experience || []).length;
+      const projCount = (p.projects || []).length;
+      const gaps = [];
+      if (!p.contact?.phone) gaps.push('phone number');
+      if (!p.contact?.location) gaps.push('location');
+      if (!expCount) gaps.push('work experience');
+      if (!projCount) gaps.push('projects');
+      if (!(p.skills || []).length) gaps.push('skills');
+
+      const profileSummary = `Scraping that job listing now — I'll tailor your resume and calculate an ATS score. This takes about 30-60 seconds.\n\n` +
+        `While we wait, here's your profile snapshot:\n` +
+        `• **Skills:** ${skills}\n` +
+        `• **Experience:** ${expCount} role${expCount !== 1 ? 's' : ''}\n` +
+        `• **Projects:** ${projCount}\n` +
+        (gaps.length ? `\n⚠️ Your profile is missing: **${gaps.join(', ')}**. Adding these before applying will improve your ATS match.` : `\n✅ Your profile looks solid!`);
+
+      res.json({ reply: profileSummary, profile: currentProfile, scraping: true });
 
       (async () => {
         try {
