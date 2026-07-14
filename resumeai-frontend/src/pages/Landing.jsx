@@ -44,6 +44,8 @@ const s = {
   statL: { fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '4px' },
 };
 
+const ADMIN_EMAIL = 'arjun.resumeai@gmail.com';
+
 export default function Landing() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -53,8 +55,13 @@ export default function Landing() {
     setLoading(true);
     setError('');
     try {
-      await signInWithGoogle();
-      navigate('/onboarding');
+      const result = await signInWithGoogle();
+      const email = result?.user?.email;
+      if (email === ADMIN_EMAIL) {
+        navigate('/admin', { replace: true });
+      } else {
+        navigate('/onboarding', { replace: true });
+      }
     } catch (e) {
       setError('Sign-in failed. Please try again.');
       setLoading(false);

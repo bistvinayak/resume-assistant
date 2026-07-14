@@ -23,7 +23,7 @@ export default function Onboarding() {
     if (searchParams.get('step') === 'gmail') {
       api.getProfile().then(p => {
         if (p?.gmail_connected || p?.gmail_filter_pending) {
-          navigate('/dashboard');
+          navigate('/dashboard', { replace: true });
         }
       }).catch(() => {});
     }
