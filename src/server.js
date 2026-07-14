@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getJobByJobId, insertJobProcessing, markJobFailed } = require('./db');
 const { ingestText, ingestPdf } = require('./profile');
 const { processJob } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
@@ -91,6 +91,27 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       const url = urlMatch[0].replace(/[)>\]]+$/, '');
       const jobId = `url_${Buffer.from(url).toString('base64url').slice(0, 40)}`;
 
+      // Check if this job was already processed
+      const existing = await getJobByJobId(jobId, req.userId);
+      if (existing) {
+        if (existing.status === 'delivered') {
+          return res.json({
+            reply: `I've already processed this job! Here's your result for **${existing.title}** at **${existing.company}** — ATS score: **${existing.ats_score}/100**. Check the Job Activity tab for the full breakdown and download.`,
+            profile: currentProfile,
+            duplicate: true,
+            existingJob: existing,
+          });
+        }
+        if (existing.status === 'processing') {
+          return res.json({
+            reply: `This job is already being processed — hang tight! You'll see the result in the Job Activity tab once it's ready.`,
+            profile: currentProfile,
+            duplicate: true,
+          });
+        }
+        // status === 'failed' — allow retry, fall through
+      }
+
       const p = currentProfile;
       const skills = (p.skills || []).slice(0, 10).join(', ') || 'none listed';
       const expCount = (p.experience || []).length;
@@ -109,6 +130,9 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
         `• **Projects:** ${projCount}\n` +
         (gaps.length ? `\n⚠️ Your profile is missing: **${gaps.join(', ')}**. Adding these before applying will improve your ATS match.` : `\n✅ Your profile looks solid!`);
 
+      // Insert job as 'processing' immediately so it's visible
+      await insertJobProcessing({ job_id: jobId, url }, req.userId);
+
       res.json({ reply: profileSummary, profile: currentProfile, scraping: true });
 
       (async () => {
@@ -117,6 +141,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
           const scraped = await scrapeLinkedInJob(url);
           if (!scraped || !scraped.jd_text) {
             console.error(`✗ Could not scrape ${url}`);
+            await markJobFailed(jobId, 'Could not scrape job page — page may require login or URL is invalid');
             return;
           }
           await processJob({
@@ -128,6 +153,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
           }, req.userId);
         } catch (e) {
           console.error('Chat job processing error:', e.message);
+          await markJobFailed(jobId, e.message).catch(() => {});
         }
       })();
       return;
@@ -189,7 +215,17 @@ app.post(['/jobs/submit-url', '/api/jobs/submit-url'], async (req, res, next) =>
 
     const job_id = `linkedin_${jobIdMatch[1]}`;
 
-    // Respond immediately, process in background
+    // Check for duplicate
+    const existing = await getJobByJobId(job_id, req.userId);
+    if (existing && existing.status === 'delivered') {
+      return res.json({ ok: true, job_id, duplicate: true, message: 'This job was already processed — check Job Activity for results' });
+    }
+    if (existing && existing.status === 'processing') {
+      return res.json({ ok: true, job_id, duplicate: true, message: 'This job is already being processed' });
+    }
+
+    await insertJobProcessing({ job_id, url }, req.userId);
+
     res.json({ ok: true, job_id, message: 'Job queued — resume will be emailed shortly' });
 
     // Background: scrape + process
@@ -199,6 +235,7 @@ app.post(['/jobs/submit-url', '/api/jobs/submit-url'], async (req, res, next) =>
         const scraped = await scrapeLinkedInJob(url);
         if (!scraped || !scraped.jd_text) {
           console.error(`✗ Could not scrape ${url}`);
+          await markJobFailed(job_id, 'Could not scrape LinkedIn job page');
           return;
         }
         await processJob({
@@ -210,6 +247,7 @@ app.post(['/jobs/submit-url', '/api/jobs/submit-url'], async (req, res, next) =>
         }, req.userId);
       } catch (e) {
         console.error('submit-url background error:', e.message);
+        await markJobFailed(job_id, e.message).catch(() => {});
       }
     })();
   } catch (e) { next(e); }

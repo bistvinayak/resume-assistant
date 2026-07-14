@@ -14,19 +14,19 @@ const ATSBadge = ({ score }) => {
 };
 
 const ProgressBar = ({ value, label, sublabel }) => {
-  const color = value === 0 ? '#2a2a27' : value === 100 ? '#22c55e' : '#f59e0b';
+  const color = value === 0 ? '#d6d3d1' : value === 100 ? '#22c55e' : '#f59e0b';
   return (
     <div style={{ marginBottom: '14px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '5px' }}>
-        <span style={{ fontSize: '12px', color: '#888' }}>{label}</span>
-        <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: value === 0 ? '#333' : value === 100 ? '#22c55e' : '#f59e0b' }}>
+        <span style={{ fontSize: '12px', color: '#57534e' }}>{label}</span>
+        <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: value === 0 ? '#c4c0bc' : value === 100 ? '#22c55e' : '#f59e0b' }}>
           {value === 0 ? 'missing' : value === 100 ? 'complete' : `${value}%`}
         </span>
       </div>
-      <div style={{ height: '3px', background: '#1f1f1c', borderRadius: '2px' }}>
+      <div style={{ height: '3px', background: '#e7e5e4', borderRadius: '2px' }}>
         <div style={{ height: '100%', width: `${value}%`, background: color, borderRadius: '2px', transition: 'width 1s ease' }} />
       </div>
-      {sublabel && <div style={{ fontSize: '10px', color: '#333', fontFamily: "'DM Mono', monospace", marginTop: '3px' }}>{sublabel}</div>}
+      {sublabel && <div style={{ fontSize: '10px', color: '#c4c0bc', fontFamily: "'DM Mono', monospace", marginTop: '3px' }}>{sublabel}</div>}
     </div>
   );
 };
@@ -67,7 +67,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     Promise.all([api.getProfile(), api.getJobs()])
-      .then(([p, j]) => { setProfile(p); setJobs(j.jobs || []); })
+      .then(([p, j]) => {
+        setProfile(p);
+        setJobs(j.jobs || []);
+        // New user with empty profile → send to onboarding
+        const isEmpty = !p.contact?.name && !(p.skills || []).length && !(p.experience || []).length && !(p.summary);
+        if (isEmpty) navigate('/onboarding');
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -274,6 +280,13 @@ export default function Dashboard() {
 
       if (res.profile) setProfile(res.profile);
 
+      // Duplicate job — show existing result inline, no polling needed
+      if (res.duplicate && res.existingJob) {
+        setChatMessages(prev => [...prev, { role: 'arjun', type: 'jobResult', job: res.existingJob }]);
+        setChatSending(false);
+        return;
+      }
+
       if (res.scraping) {
         const progressId = Date.now();
         const jobCountAtStart = jobs.length;
@@ -377,9 +390,10 @@ export default function Dashboard() {
     ? Math.round(Object.values(completeness).reduce((a, b) => a + b, 0) / Object.keys(completeness).length)
     : 0;
 
-  const avgATS = jobs.length ? Math.round(jobs.reduce((a, j) => a + (j.ats_score || 0), 0) / jobs.length) : 0;
+  const deliveredJobs = jobs.filter(j => j.status === 'delivered');
+  const avgATS = deliveredJobs.length ? Math.round(deliveredJobs.reduce((a, j) => a + (j.ats_score || 0), 0) / deliveredJobs.length) : 0;
 
-  const allMissing = jobs.flatMap(j => j.missing_keywords || []);
+  const allMissing = deliveredJobs.flatMap(j => j.missing_keywords || []);
   const missingFreq = allMissing.reduce((acc, k) => { acc[k] = (acc[k] || 0) + 1; return acc; }, {});
   const topMissing = Object.entries(missingFreq).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
@@ -394,20 +408,20 @@ export default function Dashboard() {
       {/* Topbar */}
       <nav style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '18px 40px', borderBottom: '1px solid #1a1a18',
-        position: 'sticky', top: 0, background: '#0e0e0d', zIndex: 10,
+        padding: '18px 40px', borderBottom: '1px solid #e7e5e4',
+        position: 'sticky', top: 0, background: '#fafaf9', zIndex: 10,
       }}>
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: '18px' }}>
           resumai<span style={{ color: '#f59e0b' }}>.</span>
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#141413', border: '1px solid #1f1f1c', borderRadius: '100px', padding: '5px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '100px', padding: '5px 14px' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s infinite' }} />
-            <span style={{ fontSize: '11px', color: '#555', fontFamily: "'DM Mono', monospace" }}>auto-running</span>
+            <span style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>auto-running</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {user?.photoURL && <img src={user.photoURL} style={{ width: 28, height: 28, borderRadius: '50%' }} />}
-            <button onClick={async () => { await signOutUser(); navigate('/'); }} style={{ background: 'none', border: 'none', color: '#444', fontSize: '12px', fontFamily: "'DM Mono', monospace" }}>
+            <button onClick={async () => { await signOutUser(); navigate('/'); }} style={{ background: 'none', border: 'none', color: '#a8a29e', fontSize: '12px', fontFamily: "'DM Mono', monospace" }}>
               sign out
             </button>
           </div>
@@ -416,29 +430,29 @@ export default function Dashboard() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', flex: 1 }}>
         {/* Sidebar */}
-        <aside style={{ borderRight: '1px solid #1a1a18', padding: '24px 16px', position: 'sticky', top: 61, height: 'calc(100vh - 61px)', overflowY: 'auto' }}>
+        <aside style={{ borderRight: '1px solid #e7e5e4', padding: '24px 16px', position: 'sticky', top: 61, height: 'calc(100vh - 61px)', overflowY: 'auto' }}>
           {/* Profile ring */}
-          <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
+          <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
               {user?.photoURL && <img src={user.photoURL} style={{ width: 32, height: 32, borderRadius: '50%' }} />}
               <div>
                 <div style={{ fontSize: '13px', fontWeight: 500 }}>{user?.displayName}</div>
-                <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace" }}>{user?.email}</div>
+                <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{user?.email}</div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{
                 width: 40, height: 40, borderRadius: '50%',
-                background: `conic-gradient(#f59e0b ${overallScore * 3.6}deg, #1f1f1c 0deg)`,
+                background: `conic-gradient(#f59e0b ${overallScore * 3.6}deg, #e7e5e4 0deg)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#141413', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#ffffff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>
                   {overallScore}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: '11px', color: '#f0ede8' }}>Profile score</div>
-                <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace" }}>
+                <div style={{ fontSize: '11px', color: '#1c1917' }}>Profile score</div>
+                <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>
                   {overallScore < 70 ? 'add more info' : 'looking good'}
                 </div>
               </div>
@@ -447,40 +461,43 @@ export default function Dashboard() {
 
           {/* Nav tabs */}
           {[
-            { id: 'profile', label: 'Profile Index' },
-            { id: 'chat', label: 'Add Info' },
-            { id: 'jobs', label: 'Job Activity' },
-            { id: 'submit', label: 'Submit Job URL' },
-            { id: 'gaps', label: 'Skill Gaps' },
-          ].map(({ id, label }) => (
+            { id: 'profile', label: 'Profile Index', desc: 'Your indexed career data' },
+            { id: 'chat', label: 'Build Profile', desc: 'Chat or upload PDF to add info' },
+            { id: 'submit', label: 'Tailor Resume', desc: 'Paste a job URL to get a resume' },
+            { id: 'jobs', label: 'Job Activity', desc: 'All requests & results' },
+            { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords' },
+          ].map(({ id, label, desc }) => (
             <button key={id} onClick={() => setTab(id)} style={{
               width: '100%', textAlign: 'left',
-              background: tab === id ? '#141413' : 'transparent',
-              border: `1px solid ${tab === id ? '#2a2a27' : 'transparent'}`,
+              background: tab === id ? '#ffffff' : 'transparent',
+              border: `1px solid ${tab === id ? '#d6d3d1' : 'transparent'}`,
               borderRadius: '6px', padding: '9px 12px', marginBottom: '3px',
               color: tab === id ? '#f0ede8' : '#555', fontSize: '13px',
               transition: 'all 0.15s',
-            }}>{label}</button>
+            }}>
+              {label}
+              <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '2px' }}>{desc}</div>
+            </button>
           ))}
 
           {/* Quick stats */}
-          <div style={{ marginTop: '20px', borderTop: '1px solid #1a1a18', paddingTop: '16px' }}>
+          <div style={{ marginTop: '20px', borderTop: '1px solid #e7e5e4', paddingTop: '16px' }}>
             {[
-              { label: 'Resumes sent', value: jobs.length },
+              { label: 'Resumes sent', value: deliveredJobs.length },
               { label: 'Avg ATS', value: avgATS ? `${avgATS}/100` : '—' },
-              { label: '90+ matches', value: jobs.filter(j => j.ats_score >= 90).length },
+              { label: '90+ matches', value: deliveredJobs.filter(j => j.ats_score >= 90).length },
               { label: 'Skills', value: allSkills.length },
             ].map(({ label, value }) => (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #141413' }}>
-                <span style={{ fontSize: '11px', color: '#444' }}>{label}</span>
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid #f5f5f4' }}>
+                <span style={{ fontSize: '11px', color: '#a8a29e' }}>{label}</span>
                 <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace" }}>{value}</span>
               </div>
             ))}
           </div>
 
           {/* Gmail connector */}
-          <div style={{ marginTop: '20px', borderTop: '1px solid #1a1a18', paddingTop: '16px' }}>
-            <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '6px' }}>
+          <div style={{ marginTop: '20px', borderTop: '1px solid #e7e5e4', paddingTop: '16px' }}>
+            <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '6px' }}>
               ⚡ CONNECT GMAIL
             </div>
             <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px', lineHeight: 1.5 }}>
@@ -495,7 +512,7 @@ export default function Dashboard() {
               <button
                 onClick={() => navigate('/onboarding?step=gmail')}
                 style={{
-                  width: '100%', background: '#f59e0b', color: '#0e0e0d',
+                  width: '100%', background: '#f59e0b', color: '#1c1917',
                   border: 'none', padding: '8px', borderRadius: '6px',
                   fontSize: '12px', fontWeight: 600, cursor: 'pointer',
                 }}
@@ -515,29 +532,29 @@ export default function Dashboard() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px' }}>Profile Index</h2>
                 {!editing ? (
-                  <button onClick={startEditing} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: '#c0bdb8', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                  <button onClick={startEditing} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#c0bdb8', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
                     Edit Profile
                   </button>
                 ) : (
                   <div style={{ display: 'flex', gap: '8px' }}>
-                    <button onClick={cancelEditing} style={{ background: 'transparent', border: '1px solid #2a2a27', color: '#888', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                    <button onClick={cancelEditing} style={{ background: 'transparent', border: '1px solid #d6d3d1', color: '#57534e', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
                       Cancel
                     </button>
-                    <button onClick={saveEditing} disabled={saving} style={{ background: '#22c55e', border: 'none', color: '#0e0e0d', padding: '7px 20px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+                    <button onClick={saveEditing} disabled={saving} style={{ background: '#22c55e', border: 'none', color: '#1c1917', padding: '7px 20px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
                       {saving ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
                 )}
               </div>
-              <p style={{ fontSize: '13px', color: '#555', marginBottom: '28px' }}>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '28px' }}>
                 {editing ? 'Edit your profile details below. Click Save when done.' : 'Everything the system knows about you.'}
               </p>
 
               {!editing ? (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px' }}>
-                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>COMPLETENESS</div>
+                    <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px' }}>
+                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>COMPLETENESS</div>
                       <ProgressBar value={completeness.contact || 0} label="Contact info" />
                       <ProgressBar value={completeness.summary || 0} label="Summary" sublabel={`${profile?.summary?.length || 0} chars`} />
                       <ProgressBar value={completeness.skills || 0} label="Skills" sublabel={`${allSkills.length} indexed`} />
@@ -546,50 +563,50 @@ export default function Dashboard() {
                       <ProgressBar value={0} label="Certifications" sublabel="none added" />
                       <ProgressBar value={completeness.projects || 0} label="Projects" />
                     </div>
-                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px' }}>
-                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>CONTACT</div>
+                    <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px' }}>
+                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>CONTACT</div>
                       {profile?.contact && Object.entries(profile.contact).filter(([, v]) => v).map(([k, v]) => (
-                        <div key={k} style={{ display: 'flex', gap: '12px', padding: '7px 0', borderBottom: '1px solid #1a1a18' }}>
-                          <span style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", minWidth: 60, textTransform: 'capitalize' }}>{k}</span>
-                          <span style={{ fontSize: '12px', color: '#f0ede8' }}>{Array.isArray(v) ? v.join(', ') : String(v)}</span>
+                        <div key={k} style={{ display: 'flex', gap: '12px', padding: '7px 0', borderBottom: '1px solid #e7e5e4' }}>
+                          <span style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", minWidth: 60, textTransform: 'capitalize' }}>{k}</span>
+                          <span style={{ fontSize: '12px', color: '#1c1917' }}>{Array.isArray(v) ? v.join(', ') : String(v)}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
                   {profile?.skills && profile.skills.length > 0 && (
-                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
-                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>SKILLS — {profile.skills.length} TOTAL</div>
+                    <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>SKILLS — {profile.skills.length} TOTAL</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                         {profile.skills.map(skill => (
-                          <span key={skill} style={{ background: '#1a1a18', border: '1px solid #2a2a27', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#c0bdb8', fontFamily: "'DM Mono', monospace" }}>{skill}</span>
+                          <span key={skill} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#c0bdb8', fontFamily: "'DM Mono', monospace" }}>{skill}</span>
                         ))}
                       </div>
                     </div>
                   )}
 
                   {profile?.experience && profile.experience.length > 0 && (
-                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
-                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>EXPERIENCE</div>
+                    <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>EXPERIENCE</div>
                       {profile.experience.map((exp, i) => (
-                        <div key={exp.company || i} style={{ paddingBottom: '14px', borderBottom: i < profile.experience.length - 1 ? '1px solid #1a1a18' : 'none', marginBottom: i < profile.experience.length - 1 ? '14px' : 0 }}>
+                        <div key={exp.company || i} style={{ paddingBottom: '14px', borderBottom: i < profile.experience.length - 1 ? '1px solid #e7e5e4' : 'none', marginBottom: i < profile.experience.length - 1 ? '14px' : 0 }}>
                           <div style={{ display: 'flex', gap: '14px' }}>
-                            <div style={{ width: 34, height: 34, borderRadius: '8px', background: '#1f1f1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, color: '#f59e0b', flexShrink: 0 }}>
+                            <div style={{ width: 34, height: 34, borderRadius: '8px', background: '#e7e5e4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: 600, color: '#f59e0b', flexShrink: 0 }}>
                               {(exp.company || '?')[0]}
                             </div>
                             <div style={{ flex: 1 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '2px' }}>
                                 <span style={{ fontSize: '13px', fontWeight: 500 }}>{exp.title} · {exp.company}</span>
-                                <span style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace" }}>{exp.dates}</span>
+                                <span style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{exp.dates}</span>
                               </div>
-                              {exp.location && <div style={{ fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>{exp.location}</div>}
+                              {exp.location && <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>{exp.location}</div>}
                             </div>
                           </div>
                           {(exp.bullets || []).length > 0 && (
                             <div style={{ marginTop: '8px', paddingLeft: '48px' }}>
                               {exp.bullets.map((b, bi) => (
-                                <div key={bi} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '12px', color: '#888', lineHeight: 1.5 }}>
-                                  <span style={{ color: '#333', flexShrink: 0 }}>·</span>
+                                <div key={bi} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '12px', color: '#57534e', lineHeight: 1.5 }}>
+                                  <span style={{ color: '#c4c0bc', flexShrink: 0 }}>·</span>
                                   <span>{b}</span>
                                 </div>
                               ))}
@@ -601,22 +618,22 @@ export default function Dashboard() {
                   )}
 
                   {profile?.education && profile.education.length > 0 && (
-                    <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
-                      <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>EDUCATION</div>
+                    <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>EDUCATION</div>
                       {profile.education.map((edu, i) => (
-                        <div key={i} style={{ padding: '7px 0', borderBottom: i < profile.education.length - 1 ? '1px solid #1a1a18' : 'none' }}>
+                        <div key={i} style={{ padding: '7px 0', borderBottom: i < profile.education.length - 1 ? '1px solid #e7e5e4' : 'none' }}>
                           <div style={{ fontSize: '13px', fontWeight: 500 }}>{edu.degree}</div>
-                          <div style={{ fontSize: '12px', color: '#888' }}>{edu.school} {edu.dates ? `· ${edu.dates}` : ''}</div>
+                          <div style={{ fontSize: '12px', color: '#57534e' }}>{edu.school} {edu.dates ? `· ${edu.dates}` : ''}</div>
                         </div>
                       ))}
                     </div>
                   )}
 
-                  <div style={{ background: '#1a0a0a', border: '1px solid #3a1a1a', borderRadius: '12px', padding: '20px' }}>
+                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '20px' }}>
                     <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '12px' }}>⚠ MISSING</div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {['Certifications', 'Projects', 'Awards', 'LinkedIn URL'].map(item => (
-                        <button key={item} onClick={() => setTab('chat')} style={{ background: 'transparent', border: '1px dashed #3a1a1a', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', color: '#555', fontFamily: "'DM Sans', sans-serif", cursor: 'pointer' }}>
+                        <button key={item} onClick={() => setTab('chat')} style={{ background: 'transparent', border: '1px dashed #fecaca', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', color: '#78716c', fontFamily: "'DM Sans', sans-serif", cursor: 'pointer' }}>
                           + Add {item}
                         </button>
                       ))}
@@ -626,39 +643,39 @@ export default function Dashboard() {
               ) : editProfile && (
                 <>
                   {/* Edit: Contact */}
-                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                  <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>CONTACT</div>
                     {['name', 'email', 'phone', 'location'].map(field => (
                       <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                        <span style={{ fontSize: '10px', color: '#555', fontFamily: "'DM Mono', monospace", minWidth: 70, textTransform: 'capitalize' }}>{field}</span>
+                        <span style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", minWidth: 70, textTransform: 'capitalize' }}>{field}</span>
                         <input
                           value={editProfile.contact?.[field] || ''}
                           onChange={e => updateContact(field, e.target.value)}
                           placeholder={field}
-                          style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '13px', padding: '8px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
+                          style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '13px', padding: '8px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
                         />
                       </div>
                     ))}
                   </div>
 
                   {/* Edit: Summary */}
-                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                  <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>SUMMARY</div>
                     <textarea
                       value={editProfile.summary || ''}
                       onChange={e => setEditProfile(p => ({ ...p, summary: e.target.value }))}
                       placeholder="A brief professional summary..."
                       rows={3}
-                      style={{ width: '100%', background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '13px', padding: '10px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none', resize: 'vertical' }}
+                      style={{ width: '100%', background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '13px', padding: '10px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none', resize: 'vertical' }}
                     />
                   </div>
 
                   {/* Edit: Skills */}
-                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                  <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>SKILLS</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                       {(editProfile.skills || []).map((skill, si) => (
-                        <span key={si} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#1a1a18', border: '1px solid #2a2a27', borderRadius: '4px', padding: '4px 8px 4px 10px', fontSize: '11px', color: '#c0bdb8', fontFamily: "'DM Mono', monospace" }}>
+                        <span key={si} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 8px 4px 10px', fontSize: '11px', color: '#c0bdb8', fontFamily: "'DM Mono', monospace" }}>
                           {skill}
                           <button onClick={() => removeSkill(si)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
                         </span>
@@ -670,61 +687,61 @@ export default function Dashboard() {
                         onChange={e => setNewSkill(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && addSkill()}
                         placeholder="Add a skill..."
-                        style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', fontFamily: "'DM Mono', monospace", outline: 'none' }}
+                        style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', fontFamily: "'DM Mono', monospace", outline: 'none' }}
                       />
-                      <button onClick={addSkill} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: '#c0bdb8', padding: '8px 14px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>+ Add</button>
+                      <button onClick={addSkill} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#c0bdb8', padding: '8px 14px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>+ Add</button>
                     </div>
                   </div>
 
                   {/* Edit: Experience */}
-                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                  <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                       <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>EXPERIENCE</div>
-                      <button onClick={addExperience} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: '#c0bdb8', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add Role</button>
+                      <button onClick={addExperience} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#c0bdb8', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add Role</button>
                     </div>
                     {(editProfile.experience || []).map((exp, ei) => (
-                      <div key={ei} style={{ paddingBottom: '16px', borderBottom: ei < (editProfile.experience || []).length - 1 ? '1px solid #1a1a18' : 'none', marginBottom: ei < (editProfile.experience || []).length - 1 ? '16px' : 0 }}>
+                      <div key={ei} style={{ paddingBottom: '16px', borderBottom: ei < (editProfile.experience || []).length - 1 ? '1px solid #e7e5e4' : 'none', marginBottom: ei < (editProfile.experience || []).length - 1 ? '16px' : 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                          <div style={{ width: 28, height: 28, borderRadius: '6px', background: '#1f1f1c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, color: '#f59e0b' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '6px', background: '#e7e5e4', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, color: '#f59e0b' }}>
                             {(exp.company || '?')[0]}
                           </div>
-                          <button onClick={() => removeExperience(ei)} style={{ background: 'none', border: '1px solid #3a1a1a', color: '#ef4444', padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>Remove</button>
+                          <button onClick={() => removeExperience(ei)} style={{ background: 'none', border: '1px solid #fecaca', color: '#ef4444', padding: '4px 10px', borderRadius: '4px', fontSize: '10px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>Remove</button>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
-                          <input value={exp.title || ''} onChange={e => updateExperience(ei, 'title', e.target.value)} placeholder="Title" style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
-                          <input value={exp.company || ''} onChange={e => updateExperience(ei, 'company', e.target.value)} placeholder="Company" style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
-                          <input value={exp.dates || ''} onChange={e => updateExperience(ei, 'dates', e.target.value)} placeholder="Dates (e.g. Jan 2022 - Dec 2024)" style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
-                          <input value={exp.location || ''} onChange={e => updateExperience(ei, 'location', e.target.value)} placeholder="Location" style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                          <input value={exp.title || ''} onChange={e => updateExperience(ei, 'title', e.target.value)} placeholder="Title" style={{ background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                          <input value={exp.company || ''} onChange={e => updateExperience(ei, 'company', e.target.value)} placeholder="Company" style={{ background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                          <input value={exp.dates || ''} onChange={e => updateExperience(ei, 'dates', e.target.value)} placeholder="Dates (e.g. Jan 2022 - Dec 2024)" style={{ background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                          <input value={exp.location || ''} onChange={e => updateExperience(ei, 'location', e.target.value)} placeholder="Location" style={{ background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
                         </div>
-                        <div style={{ fontSize: '10px', color: '#555', fontFamily: "'DM Mono', monospace", marginBottom: '6px', marginTop: '4px' }}>BULLETS</div>
+                        <div style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", marginBottom: '6px', marginTop: '4px' }}>BULLETS</div>
                         {(exp.bullets || []).map((b, bi) => (
                           <div key={bi} style={{ display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'flex-start' }}>
-                            <span style={{ color: '#333', marginTop: '8px', flexShrink: 0 }}>·</span>
+                            <span style={{ color: '#c4c0bc', marginTop: '8px', flexShrink: 0 }}>·</span>
                             <textarea
                               value={b}
                               onChange={e => updateBullet(ei, bi, e.target.value)}
                               rows={1}
-                              style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#c0bdb8', fontSize: '12px', padding: '8px 10px', outline: 'none', resize: 'vertical', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}
+                              style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#c0bdb8', fontSize: '12px', padding: '8px 10px', outline: 'none', resize: 'vertical', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}
                             />
                             <button onClick={() => removeBullet(ei, bi)} style={{ background: 'none', border: 'none', color: '#ef444488', fontSize: '16px', cursor: 'pointer', padding: '4px', lineHeight: 1 }}>×</button>
                           </div>
                         ))}
-                        <button onClick={() => addBullet(ei)} style={{ background: 'none', border: '1px dashed #2a2a27', color: '#555', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', marginTop: '4px' }}>+ Add bullet</button>
+                        <button onClick={() => addBullet(ei)} style={{ background: 'none', border: '1px dashed #d6d3d1', color: '#78716c', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', marginTop: '4px' }}>+ Add bullet</button>
                       </div>
                     ))}
                   </div>
 
                   {/* Edit: Education */}
-                  <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                  <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                       <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>EDUCATION</div>
-                      <button onClick={addEducation} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: '#c0bdb8', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add</button>
+                      <button onClick={addEducation} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#c0bdb8', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add</button>
                     </div>
                     {(editProfile.education || []).map((edu, ei) => (
                       <div key={ei} style={{ display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
-                        <input value={edu.degree || ''} onChange={e => updateEducation(ei, 'degree', e.target.value)} placeholder="Degree" style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
-                        <input value={edu.school || ''} onChange={e => updateEducation(ei, 'school', e.target.value)} placeholder="School" style={{ flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
-                        <input value={edu.dates || ''} onChange={e => updateEducation(ei, 'dates', e.target.value)} placeholder="Dates" style={{ width: 140, background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '6px', color: '#f0ede8', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                        <input value={edu.degree || ''} onChange={e => updateEducation(ei, 'degree', e.target.value)} placeholder="Degree" style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                        <input value={edu.school || ''} onChange={e => updateEducation(ei, 'school', e.target.value)} placeholder="School" style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
+                        <input value={edu.dates || ''} onChange={e => updateEducation(ei, 'dates', e.target.value)} placeholder="Dates" style={{ width: 140, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
                         <button onClick={() => removeEducation(ei)} style={{ background: 'none', border: 'none', color: '#ef444488', fontSize: '16px', cursor: 'pointer', padding: '4px', lineHeight: 1 }}>×</button>
                       </div>
                     ))}
@@ -732,8 +749,8 @@ export default function Dashboard() {
 
                   {/* Save/Cancel bottom bar */}
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '8px' }}>
-                    <button onClick={cancelEditing} style={{ background: 'transparent', border: '1px solid #2a2a27', color: '#888', padding: '10px 24px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
-                    <button onClick={saveEditing} disabled={saving} style={{ background: '#22c55e', border: 'none', color: '#0e0e0d', padding: '10px 28px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
+                    <button onClick={cancelEditing} style={{ background: 'transparent', border: '1px solid #d6d3d1', color: '#57534e', padding: '10px 24px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                    <button onClick={saveEditing} disabled={saving} style={{ background: '#22c55e', border: 'none', color: '#1c1917', padding: '10px 28px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: saving ? 0.7 : 1 }}>
                       {saving ? 'Saving...' : 'Save Changes'}
                     </button>
                   </div>
@@ -745,9 +762,9 @@ export default function Dashboard() {
           {/* ── ADD INFO (CHAT) ── */}
           {tab === 'chat' && (
             <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '700px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)' }}>
-              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Add Info</h2>
-              <p style={{ fontSize: '13px', color: '#555', marginBottom: '20px', lineHeight: 1.6 }}>
-                Tell Arjun about your career — type anything or upload a PDF. It gets indexed into your profile automatically.
+              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Build Profile</h2>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '20px', lineHeight: 1.6 }}>
+                Tell Arjun about your career — type anything or upload a PDF resume. It gets indexed into your profile for resume tailoring.
               </p>
 
               <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
@@ -763,7 +780,7 @@ export default function Dashboard() {
                   if (msg.type === 'progress') {
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
-                        <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#141413', border: '1px solid #2a2a27', fontSize: '13px' }}>
+                        <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
                           <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>ARJUN — PROCESSING</div>
                           {progressStages.map((stage, si) => {
                             const done = si < msg.stage;
@@ -773,11 +790,11 @@ export default function Dashboard() {
                                 <div style={{
                                   width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
                                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                  background: done ? '#22c55e' : active ? '#f59e0b' : '#1f1f1c',
-                                  fontSize: '9px', color: '#0e0e0d', fontWeight: 700,
+                                  background: done ? '#22c55e' : active ? '#f59e0b' : '#e7e5e4',
+                                  fontSize: '9px', color: '#1c1917', fontWeight: 700,
                                 }}>
                                   {done ? '✓' : active ? (
-                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #0e0e0d', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #fafaf9', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
                                   ) : (si + 1)}
                                 </div>
                                 <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#f0ede8' : '#555', fontFamily: "'DM Mono', monospace" }}>
@@ -796,16 +813,16 @@ export default function Dashboard() {
                     const scoreColor = (j.ats_score || 0) >= 90 ? '#22c55e' : (j.ats_score || 0) >= 75 ? '#f59e0b' : '#ef4444';
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
-                        <div style={{ maxWidth: '90%', padding: '16px', borderRadius: '12px', background: '#141413', border: '1px solid #2a2a27', fontSize: '13px' }}>
+                        <div style={{ maxWidth: '90%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
                           <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>ARJUN — RESUME READY</div>
                           <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{j.title}</div>
-                          <div style={{ fontSize: '12px', color: '#888', fontFamily: "'DM Mono', monospace", marginBottom: '14px' }}>{j.company}</div>
+                          <div style={{ fontSize: '12px', color: '#57534e', fontFamily: "'DM Mono', monospace", marginBottom: '14px' }}>{j.company}</div>
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
                             <div style={{ fontSize: '28px', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: scoreColor }}>{j.ats_score || '—'}</div>
                             <div>
-                              <div style={{ fontSize: '10px', color: '#888', fontFamily: "'DM Mono', monospace" }}>ATS SCORE</div>
-                              <div style={{ height: '4px', width: '120px', background: '#1f1f1c', borderRadius: '2px', marginTop: '4px' }}>
+                              <div style={{ fontSize: '10px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>ATS SCORE</div>
+                              <div style={{ height: '4px', width: '120px', background: '#e7e5e4', borderRadius: '2px', marginTop: '4px' }}>
                                 <div style={{ height: '100%', width: `${j.ats_score || 0}%`, background: scoreColor, borderRadius: '2px', transition: 'width 1s ease' }} />
                               </div>
                             </div>
@@ -816,7 +833,7 @@ export default function Dashboard() {
                               <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>MATCHED ({(j.matched_keywords || []).length})</div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
                                 {(j.matched_keywords || []).slice(0, 8).map(k => (
-                                  <span key={k} style={{ background: '#0d2a1a', border: '1px solid #22c55e22', borderRadius: '3px', padding: '2px 6px', fontSize: '10px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>{k}</span>
+                                  <span key={k} style={{ background: '#ecfdf5', border: '1px solid #22c55e22', borderRadius: '3px', padding: '2px 6px', fontSize: '10px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>{k}</span>
                                 ))}
                               </div>
                             </div>
@@ -824,7 +841,7 @@ export default function Dashboard() {
                               <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>MISSING ({(j.missing_keywords || []).length})</div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
                                 {(j.missing_keywords || []).slice(0, 8).map(k => (
-                                  <span key={k} style={{ background: '#1a0d0d', border: '1px solid #ef444422', borderRadius: '3px', padding: '2px 6px', fontSize: '10px', color: '#ef444488', fontFamily: "'DM Mono', monospace" }}>{k}</span>
+                                  <span key={k} style={{ background: '#fef2f2', border: '1px solid #ef444422', borderRadius: '3px', padding: '2px 6px', fontSize: '10px', color: '#ef444488', fontFamily: "'DM Mono', monospace" }}>{k}</span>
                                 ))}
                               </div>
                             </div>
@@ -834,11 +851,11 @@ export default function Dashboard() {
                             <div style={{ marginBottom: '14px' }}>
                               <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>SYNONYM SUBSTITUTIONS ({j.substitutions.length})</div>
                               {j.substitutions.map((s, si) => (
-                                <div key={si} style={{ fontSize: '11px', color: '#888', padding: '4px 0', borderBottom: '1px solid #1a1a18', lineHeight: 1.5 }}>
+                                <div key={si} style={{ fontSize: '11px', color: '#57534e', padding: '4px 0', borderBottom: '1px solid #e7e5e4', lineHeight: 1.5 }}>
                                   <span style={{ color: '#ef444488' }}>{s.original_phrase}</span>
-                                  <span style={{ color: '#555' }}> → </span>
+                                  <span style={{ color: '#78716c' }}> → </span>
                                   <span style={{ color: '#22c55e88' }}>{s.new_phrase}</span>
-                                  <span style={{ color: '#333', fontSize: '10px' }}> (JD: {s.jd_keyword})</span>
+                                  <span style={{ color: '#c4c0bc', fontSize: '10px' }}> (JD: {s.jd_keyword})</span>
                                 </div>
                               ))}
                             </div>
@@ -847,7 +864,7 @@ export default function Dashboard() {
                           <button
                             onClick={(e) => handleDownload(e, j.job_id)}
                             disabled={downloading === j.job_id}
-                            style={{ width: '100%', background: '#f59e0b', color: '#0e0e0d', border: 'none', padding: '10px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: downloading === j.job_id ? 0.7 : 1 }}
+                            style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '10px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: downloading === j.job_id ? 0.7 : 1 }}
                           >
                             {downloading === j.job_id ? 'Downloading...' : 'Download Tailored Resume (.docx)'}
                           </button>
@@ -860,9 +877,9 @@ export default function Dashboard() {
                   <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
                     <div style={{
                       maxWidth: '85%', padding: '12px 16px', borderRadius: '12px',
-                      background: msg.role === 'user' ? '#f59e0b' : '#141413',
-                      color: msg.role === 'user' ? '#0e0e0d' : '#c0bdb8',
-                      border: msg.role === 'user' ? 'none' : '1px solid #2a2a27',
+                      background: msg.role === 'user' ? '#f59e0b' : '#ffffff',
+                      color: msg.role === 'user' ? '#fafaf9' : '#c0bdb8',
+                      border: msg.role === 'user' ? 'none' : '1px solid #d6d3d1',
                       fontSize: '13px', lineHeight: 1.6,
                     }}>
                       {msg.role === 'arjun' && (
@@ -871,14 +888,14 @@ export default function Dashboard() {
                       {msg.text}
 
                       {msg.pendingChanges && (
-                        <div style={{ marginTop: '12px', background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '8px', padding: '12px', fontSize: '12px' }}>
+                        <div style={{ marginTop: '12px', background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '8px', padding: '12px', fontSize: '12px' }}>
                           <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.08em', marginBottom: '10px' }}>
                             PROPOSED CHANGES
                           </div>
                           {formatChanges(msg.pendingChanges).map((item, ci) => (
-                            <div key={ci} style={{ display: 'flex', gap: '8px', padding: '4px 0', borderBottom: '1px solid #1a1a18' }}>
+                            <div key={ci} style={{ display: 'flex', gap: '8px', padding: '4px 0', borderBottom: '1px solid #e7e5e4' }}>
                               {item.section && (
-                                <span style={{ fontSize: '10px', color: '#555', fontFamily: "'DM Mono', monospace", minWidth: 70, flexShrink: 0, textTransform: 'uppercase' }}>{item.section}</span>
+                                <span style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", minWidth: 70, flexShrink: 0, textTransform: 'uppercase' }}>{item.section}</span>
                               )}
                               <span style={{ color: '#c0bdb8', fontSize: '12px' }}>{item.detail}</span>
                             </div>
@@ -888,13 +905,13 @@ export default function Dashboard() {
                             <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                               <button
                                 onClick={() => handleConfirmChanges(i, msg.pendingChanges)}
-                                style={{ flex: 1, background: '#22c55e', color: '#0e0e0d', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
+                                style={{ flex: 1, background: '#22c55e', color: '#1c1917', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
                               >
                                 Confirm & Save
                               </button>
                               <button
                                 onClick={() => handleRejectChanges(i)}
-                                style={{ flex: 1, background: 'transparent', color: '#888', border: '1px solid #2a2a27', padding: '8px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+                                style={{ flex: 1, background: 'transparent', color: '#57534e', border: '1px solid #d6d3d1', padding: '8px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
                               >
                                 Discard
                               </button>
@@ -908,7 +925,7 @@ export default function Dashboard() {
                             <div style={{ marginTop: '10px', fontSize: '11px', color: '#22c55e', fontFamily: "'DM Mono', monospace" }}>✓ Saved to profile</div>
                           )}
                           {msg.confirmState === 'rejected' && (
-                            <div style={{ marginTop: '10px', fontSize: '11px', color: '#888', fontFamily: "'DM Mono', monospace" }}>Changes discarded</div>
+                            <div style={{ marginTop: '10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>Changes discarded</div>
                           )}
                         </div>
                       )}
@@ -918,7 +935,7 @@ export default function Dashboard() {
                 })}
                 {chatSending && (
                   <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
-                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#141413', border: '1px solid #2a2a27', fontSize: '13px', color: '#555' }}>
+                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px', color: '#78716c' }}>
                       <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>ARJUN</div>
                       Thinking...
                     </div>
@@ -928,7 +945,7 @@ export default function Dashboard() {
               </div>
 
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <label style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', flexShrink: 0, opacity: pdfUploading ? 0.5 : 1 }}>
+                <label style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', flexShrink: 0, opacity: pdfUploading ? 0.5 : 1 }}>
                   <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { handleChatPdf(e.target.files[0]); e.target.value = ''; }} disabled={pdfUploading} />
                   <span style={{ fontSize: '14px' }}>{pdfUploading ? '...' : '📄'}</span>
                 </label>
@@ -939,8 +956,8 @@ export default function Dashboard() {
                   placeholder="I have 3 years of experience at Google as a PM..."
                   disabled={chatSending}
                   style={{
-                    flex: 1, background: '#0e0e0d', border: '1px solid #2a2a27',
-                    borderRadius: '8px', color: '#f0ede8', fontFamily: "'DM Sans', sans-serif",
+                    flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1',
+                    borderRadius: '8px', color: '#1c1917', fontFamily: "'DM Sans', sans-serif",
                     fontSize: '13px', padding: '12px 16px', outline: 'none',
                   }}
                 />
@@ -948,8 +965,8 @@ export default function Dashboard() {
                   onClick={handleChatSend}
                   disabled={!chatInput.trim() || chatSending}
                   style={{
-                    background: chatInput.trim() ? '#f59e0b' : '#1f1f1c',
-                    color: chatInput.trim() ? '#0e0e0d' : '#444',
+                    background: chatInput.trim() ? '#f59e0b' : '#e7e5e4',
+                    color: chatInput.trim() ? '#1c1917' : '#a8a29e',
                     border: 'none', padding: '10px 20px', borderRadius: '8px',
                     fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0,
                   }}
@@ -964,50 +981,77 @@ export default function Dashboard() {
           {tab === 'jobs' && (
             <div style={{ animation: 'fadeIn 0.3s ease' }}>
               <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Job Activity</h2>
-              <p style={{ fontSize: '13px', color: '#555', marginBottom: '28px' }}>Every job processed and resume sent.</p>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '28px' }}>All job requests — delivered, processing, and failed.</p>
 
               {jobs.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '60px', color: '#444' }}>
+                <div style={{ textAlign: 'center', padding: '60px', color: '#a8a29e' }}>
                   <div style={{ fontSize: '32px', marginBottom: '12px' }}>📭</div>
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '13px' }}>No jobs processed yet</div>
-                  <div style={{ fontSize: '12px', color: '#333', marginTop: '6px' }}>Submit a job URL or wait for the auto-run</div>
+                  <div style={{ fontSize: '12px', color: '#c4c0bc', marginTop: '6px' }}>Submit a job URL or wait for the auto-run</div>
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                   {jobs.map(job => (
                     <div key={job.job_id}>
                       <div
-                        onClick={() => setActiveJob(activeJob?.job_id === job.job_id ? null : job)}
+                        onClick={() => (job.status === 'delivered' || job.status === 'failed') ? setActiveJob(activeJob?.job_id === job.job_id ? null : job) : null}
                         style={{
                           display: 'grid', gridTemplateColumns: '1fr auto auto auto auto',
                           alignItems: 'center', gap: '16px', padding: '14px 16px',
-                          background: activeJob?.job_id === job.job_id ? '#141413' : 'transparent',
-                          border: `1px solid ${activeJob?.job_id === job.job_id ? '#2a2a27' : 'transparent'}`,
-                          borderRadius: '8px', cursor: 'pointer', transition: 'all 0.15s',
+                          background: activeJob?.job_id === job.job_id ? '#ffffff' : 'transparent',
+                          border: `1px solid ${activeJob?.job_id === job.job_id ? '#d6d3d1' : 'transparent'}`,
+                          borderRadius: '8px', cursor: (job.status === 'delivered' || job.status === 'failed') ? 'pointer' : 'default',
+                          transition: 'all 0.15s',
+                          opacity: job.status === 'failed' ? 0.6 : 1,
                         }}
                       >
                         <div>
-                          <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>{job.title}</div>
-                          <div style={{ fontSize: '11px', color: '#555', fontFamily: "'DM Mono', monospace" }}>{job.company}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>{job.title || 'Untitled job'}</div>
+                          <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{job.company || job.url?.slice(0, 40) || 'Unknown'}</div>
                         </div>
-                        {job.ats_score && <ATSBadge score={job.ats_score} />}
+                        {job.status === 'delivered' && job.ats_score ? (
+                          <ATSBadge score={job.ats_score} />
+                        ) : job.status === 'processing' ? (
+                          <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#f59e0b', background: '#f59e0b11', border: '1px solid #f59e0b33', borderRadius: '4px', padding: '2px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+                            processing
+                          </span>
+                        ) : job.status === 'failed' ? (
+                          <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#ef4444', background: '#ef444411', border: '1px solid #ef444433', borderRadius: '4px', padding: '2px 8px' }}>failed</span>
+                        ) : null}
                         {job.improved && <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#f59e0b', background: '#f59e0b11', border: '1px solid #f59e0b33', borderRadius: '4px', padding: '2px 8px' }}>2nd run</span>}
-                        <span style={{ fontSize: '11px', color: '#333', fontFamily: "'DM Mono', monospace" }}>{new Date(job.created_at).toLocaleDateString()}</span>
-                        <button onClick={(e) => handleDownload(e, job.job_id)} disabled={downloading === job.job_id} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: downloading === job.job_id ? '#f59e0b' : '#888', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'color 0.2s' }}>
-                          {downloading === job.job_id ? '...' : '↓ docx'}
-                        </button>
+                        <span style={{ fontSize: '11px', color: '#c4c0bc', fontFamily: "'DM Mono', monospace" }}>{new Date(job.created_at || job.seen_at).toLocaleDateString()}</span>
+                        {job.status === 'delivered' ? (
+                          <button onClick={(e) => handleDownload(e, job.job_id)} disabled={downloading === job.job_id} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: downloading === job.job_id ? '#f59e0b' : '#888', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'color 0.2s' }}>
+                            {downloading === job.job_id ? '...' : '↓ docx'}
+                          </button>
+                        ) : (
+                          <span style={{ width: '60px' }} />
+                        )}
                       </div>
 
-                      {activeJob?.job_id === job.job_id && (
-                        <div style={{ background: '#0d0d0c', border: '1px solid #1f1f1c', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '16px', animation: 'fadeIn 0.2s ease' }}>
+                      {activeJob?.job_id === job.job_id && job.status === 'failed' && (
+                        <div style={{ background: '#f5f5f4', border: '1px solid #e7e5e4', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '16px', animation: 'fadeIn 0.2s ease' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                            <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#ef4444' }}>FAILED</span>
+                          </div>
+                          <p style={{ fontSize: '12px', color: '#57534e', lineHeight: 1.5, marginBottom: '8px' }}>
+                            This job couldn't be processed — the page may require login, the URL may be invalid, or the scraper couldn't extract the job description.
+                          </p>
+                          {job.url && <a href={job.url} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>→ {job.url}</a>}
+                        </div>
+                      )}
+
+                      {activeJob?.job_id === job.job_id && job.status === 'delivered' && (
+                        <div style={{ background: '#f5f5f4', border: '1px solid #e7e5e4', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '16px', animation: 'fadeIn 0.2s ease' }}>
                           {/* ATS Score bar */}
                           {job.ats_score && (
                             <div style={{ marginBottom: '16px' }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                                <span style={{ fontSize: '10px', color: '#888', fontFamily: "'DM Mono', monospace" }}>ATS MATCH SCORE</span>
+                                <span style={{ fontSize: '10px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>ATS MATCH SCORE</span>
                                 <span style={{ fontSize: '12px', fontFamily: "'DM Mono', monospace", fontWeight: 600, color: job.ats_score >= 90 ? '#22c55e' : job.ats_score >= 75 ? '#f59e0b' : '#ef4444' }}>{job.ats_score}/100</span>
                               </div>
-                              <div style={{ height: '4px', background: '#1f1f1c', borderRadius: '2px' }}>
+                              <div style={{ height: '4px', background: '#e7e5e4', borderRadius: '2px' }}>
                                 <div style={{ height: '100%', width: `${job.ats_score}%`, background: job.ats_score >= 90 ? '#22c55e' : job.ats_score >= 75 ? '#f59e0b' : '#ef4444', borderRadius: '2px', transition: 'width 1s ease' }} />
                               </div>
                             </div>
@@ -1018,7 +1062,7 @@ export default function Dashboard() {
                               <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>✓ MATCHED ({(job.matched_keywords || []).length})</div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                 {(job.matched_keywords || []).map(k => (
-                                  <span key={k} style={{ background: '#0d2a1a', border: '1px solid #22c55e22', borderRadius: '4px', padding: '3px 8px', fontSize: '10px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>{k}</span>
+                                  <span key={k} style={{ background: '#ecfdf5', border: '1px solid #22c55e22', borderRadius: '4px', padding: '3px 8px', fontSize: '10px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>{k}</span>
                                 ))}
                               </div>
                             </div>
@@ -1026,7 +1070,7 @@ export default function Dashboard() {
                               <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>✗ MISSING ({(job.missing_keywords || []).length})</div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                 {(job.missing_keywords || []).map(k => (
-                                  <button key={k} onClick={() => handleAddKeyword(k)} style={{ background: addedKeywords.includes(k) ? '#0d2a1a' : '#1a0d0d', border: `1px solid ${addedKeywords.includes(k) ? '#22c55e33' : '#ef444422'}`, borderRadius: '4px', padding: '3px 8px', fontSize: '10px', color: addedKeywords.includes(k) ? '#22c55e88' : '#ef444488', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                                  <button key={k} onClick={() => handleAddKeyword(k)} style={{ background: addedKeywords.includes(k) ? '#ecfdf5' : '#fef2f2', border: `1px solid ${addedKeywords.includes(k) ? '#22c55e33' : '#ef444422'}`, borderRadius: '4px', padding: '3px 8px', fontSize: '10px', color: addedKeywords.includes(k) ? '#22c55e88' : '#ef444488', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
                                     {addedKeywords.includes(k) ? '✓ ' : '+ '}{k}
                                   </button>
                                 ))}
@@ -1035,11 +1079,11 @@ export default function Dashboard() {
                           </div>
 
                           {/* Download + meta row */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#141413', border: '1px solid #2a2a27', borderRadius: '8px' }}>
-                            <button onClick={(e) => handleDownload(e, job.job_id)} disabled={downloading === job.job_id} style={{ background: '#f59e0b', color: '#0e0e0d', border: 'none', padding: '8px 20px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === job.job_id ? 0.7 : 1, whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '8px' }}>
+                            <button onClick={(e) => handleDownload(e, job.job_id)} disabled={downloading === job.job_id} style={{ background: '#f59e0b', color: '#1c1917', border: 'none', padding: '8px 20px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === job.job_id ? 0.7 : 1, whiteSpace: 'nowrap' }}>
                               {downloading === job.job_id ? 'Downloading...' : 'Download Resume (.docx)'}
                             </button>
-                            <div style={{ flex: 1, display: 'flex', gap: '16px', fontSize: '11px', color: '#555', fontFamily: "'DM Mono', monospace" }}>
+                            <div style={{ flex: 1, display: 'flex', gap: '16px', fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>
                               {job.ats_score && <span>ATS: {job.ats_score}</span>}
                               <span>Matched: {(job.matched_keywords || []).length}</span>
                               <span>Missing: {(job.missing_keywords || []).length}</span>
@@ -1047,7 +1091,7 @@ export default function Dashboard() {
                             </div>
                           </div>
 
-                          {job.url && <a href={job.url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: '12px', fontSize: '11px', color: '#333', fontFamily: "'DM Mono', monospace" }}>→ {job.url}</a>}
+                          {job.url && <a href={job.url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: '12px', fontSize: '11px', color: '#c4c0bc', fontFamily: "'DM Mono', monospace" }}>→ {job.url}</a>}
                         </div>
                       )}
                     </div>
@@ -1061,19 +1105,19 @@ export default function Dashboard() {
           {tab === 'submit' && (
             <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '600px' }}>
               <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Submit a Job URL</h2>
-              <p style={{ fontSize: '13px', color: '#555', marginBottom: '28px', lineHeight: 1.6 }}>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '28px', lineHeight: 1.6 }}>
                 Paste any LinkedIn job URL. We'll scrape the full description, tailor your resume, calculate ATS score, and email it to you.
               </p>
 
-              <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '24px', marginBottom: '16px' }}>
-                <label style={{ fontSize: '11px', color: '#555', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '10px' }}>JOB URL</label>
+              <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '24px', marginBottom: '16px' }}>
+                <label style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '10px' }}>JOB URL</label>
                 <input
                   value={jobUrl}
                   onChange={e => setJobUrl(e.target.value)}
                   placeholder="https://www.linkedin.com/jobs/view/4432548390"
                   style={{
-                    width: '100%', background: '#0e0e0d', border: '1px solid #2a2a27',
-                    borderRadius: '6px', color: '#f0ede8',
+                    width: '100%', background: '#fafaf9', border: '1px solid #d6d3d1',
+                    borderRadius: '6px', color: '#1c1917',
                     fontFamily: "'DM Mono', monospace", fontSize: '13px',
                     padding: '12px 16px', outline: 'none', marginBottom: '16px',
                   }}
@@ -1082,8 +1126,8 @@ export default function Dashboard() {
                   onClick={handleSubmitUrl}
                   disabled={!jobUrl.trim() || submitting}
                   style={{
-                    width: '100%', background: jobUrl.trim() ? '#f59e0b' : '#1f1f1c',
-                    color: jobUrl.trim() ? '#0e0e0d' : '#444',
+                    width: '100%', background: jobUrl.trim() ? '#f59e0b' : '#e7e5e4',
+                    color: jobUrl.trim() ? '#fafaf9' : '#444',
                     border: 'none', padding: '12px', borderRadius: '6px',
                     fontSize: '14px', fontWeight: 600,
                     opacity: submitting ? 0.7 : 1,
@@ -1098,17 +1142,17 @@ export default function Dashboard() {
                 )}
               </div>
 
-              <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '20px' }}>
-                <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>HOW IT WORKS</div>
+              <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px' }}>
+                <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>HOW IT WORKS</div>
                 {[
                   { n: '01', text: 'Puppeteer opens the LinkedIn job page and scrapes the full JD' },
                   { n: '02', text: 'OpenRouter tailors your resume using only facts from your profile' },
                   { n: '03', text: 'ATS score calculated — if < 95, one improvement run' },
                   { n: '04', text: 'Tailored .docx emailed to you with score + matched/missing keywords' },
                 ].map(({ n, text }) => (
-                  <div key={n} style={{ display: 'flex', gap: '14px', padding: '10px 0', borderBottom: '1px solid #1a1a18' }}>
+                  <div key={n} style={{ display: 'flex', gap: '14px', padding: '10px 0', borderBottom: '1px solid #e7e5e4' }}>
                     <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', flexShrink: 0 }}>{n}</span>
-                    <span style={{ fontSize: '13px', color: '#888', lineHeight: 1.5 }}>{text}</span>
+                    <span style={{ fontSize: '13px', color: '#57534e', lineHeight: 1.5 }}>{text}</span>
                   </div>
                 ))}
               </div>
@@ -1119,31 +1163,31 @@ export default function Dashboard() {
           {tab === 'gaps' && (
             <div style={{ animation: 'fadeIn 0.3s ease' }}>
               <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Skill Gaps</h2>
-              <p style={{ fontSize: '13px', color: '#555', marginBottom: '28px' }}>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '28px' }}>
                 Keywords appearing in job descriptions but missing from your profile.
               </p>
 
               {topMissing.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '60px', color: '#444' }}>
+                <div style={{ textAlign: 'center', padding: '60px', color: '#a8a29e' }}>
                   <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '13px' }}>No gap data yet — process some jobs first</div>
                 </div>
               ) : (
-                <div style={{ background: '#141413', border: '1px solid #1f1f1c', borderRadius: '12px', padding: '24px' }}>
-                  <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '20px' }}>
+                <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '24px' }}>
+                  <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '20px' }}>
                     MOST COMMON GAPS — {jobs.length} JOBS ANALYZED
                   </div>
                   {topMissing.map(([keyword, count]) => (
                     <div key={keyword} style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '14px' }}>
                       <div style={{ width: '130px', fontSize: '12px', fontFamily: "'DM Mono', monospace", flexShrink: 0 }}>{keyword}</div>
-                      <div style={{ flex: 1, height: '3px', background: '#1f1f1c', borderRadius: '2px' }}>
+                      <div style={{ flex: 1, height: '3px', background: '#e7e5e4', borderRadius: '2px' }}>
                         <div style={{ height: '100%', width: `${(count / jobs.length) * 100}%`, background: count >= 3 ? '#ef4444' : '#f59e0b', borderRadius: '2px', transition: 'width 1s ease' }} />
                       </div>
-                      <span style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", minWidth: 40 }}>{count}/{jobs.length}</span>
+                      <span style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", minWidth: 40 }}>{count}/{jobs.length}</span>
                       <button
                         onClick={() => handleAddKeyword(keyword)}
                         style={{
-                          background: addedKeywords.includes(keyword) ? '#0d2a1a' : 'transparent',
-                          border: `1px solid ${addedKeywords.includes(keyword) ? '#22c55e33' : '#2a2a27'}`,
+                          background: addedKeywords.includes(keyword) ? '#ecfdf5' : 'transparent',
+                          border: `1px solid ${addedKeywords.includes(keyword) ? '#22c55e33' : '#d6d3d1'}`,
                           color: addedKeywords.includes(keyword) ? '#22c55e' : '#555',
                           padding: '4px 12px', borderRadius: '4px',
                           fontSize: '11px', fontFamily: "'DM Mono', monospace",

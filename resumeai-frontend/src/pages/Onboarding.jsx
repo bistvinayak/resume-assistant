@@ -72,7 +72,7 @@ export default function Onboarding() {
 
   const card = {
     width: '100%', maxWidth: '620px',
-    background: '#141413', border: '1px solid #2a2a27',
+    background: '#ffffff', border: '1px solid #2a2a27',
     borderRadius: '16px', padding: '36px',
   };
 
@@ -88,7 +88,7 @@ export default function Onboarding() {
         {[1, 2, 3].map(n => (
           <div key={n} style={{
             width: n === step ? 24 : 8, height: 8, borderRadius: '4px',
-            background: n === step ? '#f59e0b' : n < step ? '#22c55e' : '#2a2a27',
+            background: n === step ? '#f59e0b' : n < step ? '#22c55e' : '#d6d3d1',
             transition: 'all 0.3s',
           }} />
         ))}
@@ -103,7 +103,7 @@ export default function Onboarding() {
             <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '28px', marginBottom: '8px' }}>
               Hi {user?.displayName?.split(' ')[0]} 👋
             </h2>
-            <p style={{ fontSize: '14px', color: '#666', lineHeight: 1.6, marginBottom: '20px' }}>
+            <p style={{ fontSize: '14px', color: '#78716c', lineHeight: 1.6, marginBottom: '20px' }}>
               Don't use resume format. Write like you're explaining your career to a friend —
               roles, skills, achievements, tools, anything relevant.
             </p>
@@ -111,9 +111,9 @@ export default function Onboarding() {
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
               {['I spent X years at...', 'I built a product that...', 'I know Python and...', 'I led a team of...'].map(eg => (
                 <span key={eg} style={{
-                  background: '#1a1a18', border: '1px solid #2a2a27',
+                  background: '#e7e5e4', border: '1px solid #2a2a27',
                   borderRadius: '100px', padding: '3px 12px',
-                  fontSize: '11px', color: '#444', fontFamily: "'DM Mono', monospace",
+                  fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace",
                 }}>{eg}</span>
               ))}
             </div>
@@ -123,9 +123,9 @@ export default function Onboarding() {
               onChange={e => setBio(e.target.value)}
               placeholder="I'm a Product Manager with 6 years of experience. I've worked at Zinnia building transaction automation systems handling 100K+ monthly workflows. I'm strong at API integrations, roadmap strategy, AI products, and cross-functional collaboration..."
               style={{
-                width: '100%', minHeight: '200px', background: '#0e0e0d',
-                border: `1px solid ${bio.length > 50 ? '#f59e0b44' : '#2a2a27'}`,
-                borderRadius: '8px', color: '#f0ede8',
+                width: '100%', minHeight: '200px', background: '#fafaf9',
+                border: `1px solid ${bio.length > 50 ? '#f59e0b44' : '#d6d3d1'}`,
+                borderRadius: '8px', color: '#1c1917',
                 fontFamily: "'DM Sans', sans-serif", fontSize: '14px',
                 lineHeight: 1.7, padding: '16px', resize: 'vertical', outline: 'none',
                 transition: 'border-color 0.3s',
@@ -139,8 +139,8 @@ export default function Onboarding() {
                 onClick={handleBioSubmit}
                 disabled={bio.trim().length < 50 || loading}
                 style={{
-                  background: bio.trim().length >= 50 ? '#f59e0b' : '#1f1f1c',
-                  color: bio.trim().length >= 50 ? '#0e0e0d' : '#444',
+                  background: bio.trim().length >= 50 ? '#f59e0b' : '#e7e5e4',
+                  color: bio.trim().length >= 50 ? '#fafaf9' : '#444',
                   border: 'none', padding: '10px 24px', borderRadius: '6px',
                   fontSize: '13px', fontWeight: 600,
                   opacity: loading ? 0.7 : 1,
@@ -160,7 +160,7 @@ export default function Onboarding() {
             <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '28px', marginBottom: '8px' }}>
               Got a resume PDF?
             </h2>
-            <p style={{ fontSize: '14px', color: '#666', lineHeight: 1.6, marginBottom: '24px' }}>
+            <p style={{ fontSize: '14px', color: '#78716c', lineHeight: 1.6, marginBottom: '24px' }}>
               Upload your existing resume and we'll extract all the details automatically.
               You can skip this and add more info later.
             </p>
@@ -168,9 +168,9 @@ export default function Onboarding() {
             <label style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', gap: '10px',
-              border: `2px dashed ${file ? '#22c55e44' : '#2a2a27'}`,
+              border: `2px dashed ${file ? '#22c55e44' : '#d6d3d1'}`,
               borderRadius: '10px', padding: '32px', cursor: 'pointer',
-              background: file ? '#0d1a0d' : '#0e0e0d',
+              background: file ? '#ecfdf5' : '#fafaf9',
               transition: 'all 0.2s',
             }}>
               <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
@@ -187,7 +187,7 @@ export default function Onboarding() {
                 onClick={() => setStep(3)}
                 style={{
                   flex: 1, background: 'transparent', border: '1px solid #2a2a27',
-                  color: '#555', padding: '12px', borderRadius: '6px', fontSize: '13px',
+                  color: '#78716c', padding: '12px', borderRadius: '6px', fontSize: '13px',
                 }}
               >
                 Skip for now
@@ -196,7 +196,7 @@ export default function Onboarding() {
                 onClick={handlePdfSubmit}
                 disabled={loading}
                 style={{
-                  flex: 2, background: '#f59e0b', color: '#0e0e0d',
+                  flex: 2, background: '#f59e0b', color: '#1c1917',
                   border: 'none', padding: '12px', borderRadius: '6px',
                   fontSize: '13px', fontWeight: 600, opacity: loading ? 0.7 : 1,
                 }}
@@ -215,13 +215,13 @@ export default function Onboarding() {
                 <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '12px' }}>
                   Gmail is live!
                 </h2>
-                <div style={{ background: '#0d1a0d', border: '1px solid #22c55e22', borderRadius: '8px', padding: '14px', marginBottom: '20px' }}>
+                <div style={{ background: '#ecfdf5', border: '1px solid #22c55e22', borderRadius: '8px', padding: '14px', marginBottom: '20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse 2s infinite' }} />
                     <span style={{ fontSize: '13px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>Arjun is watching for LinkedIn job alerts</span>
                   </div>
                 </div>
-                <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '24px', textAlign: 'left' }}>
+                <div style={{ background: '#ffffff', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '24px', textAlign: 'left' }}>
                   <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>WHAT HAPPENS NEXT</div>
                   {[
                     { icon: '📧', text: 'Your LinkedIn job alerts forward to Arjun automatically' },
@@ -231,13 +231,13 @@ export default function Onboarding() {
                     { icon: '📊', text: 'Calculates ATS score (target: 95/100)' },
                     { icon: '📨', text: 'Emails you the tailored .docx resume' },
                   ].map(({ icon, text }) => (
-                    <div key={text} style={{ display: 'flex', gap: '12px', padding: '8px 0', borderBottom: '1px solid #1a1a18' }}>
+                    <div key={text} style={{ display: 'flex', gap: '12px', padding: '8px 0', borderBottom: '1px solid #e7e5e4' }}>
                       <span style={{ fontSize: '14px', flexShrink: 0 }}>{icon}</span>
-                      <span style={{ fontSize: '13px', color: '#888', lineHeight: 1.5 }}>{text}</span>
+                      <span style={{ fontSize: '13px', color: '#57534e', lineHeight: 1.5 }}>{text}</span>
                     </div>
                   ))}
                 </div>
-                <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: '#f59e0b', color: '#0e0e0d', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+                <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
                   Go to dashboard →
                 </button>
               </div>
@@ -249,11 +249,11 @@ export default function Onboarding() {
                 <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '8px' }}>
                   Connect Gmail
                 </h2>
-                <p style={{ fontSize: '14px', color: '#666', lineHeight: 1.6, marginBottom: '20px' }}>
+                <p style={{ fontSize: '14px', color: '#78716c', lineHeight: 1.6, marginBottom: '20px' }}>
                   Set up a Gmail filter so LinkedIn job alerts forward to Arjun automatically. Takes 2 minutes.
                 </p>
 
-                <div style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                <div style={{ background: '#fafaf9', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                   <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>GMAIL FILTER SETUP</div>
                   {[
                     { n: '01', text: 'Open Gmail → click the gear icon → See all settings' },
@@ -264,26 +264,26 @@ export default function Onboarding() {
                     { n: '06', text: `Check "Forward it to" → enter: ${FORWARD_EMAIL}` },
                     { n: '07', text: 'Click "Create filter" — done!' },
                   ].map(({ n, text }) => (
-                    <div key={n} style={{ display: 'flex', gap: '14px', padding: '10px 0', borderBottom: '1px solid #1a1a18' }}>
+                    <div key={n} style={{ display: 'flex', gap: '14px', padding: '10px 0', borderBottom: '1px solid #e7e5e4' }}>
                       <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', flexShrink: 0, paddingTop: '2px' }}>{n}</span>
-                      <span style={{ fontSize: '13px', color: '#888', lineHeight: 1.5 }}>{text}</span>
+                      <span style={{ fontSize: '13px', color: '#57534e', lineHeight: 1.5 }}>{text}</span>
                     </div>
                   ))}
                 </div>
 
-                <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '8px', padding: '14px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: '12px', color: '#888', fontFamily: "'DM Mono', monospace" }}>{FORWARD_EMAIL}</span>
-                  <button onClick={handleCopyEmail} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: copied ? '#22c55e' : '#666', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'color 0.2s' }}>
+                <div style={{ background: '#ffffff', border: '1px solid #2a2a27', borderRadius: '8px', padding: '14px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '12px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{FORWARD_EMAIL}</span>
+                  <button onClick={handleCopyEmail} style={{ background: '#e7e5e4', border: '1px solid #2a2a27', color: copied ? '#22c55e' : '#666', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'color 0.2s' }}>
                     {copied ? '✓ Copied' : 'Copy'}
                   </button>
                 </div>
 
                 {error && <p style={{ color: '#ef4444', fontSize: '12px', marginBottom: '10px' }}>{error}</p>}
 
-                <button onClick={handleVerifyFilter} disabled={verifying} style={{ width: '100%', background: '#f59e0b', color: '#0e0e0d', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '10px', opacity: verifying ? 0.7 : 1 }}>
+                <button onClick={handleVerifyFilter} disabled={verifying} style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '10px', opacity: verifying ? 0.7 : 1 }}>
                   {verifying ? 'Verifying...' : "✓ I've set up the filter"}
                 </button>
-                <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: 'transparent', border: '1px solid #2a2a27', color: '#555', padding: '12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: 'transparent', border: '1px solid #2a2a27', color: '#78716c', padding: '12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
                   Skip — I'll do this later
                 </button>
               </>

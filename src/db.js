@@ -126,13 +126,44 @@ async function markDelivered(tailoredId, jobId, atsData) {
   );
 }
 
+async function getJobByJobId(jobId, userId = 'me') {
+  const { rows } = await pool.query(
+    `SELECT j.*, t.file_path, t.created_at AS resume_created_at
+     FROM jobs j
+     LEFT JOIN tailored_resume t ON t.job_id = j.job_id AND t.user_id = j.user_id AND t.delivered = true
+     WHERE j.job_id = $1 AND j.user_id = $2
+     LIMIT 1`,
+    [jobId, userId]
+  );
+  return rows.length ? rows[0] : null;
+}
+
+async function insertJobProcessing(job, userId = 'me') {
+  const res = await pool.query(
+    `INSERT INTO jobs (job_id, user_id, title, company, url, status)
+     VALUES ($1, $2, $3, $4, $5, 'processing')
+     ON CONFLICT (job_id) DO UPDATE SET status = 'processing', seen_at = now()
+     WHERE jobs.status = 'failed'
+     RETURNING job_id`,
+    [job.job_id, userId, job.title || null, job.company || null, job.url || null]
+  );
+  return res.rowCount > 0;
+}
+
+async function markJobFailed(jobId, reason) {
+  await pool.query(
+    `UPDATE jobs SET status = 'failed', jd_text = COALESCE(jd_text, $2) WHERE job_id = $1`,
+    [jobId, reason || 'Scraping failed']
+  );
+}
+
 async function getJobsForUser(userId = 'me', limit = 50) {
   const { rows } = await pool.query(
     `SELECT j.*, t.created_at, t.file_path
      FROM jobs j
-     LEFT JOIN tailored_resume t ON t.job_id = j.job_id AND t.user_id = j.user_id
-     WHERE j.user_id = $1 AND j.status = 'delivered'
-     ORDER BY t.created_at DESC NULLS LAST
+     LEFT JOIN tailored_resume t ON t.job_id = j.job_id AND t.user_id = j.user_id AND t.delivered = true
+     WHERE j.user_id = $1
+     ORDER BY j.seen_at DESC
      LIMIT $2`,
     [userId, limit]
   );
@@ -142,7 +173,8 @@ async function getJobsForUser(userId = 'me', limit = 50) {
 module.exports = {
   pool, initSchema, getProfile, saveProfile,
   seenJobBefore, saveTailored, markDelivered,
-  getJobsForUser, EMPTY_PROFILE,
+  getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed,
+  EMPTY_PROFILE,
 };
 
 if (require.main === module && process.argv.includes('--init')) {
