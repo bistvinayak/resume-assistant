@@ -276,28 +276,24 @@ export default function Dashboard() {
 
       if (res.scraping) {
         const progressId = Date.now();
+        const jobCountAtStart = jobs.length;
         setChatMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, stage: 0 }]);
 
-        const stages = [
-          'Opening job page in headless browser...',
-          'Reading job description...',
-          'Tailoring your resume with AI...',
-          'Calculating ATS match score...',
-          'Improving resume if needed...',
-        ];
         let stageIdx = 0;
         const stageTimer = setInterval(() => {
           stageIdx++;
-          if (stageIdx < stages.length) {
+          if (stageIdx < 5) {
             setChatMessages(prev => prev.map(m => m.id === progressId ? { ...m, stage: stageIdx } : m));
           }
         }, 8000);
 
+        let pollCount = 0;
         const pollJobs = setInterval(async () => {
+          pollCount++;
           try {
             const jobsRes = await api.getJobs();
             const newJobs = jobsRes.jobs || [];
-            if (newJobs.length > jobs.length) {
+            if (newJobs.length > jobCountAtStart) {
               clearInterval(pollJobs);
               clearInterval(stageTimer);
               setJobs(newJobs);
@@ -306,10 +302,25 @@ export default function Dashboard() {
                 ...prev.filter(m => m.id !== progressId),
                 { role: 'arjun', type: 'jobResult', job: latest },
               ]);
+            } else if (pollCount >= 12) {
+              clearInterval(pollJobs);
+              clearInterval(stageTimer);
+              if (newJobs.length > 0) {
+                const latest = newJobs[0];
+                setChatMessages(prev => [
+                  ...prev.filter(m => m.id !== progressId),
+                  { role: 'arjun', type: 'jobResult', job: latest },
+                  { role: 'arjun', text: 'This job may have been processed before — showing your most recent result. Check the Job Activity tab for all resumes.' },
+                ]);
+              } else {
+                setChatMessages(prev => [
+                  ...prev.filter(m => m.id !== progressId),
+                  { role: 'arjun', text: 'The scraping took longer than expected or the page couldn\'t be read. This can happen with LinkedIn pages that require login. Try pasting the direct job URL (linkedin.com/jobs/view/...) or a different job site.' },
+                ]);
+              }
             }
           } catch {}
         }, 10000);
-        setTimeout(() => { clearInterval(pollJobs); clearInterval(stageTimer); }, 120000);
       }
     } catch {
       setChatMessages(prev => [...prev, { role: 'arjun', text: 'Something went wrong. Try again.' }]);
