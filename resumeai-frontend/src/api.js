@@ -86,11 +86,11 @@ export const api = {
     return this.ingestText(`I have experience with ${keyword}`);
   },
 
-  async chat(message) {
+  async chat(message, mode = 'profile') {
     const res = await fetch(`${BASE}/chat`, {
       method: 'POST',
       headers: await getHeaders(),
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, mode }),
     });
     return res.json();
   },

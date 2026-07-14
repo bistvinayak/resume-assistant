@@ -80,14 +80,14 @@ app.post(['/ingest/pdf', '/api/ingest/pdf'], upload.single('file'), async (req, 
 // ── CHAT ENRICH ──────────────────────────────────────────────────────────
 app.post(['/chat', '/api/chat'], async (req, res, next) => {
   try {
-    const { message } = req.body || {};
+    const { message, mode } = req.body || {};
     if (!message) return res.status(400).json({ error: 'message required' });
 
     const currentProfile = await getProfile(req.userId);
 
-    // Detect any job URL
+    // Detect any job URL — but only process if mode is 'tailor' (not 'profile')
     const urlMatch = message.match(/https?:\/\/[^\s]+/);
-    if (urlMatch) {
+    if (urlMatch && mode !== 'profile') {
       const url = urlMatch[0].replace(/[)>\]]+$/, '');
       const jobId = `url_${Buffer.from(url).toString('base64url').slice(0, 40)}`;
 

@@ -266,7 +266,7 @@ export default function Dashboard() {
     setChatMessages(prev => [...prev, { role: 'user', text: msg }]);
     setChatSending(true);
     try {
-      const res = await api.chat(msg);
+      const res = await api.chat(msg, 'profile');
 
       if (res.pendingChanges && Object.keys(res.pendingChanges).length > 0) {
         setChatMessages(prev => [...prev, {
@@ -363,7 +363,7 @@ export default function Dashboard() {
     setTailorMessages(prev => [...prev, { role: 'user', text: msg }]);
     setTailorSending(true);
     try {
-      const res = await api.chat(msg);
+      const res = await api.chat(msg, 'tailor');
 
       if (res.reply) {
         setTailorMessages(prev => [...prev, { role: 'arjun', text: res.reply }]);
