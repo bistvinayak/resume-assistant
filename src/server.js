@@ -76,16 +76,14 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
 
     const currentProfile = await getProfile(req.userId);
 
-    // Detect LinkedIn job URL
-    const linkedinMatch = message.match(/linkedin\.com\/jobs\/(?:view|search[^\s]*currentJobId=)(\d+)/);
-    if (linkedinMatch) {
-      const jobId = linkedinMatch[1];
-      let url = message.match(/https?:\/\/[^\s]+linkedin\.com\/[^\s]+/)?.[0];
-      if (!url) url = `https://www.linkedin.com/jobs/view/${jobId}`;
+    // Detect any job URL
+    const urlMatch = message.match(/https?:\/\/[^\s]+/);
+    if (urlMatch) {
+      const url = urlMatch[0].replace(/[)>\]]+$/, '');
+      const jobId = `url_${Buffer.from(url).toString('base64url').slice(0, 40)}`;
 
       res.json({ reply: `Scraping that job listing now — hang tight, this takes about 30 seconds...`, profile: currentProfile, scraping: true });
 
-      // Process in background: scrape → analyze → tailored resume
       (async () => {
         try {
           console.log(`→ Chat: scraping ${url} for user ${req.userId}`);
@@ -95,9 +93,9 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
             return;
           }
           await processJob({
-            job_id: `linkedin_${jobId}`,
-            title: scraped.title,
-            company: scraped.company,
+            job_id: jobId,
+            title: scraped.title || 'Unknown Role',
+            company: scraped.company || 'Unknown Company',
             jd_text: scraped.jd_text,
             url,
           }, req.userId);
