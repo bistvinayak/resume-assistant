@@ -3,8 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { auth } from '../firebase';
 
-const GMAIL_CLIENT_ID = '936622203021-ohr1ivs5dk45rc9t7g2qma4t0st5gfe5.apps.googleusercontent.com';
-const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.settings.basic'].join(' ');
+const FORWARD_EMAIL = 'arjun.resumeai@gmail.com';
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -14,13 +13,27 @@ export default function Onboarding() {
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [gmailVerified, setGmailVerified] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const user = auth.currentUser;
 
-  const handleConnectGmail = () => {
-    const redirectUri = encodeURIComponent(`${window.location.origin}/projects/arjun/oauth/callback`);
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GMAIL_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(GMAIL_SCOPES)}&access_type=offline&prompt=consent`;
-    window.location.href = authUrl;
+  const handleVerifyFilter = async () => {
+    setVerifying(true);
+    try {
+      await api.verifyGmailFilter();
+      setGmailVerified(true);
+    } catch (e) {
+      setError('Verification failed. Please try again.');
+    }
+    setVerifying(false);
+  };
+
+  const handleCopyEmail = () => {
+    navigator.clipboard.writeText(FORWARD_EMAIL);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   const handleBioSubmit = async () => {
@@ -185,38 +198,86 @@ export default function Onboarding() {
         )}
 
         {step === 3 && (
-          <div style={{ textAlign: 'center', animation: 'fadeIn 0.3s ease' }}>
-            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', letterSpacing: '0.1em', marginBottom: '10px' }}>
-              AUTO-MODE
-            </div>
-            <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '8px' }}>
-              Connect Gmail
-            </h2>
-            <p style={{ fontSize: '14px', color: '#666', lineHeight: 1.6, marginBottom: '24px' }}>
-              Connect Gmail so Arjun can watch for LinkedIn job alerts and automatically
-              tailor + email you a resume every 2 hours. Optional — you can always do this later.
-            </p>
+          <div style={{ animation: 'fadeIn 0.3s ease' }}>
+            {gmailVerified ? (
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
+                <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '12px' }}>
+                  Gmail is live!
+                </h2>
+                <div style={{ background: '#0d1a0d', border: '1px solid #22c55e22', borderRadius: '8px', padding: '14px', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse 2s infinite' }} />
+                    <span style={{ fontSize: '13px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>Arjun is watching for LinkedIn job alerts</span>
+                  </div>
+                </div>
+                <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '24px', textAlign: 'left' }}>
+                  <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>WHAT HAPPENS NEXT</div>
+                  {[
+                    { icon: '📧', text: 'Your LinkedIn job alerts forward to Arjun automatically' },
+                    { icon: '⏱', text: 'Every 2 hours: Arjun checks for new alerts' },
+                    { icon: '🤖', text: 'Scrapes full job description from LinkedIn' },
+                    { icon: '✍️', text: 'Tailors your resume using your profile' },
+                    { icon: '📊', text: 'Calculates ATS score (target: 95/100)' },
+                    { icon: '📨', text: 'Emails you the tailored .docx resume' },
+                  ].map(({ icon, text }) => (
+                    <div key={text} style={{ display: 'flex', gap: '12px', padding: '8px 0', borderBottom: '1px solid #1a1a18' }}>
+                      <span style={{ fontSize: '14px', flexShrink: 0 }}>{icon}</span>
+                      <span style={{ fontSize: '13px', color: '#888', lineHeight: 1.5 }}>{text}</span>
+                    </div>
+                  ))}
+                </div>
+                <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: '#f59e0b', color: '#0e0e0d', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+                  Go to dashboard →
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', letterSpacing: '0.1em', marginBottom: '10px' }}>
+                  AUTO-MODE
+                </div>
+                <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '8px' }}>
+                  Connect Gmail
+                </h2>
+                <p style={{ fontSize: '14px', color: '#666', lineHeight: 1.6, marginBottom: '20px' }}>
+                  Set up a Gmail filter so LinkedIn job alerts forward to Arjun automatically. Takes 2 minutes.
+                </p>
 
-            <button
-              onClick={handleConnectGmail}
-              style={{
-                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
-                background: '#f59e0b', color: '#0e0e0d',
-                border: 'none', padding: '12px', borderRadius: '6px',
-                fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '10px',
-              }}
-            >
-              Connect Gmail →
-            </button>
-            <button
-              onClick={() => navigate('/dashboard')}
-              style={{
-                width: '100%', background: 'transparent', border: '1px solid #2a2a27',
-                color: '#555', padding: '12px', borderRadius: '6px', fontSize: '13px',
-              }}
-            >
-              Skip — go to dashboard
-            </button>
+                <div style={{ background: '#0e0e0d', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                  <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>GMAIL FILTER SETUP</div>
+                  {[
+                    { n: '01', text: 'Open Gmail → click the gear icon → See all settings' },
+                    { n: '02', text: 'Click the "Filters and Blocked Addresses" tab' },
+                    { n: '03', text: 'Click "Create a new filter" at the bottom' },
+                    { n: '04', text: 'In the From field enter: jobalerts-noreply@linkedin.com' },
+                    { n: '05', text: 'Click "Create filter"' },
+                    { n: '06', text: `Check "Forward it to" → enter: ${FORWARD_EMAIL}` },
+                    { n: '07', text: 'Click "Create filter" — done!' },
+                  ].map(({ n, text }) => (
+                    <div key={n} style={{ display: 'flex', gap: '14px', padding: '10px 0', borderBottom: '1px solid #1a1a18' }}>
+                      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', flexShrink: 0, paddingTop: '2px' }}>{n}</span>
+                      <span style={{ fontSize: '13px', color: '#888', lineHeight: 1.5 }}>{text}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ background: '#141413', border: '1px solid #2a2a27', borderRadius: '8px', padding: '14px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '12px', color: '#888', fontFamily: "'DM Mono', monospace" }}>{FORWARD_EMAIL}</span>
+                  <button onClick={handleCopyEmail} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: copied ? '#22c55e' : '#666', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'color 0.2s' }}>
+                    {copied ? '✓ Copied' : 'Copy'}
+                  </button>
+                </div>
+
+                {error && <p style={{ color: '#ef4444', fontSize: '12px', marginBottom: '10px' }}>{error}</p>}
+
+                <button onClick={handleVerifyFilter} disabled={verifying} style={{ width: '100%', background: '#f59e0b', color: '#0e0e0d', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '10px', opacity: verifying ? 0.7 : 1 }}>
+                  {verifying ? 'Verifying...' : "✓ I've set up the filter"}
+                </button>
+                <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: 'transparent', border: '1px solid #2a2a27', color: '#555', padding: '12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                  Skip — I'll do this later
+                </button>
+              </>
+            )}
           </div>
         )}
       </div>

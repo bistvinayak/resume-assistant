@@ -43,6 +43,18 @@ export default function Dashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(null);
+
+  const handleDownload = async (e, jobId) => {
+    e.stopPropagation();
+    setDownloading(jobId);
+    try {
+      await api.downloadResume(jobId);
+    } catch (err) {
+      console.error('Download failed:', err);
+    }
+    setDownloading(null);
+  };
 
   useEffect(() => {
     Promise.all([api.getProfile(), api.getJobs()])
@@ -335,14 +347,29 @@ export default function Dashboard() {
                         {job.ats_score && <ATSBadge score={job.ats_score} />}
                         {job.improved && <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#f59e0b', background: '#f59e0b11', border: '1px solid #f59e0b33', borderRadius: '4px', padding: '2px 8px' }}>2nd run</span>}
                         <span style={{ fontSize: '11px', color: '#333', fontFamily: "'DM Mono', monospace" }}>{new Date(job.created_at).toLocaleDateString()}</span>
-                        <button style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: '#888', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace" }}>↓ docx</button>
+                        <button onClick={(e) => handleDownload(e, job.job_id)} disabled={downloading === job.job_id} style={{ background: '#1a1a18', border: '1px solid #2a2a27', color: downloading === job.job_id ? '#f59e0b' : '#888', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'color 0.2s' }}>
+                          {downloading === job.job_id ? '...' : '↓ docx'}
+                        </button>
                       </div>
 
                       {activeJob?.job_id === job.job_id && (
                         <div style={{ background: '#0d0d0c', border: '1px solid #1f1f1c', borderTop: 'none', borderRadius: '0 0 8px 8px', padding: '16px', animation: 'fadeIn 0.2s ease' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                          {/* ATS Score bar */}
+                          {job.ats_score && (
+                            <div style={{ marginBottom: '16px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                <span style={{ fontSize: '10px', color: '#888', fontFamily: "'DM Mono', monospace" }}>ATS MATCH SCORE</span>
+                                <span style={{ fontSize: '12px', fontFamily: "'DM Mono', monospace", fontWeight: 600, color: job.ats_score >= 90 ? '#22c55e' : job.ats_score >= 75 ? '#f59e0b' : '#ef4444' }}>{job.ats_score}/100</span>
+                              </div>
+                              <div style={{ height: '4px', background: '#1f1f1c', borderRadius: '2px' }}>
+                                <div style={{ height: '100%', width: `${job.ats_score}%`, background: job.ats_score >= 90 ? '#22c55e' : job.ats_score >= 75 ? '#f59e0b' : '#ef4444', borderRadius: '2px', transition: 'width 1s ease' }} />
+                              </div>
+                            </div>
+                          )}
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                             <div>
-                              <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>✓ MATCHED</div>
+                              <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>✓ MATCHED ({(job.matched_keywords || []).length})</div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                 {(job.matched_keywords || []).map(k => (
                                   <span key={k} style={{ background: '#0d2a1a', border: '1px solid #22c55e22', borderRadius: '4px', padding: '3px 8px', fontSize: '10px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>{k}</span>
@@ -350,16 +377,30 @@ export default function Dashboard() {
                               </div>
                             </div>
                             <div>
-                              <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>✗ MISSING</div>
+                              <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>✗ MISSING ({(job.missing_keywords || []).length})</div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
                                 {(job.missing_keywords || []).map(k => (
-                                  <button key={k} onClick={() => handleAddKeyword(k)} style={{ background: addedKeywords.includes(k) ? '#0d2a1a' : '#1a0d0d', border: `1px solid ${addedKeywords.includes(k) ? '#22c55e33' : '#ef444422'}`, borderRadius: '4px', padding: '3px 8px', fontSize: '10px', color: addedKeywords.includes(k) ? '#22c55e88' : '#ef444488', fontFamily: "'DM Mono', monospace" }}>
+                                  <button key={k} onClick={() => handleAddKeyword(k)} style={{ background: addedKeywords.includes(k) ? '#0d2a1a' : '#1a0d0d', border: `1px solid ${addedKeywords.includes(k) ? '#22c55e33' : '#ef444422'}`, borderRadius: '4px', padding: '3px 8px', fontSize: '10px', color: addedKeywords.includes(k) ? '#22c55e88' : '#ef444488', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
                                     {addedKeywords.includes(k) ? '✓ ' : '+ '}{k}
                                   </button>
                                 ))}
                               </div>
                             </div>
                           </div>
+
+                          {/* Download + meta row */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: '#141413', border: '1px solid #2a2a27', borderRadius: '8px' }}>
+                            <button onClick={(e) => handleDownload(e, job.job_id)} disabled={downloading === job.job_id} style={{ background: '#f59e0b', color: '#0e0e0d', border: 'none', padding: '8px 20px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === job.job_id ? 0.7 : 1, whiteSpace: 'nowrap' }}>
+                              {downloading === job.job_id ? 'Downloading...' : 'Download Resume (.docx)'}
+                            </button>
+                            <div style={{ flex: 1, display: 'flex', gap: '16px', fontSize: '11px', color: '#555', fontFamily: "'DM Mono', monospace" }}>
+                              {job.ats_score && <span>ATS: {job.ats_score}</span>}
+                              <span>Matched: {(job.matched_keywords || []).length}</span>
+                              <span>Missing: {(job.missing_keywords || []).length}</span>
+                              {job.improved && <span style={{ color: '#f59e0b' }}>2nd pass</span>}
+                            </div>
+                          </div>
+
                           {job.url && <a href={job.url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: '12px', fontSize: '11px', color: '#333', fontFamily: "'DM Mono', monospace" }}>→ {job.url}</a>}
                         </div>
                       )}

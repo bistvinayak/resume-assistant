@@ -82,4 +82,21 @@ export const api = {
     });
     return res.json();
   },
+
+  async downloadResume(jobId) {
+    const user = auth.currentUser;
+    const token = await user.getIdToken();
+    const res = await fetch(`${BASE}/jobs/${jobId}/download`, {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error('Download failed');
+    const blob = await res.blob();
+    const filename = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'resume.docx';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
