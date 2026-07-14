@@ -7,13 +7,14 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { initSchema, getProfile, getJobsForUser } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser } = require('./db');
 const { ingestText, ingestPdf } = require('./profile');
 const { processJob } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
 const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
+const { renderResumeDocx } = require('./renderDocx');
 
 const app = express();
 
