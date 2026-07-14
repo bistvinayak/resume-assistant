@@ -291,10 +291,17 @@ export default function Dashboard() {
       if (res.scraping) {
         const progressId = Date.now();
         const deliveredCountAtStart = jobs.filter(j => j.status === 'delivered').length;
-        setChatMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, startTime: Date.now() }]);
+        setChatMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, startTime: Date.now(), stage: 0 }]);
 
+        let stageIdx = 0;
         const elapsedTimer = setInterval(() => {
-          setChatMessages(prev => prev.map(m => m.id === progressId ? { ...m, elapsed: Math.floor((Date.now() - m.startTime) / 1000) } : m));
+          const now = Date.now();
+          setChatMessages(prev => prev.map(m => {
+            if (m.id !== progressId) return m;
+            const elapsed = Math.floor((now - m.startTime) / 1000);
+            const newStage = elapsed < 8 ? 0 : elapsed < 16 ? 1 : elapsed < 28 ? 2 : elapsed < 38 ? 3 : 4;
+            return { ...m, elapsed, stage: newStage };
+          }));
         }, 1000);
 
         let pollCount = 0;
@@ -379,10 +386,17 @@ export default function Dashboard() {
       if (res.scraping) {
         const progressId = Date.now();
         const deliveredCountAtStart = jobs.filter(j => j.status === 'delivered').length;
-        setTailorMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, startTime: Date.now() }]);
+        setTailorMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, startTime: Date.now(), stage: 0 }]);
 
+        let stageIdx = 0;
         const elapsedTimer = setInterval(() => {
-          setTailorMessages(prev => prev.map(m => m.id === progressId ? { ...m, elapsed: Math.floor((Date.now() - m.startTime) / 1000) } : m));
+          const now = Date.now();
+          setTailorMessages(prev => prev.map(m => {
+            if (m.id !== progressId) return m;
+            const elapsed = Math.floor((now - m.startTime) / 1000);
+            const newStage = elapsed < 8 ? 0 : elapsed < 16 ? 1 : elapsed < 28 ? 2 : elapsed < 38 ? 3 : 4;
+            return { ...m, elapsed, stage: newStage };
+          }));
         }, 1000);
 
         let pollCount = 0;
@@ -853,28 +867,40 @@ export default function Dashboard() {
                   if (msg.type === 'progress') {
                     const secs = msg.elapsed || 0;
                     const progressStages = [
-                      'Scraping job page',
-                      'Reading job description',
-                      'Tailoring resume with AI',
-                      'Calculating ATS match score',
-                      'Improving resume if needed',
+                      'Scraping job page...',
+                      'Reading job description...',
+                      'Tailoring resume with AI...',
+                      'Calculating ATS match score...',
+                      'Improving resume if needed...',
                     ];
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
                         <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                             <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace" }}>ARJUN — PROCESSING</div>
                             <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{secs}s</div>
                           </div>
-                          {progressStages.map((stage, si) => (
-                            <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0' }}>
-                              <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0, opacity: 0.5 }} />
-                              <span style={{ fontSize: '12px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{stage}</span>
-                            </div>
-                          ))}
-                          <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '8px', borderTop: '1px solid #e7e5e4', paddingTop: '8px' }}>
-                            Typically takes 30–60 seconds
-                          </div>
+                          {progressStages.map((stage, si) => {
+                            const done = si < msg.stage;
+                            const active = si === msg.stage;
+                            return (
+                              <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0', opacity: si > msg.stage ? 0.3 : 1 }}>
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  background: done ? '#22c55e' : active ? '#f59e0b' : '#e7e5e4',
+                                  fontSize: '9px', color: done ? '#fff' : '#1c1917', fontWeight: 700,
+                                }}>
+                                  {done ? '✓' : active ? (
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #fff', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                                  ) : (si + 1)}
+                                </div>
+                                <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#1c1917' : '#78716c', fontFamily: "'DM Mono', monospace" }}>
+                                  {stage}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -1186,28 +1212,40 @@ export default function Dashboard() {
                   if (msg.type === 'progress') {
                     const secs = msg.elapsed || 0;
                     const progressStages = [
-                      'Scraping job page',
-                      'Reading job description',
-                      'Tailoring resume with AI',
-                      'Calculating ATS match score',
-                      'Improving resume if needed',
+                      'Scraping job page...',
+                      'Reading job description...',
+                      'Tailoring resume with AI...',
+                      'Calculating ATS match score...',
+                      'Improving resume if needed...',
                     ];
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
                         <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
                             <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace" }}>ARJUN — PROCESSING</div>
                             <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{secs}s</div>
                           </div>
-                          {progressStages.map((stage, si) => (
-                            <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0' }}>
-                              <span style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid #f59e0b', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite', flexShrink: 0, opacity: 0.5 }} />
-                              <span style={{ fontSize: '12px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{stage}</span>
-                            </div>
-                          ))}
-                          <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '8px', borderTop: '1px solid #e7e5e4', paddingTop: '8px' }}>
-                            Typically takes 30–60 seconds
-                          </div>
+                          {progressStages.map((stage, si) => {
+                            const done = si < msg.stage;
+                            const active = si === msg.stage;
+                            return (
+                              <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0', opacity: si > msg.stage ? 0.3 : 1 }}>
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  background: done ? '#22c55e' : active ? '#f59e0b' : '#e7e5e4',
+                                  fontSize: '9px', color: done ? '#fff' : '#1c1917', fontWeight: 700,
+                                }}>
+                                  {done ? '✓' : active ? (
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #fff', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                                  ) : (si + 1)}
+                                </div>
+                                <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#1c1917' : '#78716c', fontFamily: "'DM Mono', monospace" }}>
+                                  {stage}
+                                </span>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     );
