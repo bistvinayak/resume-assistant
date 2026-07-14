@@ -98,6 +98,26 @@ export default function Dashboard() {
       const res = await api.chat(msg);
       setChatMessages(prev => [...prev, { role: 'arjun', text: res.reply }]);
       if (res.profile) setProfile(res.profile);
+
+      if (res.scraping) {
+        setChatMessages(prev => [...prev, { role: 'arjun', text: 'Scraping the job, tailoring your resume, and calculating ATS score. This usually takes 30-60 seconds. Check the Job Activity tab shortly for results!' }]);
+        const pollJobs = setInterval(async () => {
+          try {
+            const jobsRes = await api.getJobs();
+            const newJobs = jobsRes.jobs || [];
+            if (newJobs.length > jobs.length) {
+              clearInterval(pollJobs);
+              setJobs(newJobs);
+              const latest = newJobs[0];
+              setChatMessages(prev => [...prev, {
+                role: 'arjun',
+                text: `Done! "${latest.title}" at ${latest.company}\n\nATS Score: ${latest.ats_score || '—'}/100\nMatched: ${(latest.matched_keywords || []).length} keywords\nMissing: ${(latest.missing_keywords || []).join(', ') || 'none'}\n\nYour tailored resume is ready — go to Job Activity to download it.`
+              }]);
+            }
+          } catch {}
+        }, 10000);
+        setTimeout(() => clearInterval(pollJobs), 120000);
+      }
     } catch {
       setChatMessages(prev => [...prev, { role: 'arjun', text: 'Something went wrong. Try again.' }]);
     }
