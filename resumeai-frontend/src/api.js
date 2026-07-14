@@ -2,10 +2,21 @@ import { auth } from './firebase';
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
+function waitForAuth() {
+  return new Promise((resolve) => {
+    const user = auth.currentUser;
+    if (user) return resolve(user);
+    const unsub = auth.onAuthStateChanged((u) => {
+      unsub();
+      resolve(u);
+    });
+  });
+}
+
 async function getHeaders() {
-  const user = auth.currentUser;
+  const user = await waitForAuth();
   if (!user) throw new Error('Not authenticated');
-  const token = await user.getIdToken();
+  const token = await user.getIdToken(true);
   return {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`,
@@ -28,8 +39,8 @@ export const api = {
   },
 
   async ingestPdf(file) {
-    const user = auth.currentUser;
-    const token = await user.getIdToken();
+    const user = await waitForAuth();
+    const token = await user.getIdToken(true);
     const form = new FormData();
     form.append('file', file);
     const res = await fetch(`${BASE}/ingest/pdf`, {
@@ -93,8 +104,8 @@ export const api = {
   },
 
   async downloadResume(jobId) {
-    const user = auth.currentUser;
-    const token = await user.getIdToken();
+    const user = await waitForAuth();
+    const token = await user.getIdToken(true);
     const res = await fetch(`${BASE}/jobs/${jobId}/download`, {
       headers: { 'Authorization': `Bearer ${token}` },
     });
