@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithGoogle } from '../firebase';
+import { api } from '../api';
 
 const s = {
   root: { minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#fafaf9', color: '#1c1917' },
@@ -60,7 +61,9 @@ export default function Landing() {
       if (email === ADMIN_EMAIL) {
         navigate('/admin', { replace: true });
       } else {
-        navigate('/onboarding', { replace: true });
+        const profile = await api.getProfile();
+        const hasProfile = profile && (profile.contact?.name || (profile.experience?.length > 0) || (profile.skills?.length > 0));
+        navigate(hasProfile ? '/dashboard' : '/onboarding', { replace: true });
       }
     } catch (e) {
       setError('Sign-in failed. Please try again.');
