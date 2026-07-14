@@ -63,13 +63,16 @@ async function processJob(job, userId = 'me') {
   const tailoredId = await saveTailored(job.job_id, resume, filePath, userId);
   await markDelivered(tailoredId, job.job_id, { ...ats, improved, substitutions });
 
+  const userEmail = profile.contact?.email || null;
   try {
     await sendResumeEmail({
+      to: userEmail,
       subject: `[ATS ${ats.score}/100] ${job.title} @ ${job.company}`,
       text: buildEmailBody({ job, ats, improved, substitutions }),
       attachmentPath: filePath,
       attachmentName: fileName,
     });
+    console.log(`✓ Resume emailed to ${userEmail || 'default TO_EMAIL'}`);
   } catch (e) {
     console.error(`⚠ Email failed for ${job.job_id} (resume still saved):`, e.message);
   }

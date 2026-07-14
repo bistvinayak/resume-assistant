@@ -54,9 +54,9 @@ function buildRawEmail({ from, to, subject, text, attachmentPath, attachmentName
   return Buffer.from(raw).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function sendResumeEmail({ subject, text, attachmentPath, attachmentName }) {
+async function sendResumeEmail({ to, subject, text, attachmentPath, attachmentName }) {
   const from = `"${process.env.FROM_NAME || 'Resume Assistant'}" <${process.env.FROM_EMAIL}>`;
-  const to = process.env.TO_EMAIL;
+  if (!to) to = process.env.TO_EMAIL;
 
   const raw = buildRawEmail({ from, to, subject, text, attachmentPath, attachmentName });
 
