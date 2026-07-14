@@ -275,23 +275,41 @@ export default function Dashboard() {
       if (res.profile) setProfile(res.profile);
 
       if (res.scraping) {
-        setChatMessages(prev => [...prev, { role: 'arjun', text: 'Scraping the job, tailoring your resume, and calculating ATS score. This usually takes 30-60 seconds. Check the Job Activity tab shortly for results!' }]);
+        const progressId = Date.now();
+        setChatMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, stage: 0 }]);
+
+        const stages = [
+          'Opening job page in headless browser...',
+          'Reading job description...',
+          'Tailoring your resume with AI...',
+          'Calculating ATS match score...',
+          'Improving resume if needed...',
+        ];
+        let stageIdx = 0;
+        const stageTimer = setInterval(() => {
+          stageIdx++;
+          if (stageIdx < stages.length) {
+            setChatMessages(prev => prev.map(m => m.id === progressId ? { ...m, stage: stageIdx } : m));
+          }
+        }, 8000);
+
         const pollJobs = setInterval(async () => {
           try {
             const jobsRes = await api.getJobs();
             const newJobs = jobsRes.jobs || [];
             if (newJobs.length > jobs.length) {
               clearInterval(pollJobs);
+              clearInterval(stageTimer);
               setJobs(newJobs);
               const latest = newJobs[0];
-              setChatMessages(prev => [...prev, {
-                role: 'arjun',
-                text: `Done! "${latest.title}" at ${latest.company}\n\nATS Score: ${latest.ats_score || '—'}/100\nMatched: ${(latest.matched_keywords || []).length} keywords\nMissing: ${(latest.missing_keywords || []).join(', ') || 'none'}\n\nYour tailored resume is ready — go to Job Activity to download it.`
-              }]);
+              setChatMessages(prev => [
+                ...prev.filter(m => m.id !== progressId),
+                { role: 'arjun', type: 'jobResult', job: latest },
+              ]);
             }
           } catch {}
         }, 10000);
-        setTimeout(() => clearInterval(pollJobs), 120000);
+        setTimeout(() => { clearInterval(pollJobs); clearInterval(stageTimer); }, 120000);
       }
     } catch {
       setChatMessages(prev => [...prev, { role: 'arjun', text: 'Something went wrong. Try again.' }]);
@@ -722,7 +740,98 @@ export default function Dashboard() {
               </p>
 
               <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
-                {chatMessages.map((msg, i) => (
+                {chatMessages.map((msg, i) => {
+                  const progressStages = [
+                    'Opening job page in headless browser...',
+                    'Reading job description...',
+                    'Tailoring your resume with AI...',
+                    'Calculating ATS match score...',
+                    'Improving resume if needed...',
+                  ];
+
+                  if (msg.type === 'progress') {
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#141413', border: '1px solid #2a2a27', fontSize: '13px' }}>
+                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>ARJUN — PROCESSING</div>
+                          {progressStages.map((stage, si) => {
+                            const done = si < msg.stage;
+                            const active = si === msg.stage;
+                            return (
+                              <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0', opacity: si > msg.stage ? 0.3 : 1 }}>
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  background: done ? '#22c55e' : active ? '#f59e0b' : '#1f1f1c',
+                                  fontSize: '9px', color: '#0e0e0d', fontWeight: 700,
+                                }}>
+                                  {done ? '✓' : active ? (
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #0e0e0d', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                                  ) : (si + 1)}
+                                </div>
+                                <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#f0ede8' : '#555', fontFamily: "'DM Mono', monospace" }}>
+                                  {stage}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (msg.type === 'jobResult' && msg.job) {
+                    const j = msg.job;
+                    const scoreColor = (j.ats_score || 0) >= 90 ? '#22c55e' : (j.ats_score || 0) >= 75 ? '#f59e0b' : '#ef4444';
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ maxWidth: '90%', padding: '16px', borderRadius: '12px', background: '#141413', border: '1px solid #2a2a27', fontSize: '13px' }}>
+                          <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>ARJUN — RESUME READY</div>
+                          <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{j.title}</div>
+                          <div style={{ fontSize: '12px', color: '#888', fontFamily: "'DM Mono', monospace", marginBottom: '14px' }}>{j.company}</div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                            <div style={{ fontSize: '28px', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: scoreColor }}>{j.ats_score || '—'}</div>
+                            <div>
+                              <div style={{ fontSize: '10px', color: '#888', fontFamily: "'DM Mono', monospace" }}>ATS SCORE</div>
+                              <div style={{ height: '4px', width: '120px', background: '#1f1f1c', borderRadius: '2px', marginTop: '4px' }}>
+                                <div style={{ height: '100%', width: `${j.ats_score || 0}%`, background: scoreColor, borderRadius: '2px', transition: 'width 1s ease' }} />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                            <div>
+                              <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>MATCHED ({(j.matched_keywords || []).length})</div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                                {(j.matched_keywords || []).slice(0, 8).map(k => (
+                                  <span key={k} style={{ background: '#0d2a1a', border: '1px solid #22c55e22', borderRadius: '3px', padding: '2px 6px', fontSize: '10px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>{k}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>MISSING ({(j.missing_keywords || []).length})</div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                                {(j.missing_keywords || []).slice(0, 8).map(k => (
+                                  <span key={k} style={{ background: '#1a0d0d', border: '1px solid #ef444422', borderRadius: '3px', padding: '2px 6px', fontSize: '10px', color: '#ef444488', fontFamily: "'DM Mono', monospace" }}>{k}</span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={(e) => handleDownload(e, j.job_id)}
+                            disabled={downloading === j.job_id}
+                            style={{ width: '100%', background: '#f59e0b', color: '#0e0e0d', border: 'none', padding: '10px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: downloading === j.job_id ? 0.7 : 1 }}
+                          >
+                            {downloading === j.job_id ? 'Downloading...' : 'Download Tailored Resume (.docx)'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
                   <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
                     <div style={{
                       maxWidth: '85%', padding: '12px 16px', borderRadius: '12px',
@@ -780,7 +889,8 @@ export default function Dashboard() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {chatSending && (
                   <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
                     <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#141413', border: '1px solid #2a2a27', fontSize: '13px', color: '#555' }}>
