@@ -65,4 +65,21 @@ export const api = {
   async addKeywordToProfile(keyword) {
     return this.ingestText(`I have experience with ${keyword}`);
   },
+
+  async connectGmail(code) {
+    const res = await fetch(`${BASE}/gmail/connect`, {
+      method: 'POST',
+      headers: await getHeaders(),
+      body: JSON.stringify({ code }),
+    });
+    return res.json();
+  },
+
+  async verifyGmailFilter() {
+    const res = await fetch(`${BASE}/gmail/verify`, {
+      method: 'POST',
+      headers: await getHeaders(),
+    });
+    return res.json();
+  },
 };

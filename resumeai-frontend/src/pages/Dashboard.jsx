@@ -188,6 +188,33 @@ export default function Dashboard() {
               </div>
             ))}
           </div>
+
+          {/* Gmail connector */}
+          <div style={{ marginTop: '20px', borderTop: '1px solid #1a1a18', paddingTop: '16px' }}>
+            <div style={{ fontSize: '10px', color: '#444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '6px' }}>
+              ⚡ CONNECT GMAIL
+            </div>
+            <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px', lineHeight: 1.5 }}>
+              Auto-process job alerts every 2 hours
+            </div>
+            {profile?.gmail_connected ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#22c55e', fontFamily: "'DM Mono', monospace" }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                Connected
+              </div>
+            ) : (
+              <button
+                onClick={() => navigate('/onboarding?step=gmail')}
+                style={{
+                  width: '100%', background: '#f59e0b', color: '#0e0e0d',
+                  border: 'none', padding: '8px', borderRadius: '6px',
+                  fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                Connect Gmail →
+              </button>
+            )}
+          </div>
         </aside>
 
         {/* Main */}
@@ -333,7 +360,7 @@ export default function Dashboard() {
                               </div>
                             </div>
                           </div>
-                          {job.url && <a href={job.url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: '12px', fontSize: '11px', color: '#333', fontFamily: "'DM Mono', monospace' }}>→ {job.url}</a>}
+                          {job.url && <a href={job.url} target="_blank" rel="noreferrer" style={{ display: 'block', marginTop: '12px', fontSize: '11px', color: '#333', fontFamily: "'DM Mono', monospace" }}>→ {job.url}</a>}
                         </div>
                       )}
                     </div>

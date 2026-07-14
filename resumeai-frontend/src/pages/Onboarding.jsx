@@ -1,17 +1,27 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { auth } from '../firebase';
 
+const GMAIL_CLIENT_ID = '936622203021-ohr1ivs5dk45rc9t7g2qma4t0st5gfe5.apps.googleusercontent.com';
+const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send', 'https://www.googleapis.com/auth/gmail.settings.basic'].join(' ');
+
 export default function Onboarding() {
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+  const [searchParams] = useSearchParams();
+  const [step, setStep] = useState(searchParams.get('step') === 'gmail' ? 3 : 1);
   const [bio, setBio] = useState('');
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   const user = auth.currentUser;
+
+  const handleConnectGmail = () => {
+    const redirectUri = encodeURIComponent(`${window.location.origin}/projects/arjun/oauth/callback`);
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${GMAIL_CLIENT_ID}&redirect_uri=${redirectUri}&response_type=code&scope=${encodeURIComponent(GMAIL_SCOPES)}&access_type=offline&prompt=consent`;
+    window.location.href = authUrl;
+  };
 
   const handleBioSubmit = async () => {
     if (bio.trim().length < 50) return;
@@ -26,11 +36,11 @@ export default function Onboarding() {
   };
 
   const handlePdfSubmit = async () => {
-    if (!file) { navigate('/dashboard'); return; }
+    if (!file) { setStep(3); return; }
     setLoading(true);
     try {
       await api.ingestPdf(file);
-      navigate('/dashboard');
+      setStep(3);
     } catch (e) {
       setError('PDF upload failed. Please try again.');
     }
@@ -52,7 +62,7 @@ export default function Onboarding() {
 
       {/* Progress */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
-        {[1, 2].map(n => (
+        {[1, 2, 3].map(n => (
           <div key={n} style={{
             width: n === step ? 24 : 8, height: 8, borderRadius: '4px',
             background: n === step ? '#f59e0b' : n < step ? '#22c55e' : '#2a2a27',
@@ -151,7 +161,7 @@ export default function Onboarding() {
 
             <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => setStep(3)}
                 style={{
                   flex: 1, background: 'transparent', border: '1px solid #2a2a27',
                   color: '#555', padding: '12px', borderRadius: '6px', fontSize: '13px',
@@ -168,10 +178,46 @@ export default function Onboarding() {
                   fontSize: '13px', fontWeight: 600, opacity: loading ? 0.7 : 1,
                 }}
               >
-                {loading ? 'Processing...' : file ? 'Upload & go to dashboard →' : 'Go to dashboard →'}
+                {loading ? 'Processing...' : file ? 'Upload & continue →' : 'Continue →'}
               </button>
             </div>
           </>
+        )}
+
+        {step === 3 && (
+          <div style={{ textAlign: 'center', animation: 'fadeIn 0.3s ease' }}>
+            <div style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', letterSpacing: '0.1em', marginBottom: '10px' }}>
+              AUTO-MODE
+            </div>
+            <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '8px' }}>
+              Connect Gmail
+            </h2>
+            <p style={{ fontSize: '14px', color: '#666', lineHeight: 1.6, marginBottom: '24px' }}>
+              Connect Gmail so Arjun can watch for LinkedIn job alerts and automatically
+              tailor + email you a resume every 2 hours. Optional — you can always do this later.
+            </p>
+
+            <button
+              onClick={handleConnectGmail}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px',
+                background: '#f59e0b', color: '#0e0e0d',
+                border: 'none', padding: '12px', borderRadius: '6px',
+                fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '10px',
+              }}
+            >
+              Connect Gmail →
+            </button>
+            <button
+              onClick={() => navigate('/dashboard')}
+              style={{
+                width: '100%', background: 'transparent', border: '1px solid #2a2a27',
+                color: '#555', padding: '12px', borderRadius: '6px', fontSize: '13px',
+              }}
+            >
+              Skip — go to dashboard
+            </button>
+          </div>
         )}
       </div>
     </div>

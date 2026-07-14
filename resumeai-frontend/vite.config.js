@@ -14,7 +14,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: '../resume-assistant/public',
+    outDir: '../public',
     emptyOutDir: true,
   },
 });
