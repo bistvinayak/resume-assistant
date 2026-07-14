@@ -72,7 +72,7 @@ export default function Onboarding() {
 
   const card = {
     width: '100%', maxWidth: '620px',
-    background: '#ffffff', border: '1px solid #2a2a27',
+    background: '#ffffff', border: '1px solid #d6d3d1',
     borderRadius: '16px', padding: '36px',
   };
 
@@ -111,7 +111,7 @@ export default function Onboarding() {
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginBottom: '14px' }}>
               {['I spent X years at...', 'I built a product that...', 'I know Python and...', 'I led a team of...'].map(eg => (
                 <span key={eg} style={{
-                  background: '#e7e5e4', border: '1px solid #2a2a27',
+                  background: '#e7e5e4', border: '1px solid #d6d3d1',
                   borderRadius: '100px', padding: '3px 12px',
                   fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace",
                 }}>{eg}</span>
@@ -140,7 +140,7 @@ export default function Onboarding() {
                 disabled={bio.trim().length < 50 || loading}
                 style={{
                   background: bio.trim().length >= 50 ? '#f59e0b' : '#e7e5e4',
-                  color: bio.trim().length >= 50 ? '#fafaf9' : '#444',
+                  color: bio.trim().length >= 50 ? '#1c1917' : '#78716c',
                   border: 'none', padding: '10px 24px', borderRadius: '6px',
                   fontSize: '13px', fontWeight: 600,
                   opacity: loading ? 0.7 : 1,
@@ -186,7 +186,7 @@ export default function Onboarding() {
               <button
                 onClick={() => setStep(3)}
                 style={{
-                  flex: 1, background: 'transparent', border: '1px solid #2a2a27',
+                  flex: 1, background: 'transparent', border: '1px solid #d6d3d1',
                   color: '#78716c', padding: '12px', borderRadius: '6px', fontSize: '13px',
                 }}
               >
@@ -221,7 +221,7 @@ export default function Onboarding() {
                     <span style={{ fontSize: '13px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>Arjun is watching for LinkedIn job alerts</span>
                   </div>
                 </div>
-                <div style={{ background: '#ffffff', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '24px', textAlign: 'left' }}>
+                <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '24px', textAlign: 'left' }}>
                   <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>WHAT HAPPENS NEXT</div>
                   {[
                     { icon: '📧', text: 'Your LinkedIn job alerts forward to Arjun automatically' },
@@ -253,7 +253,7 @@ export default function Onboarding() {
                   Set up a Gmail filter so LinkedIn job alerts forward to Arjun automatically. Takes 2 minutes.
                 </p>
 
-                <div style={{ background: '#fafaf9', border: '1px solid #2a2a27', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                <div style={{ background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                   <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>GMAIL FILTER SETUP</div>
                   {[
                     { n: '01', text: 'Open Gmail → click the gear icon → See all settings' },
@@ -271,9 +271,9 @@ export default function Onboarding() {
                   ))}
                 </div>
 
-                <div style={{ background: '#ffffff', border: '1px solid #2a2a27', borderRadius: '8px', padding: '14px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '8px', padding: '14px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: '12px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{FORWARD_EMAIL}</span>
-                  <button onClick={handleCopyEmail} style={{ background: '#e7e5e4', border: '1px solid #2a2a27', color: copied ? '#22c55e' : '#666', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'color 0.2s' }}>
+                  <button onClick={handleCopyEmail} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: copied ? '#22c55e' : '#666', padding: '4px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', transition: 'color 0.2s' }}>
                     {copied ? '✓ Copied' : 'Copy'}
                   </button>
                 </div>
@@ -283,7 +283,7 @@ export default function Onboarding() {
                 <button onClick={handleVerifyFilter} disabled={verifying} style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '10px', opacity: verifying ? 0.7 : 1 }}>
                   {verifying ? 'Verifying...' : "✓ I've set up the filter"}
                 </button>
-                <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: 'transparent', border: '1px solid #2a2a27', color: '#78716c', padding: '12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: 'transparent', border: '1px solid #d6d3d1', color: '#78716c', padding: '12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
                   Skip — I'll do this later
                 </button>
               </>

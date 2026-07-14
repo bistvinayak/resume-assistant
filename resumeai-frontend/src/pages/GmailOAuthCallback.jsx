@@ -75,7 +75,7 @@ export default function GmailOAuthCallback() {
         <div style={{ textAlign: 'center', animation: 'fadeIn 0.3s ease' }}>
           <div style={{ fontSize: '40px', marginBottom: '16px' }}>⚠️</div>
           <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '24px', marginBottom: '8px' }}>Something went wrong</h2>
-          <button onClick={() => navigate('/dashboard')} style={{ background: '#f59e0b', color: '#fafaf9', border: 'none', padding: '12px 24px', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginTop: '16px' }}>
+          <button onClick={() => navigate('/dashboard')} style={{ background: '#f59e0b', color: '#1c1917', border: 'none', padding: '12px 24px', borderRadius: '6px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginTop: '16px' }}>
             Go to dashboard
           </button>
         </div>
@@ -109,7 +109,7 @@ export default function GmailOAuthCallback() {
                   <span style={{ fontSize: '13px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>Gmail is live — Arjun is watching for job alerts</span>
                 </div>
               </div>
-              <button onClick={() => navigate('/dashboard?gmail=connected')} style={{ width: '100%', background: '#f59e0b', color: '#fafaf9', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
+              <button onClick={() => navigate('/dashboard?gmail=connected')} style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer' }}>
                 Go to dashboard →
               </button>
             </div>
@@ -138,7 +138,7 @@ export default function GmailOAuthCallback() {
                 </button>
               </div>
 
-              <button onClick={handleVerify} disabled={verifying} style={{ width: '100%', background: '#f59e0b', color: '#fafaf9', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '10px', opacity: verifying ? 0.7 : 1 }}>
+              <button onClick={handleVerify} disabled={verifying} style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '10px', opacity: verifying ? 0.7 : 1 }}>
                 {verifying ? 'Saving...' : "✓ I've set up the filter"}
               </button>
               <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: 'transparent', border: '1px solid #d6d3d1', color: '#a8a29e', padding: '12px', borderRadius: '8px', fontSize: '13px', cursor: 'pointer' }}>

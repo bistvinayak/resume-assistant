@@ -52,7 +52,11 @@ export default function Dashboard() {
   const [editProfile, setEditProfile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [newSkill, setNewSkill] = useState('');
+  const [tailorMessages, setTailorMessages] = useState([]);
+  const [tailorInput, setTailorInput] = useState('');
+  const [tailorSending, setTailorSending] = useState(false);
   const chatEndRef = useRef(null);
+  const tailorEndRef = useRef(null);
 
   const handleDownload = async (e, jobId) => {
     e.stopPropagation();
@@ -70,9 +74,6 @@ export default function Dashboard() {
       .then(([p, j]) => {
         setProfile(p);
         setJobs(j.jobs || []);
-        // New user with empty profile → send to onboarding
-        const isEmpty = !p.contact?.name && !(p.skills || []).length && !(p.experience || []).length && !(p.summary);
-        if (isEmpty) navigate('/onboarding');
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -355,9 +356,79 @@ export default function Dashboard() {
     setPdfUploading(false);
   };
 
+  const handleTailorSend = async () => {
+    const msg = tailorInput.trim();
+    if (!msg || tailorSending) return;
+    setTailorInput('');
+    setTailorMessages(prev => [...prev, { role: 'user', text: msg }]);
+    setTailorSending(true);
+    try {
+      const res = await api.chat(msg);
+
+      if (res.reply) {
+        setTailorMessages(prev => [...prev, { role: 'arjun', text: res.reply }]);
+      }
+
+      if (res.profile) setProfile(res.profile);
+
+      if (res.duplicate && res.existingJob) {
+        setTailorMessages(prev => [...prev, { role: 'arjun', type: 'jobResult', job: res.existingJob }]);
+        setTailorSending(false);
+        return;
+      }
+
+      if (res.scraping) {
+        const progressId = Date.now();
+        const jobCountAtStart = jobs.length;
+        setTailorMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, stage: 0 }]);
+
+        let stageIdx = 0;
+        const stageTimer = setInterval(() => {
+          stageIdx++;
+          if (stageIdx < 5) {
+            setTailorMessages(prev => prev.map(m => m.id === progressId ? { ...m, stage: stageIdx } : m));
+          }
+        }, 8000);
+
+        let pollCount = 0;
+        const pollJobs = setInterval(async () => {
+          pollCount++;
+          try {
+            const jobsRes = await api.getJobs();
+            const newJobs = jobsRes.jobs || [];
+            if (newJobs.length > jobCountAtStart) {
+              clearInterval(pollJobs);
+              clearInterval(stageTimer);
+              setJobs(newJobs);
+              const latest = newJobs[0];
+              setTailorMessages(prev => [
+                ...prev.filter(m => m.id !== progressId),
+                { role: 'arjun', type: 'jobResult', job: latest },
+              ]);
+            } else if (pollCount >= 12) {
+              clearInterval(pollJobs);
+              clearInterval(stageTimer);
+              setTailorMessages(prev => [
+                ...prev.filter(m => m.id !== progressId),
+                { role: 'arjun', text: 'The scraping took longer than expected. Check the Job Activity tab for results.' },
+              ]);
+            }
+          } catch {}
+        }, 10000);
+      }
+    } catch {
+      setTailorMessages(prev => [...prev, { role: 'arjun', text: 'Something went wrong. Try again.' }]);
+    }
+    setTailorSending(false);
+  };
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  useEffect(() => {
+    tailorEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [tailorMessages]);
 
   useEffect(() => {
     if (tab === 'chat' && chatMessages.length === 0) {
@@ -369,6 +440,9 @@ export default function Dashboard() {
       if ((profile?.education?.length || 0) === 0) missing.push('education');
       const hint = missing.length > 0 ? ` I noticed you're missing: ${missing.slice(0, 3).join(', ')}. Want to start there?` : ' What would you like to add?';
       setChatMessages([{ role: 'arjun', text: `Hey ${user?.displayName?.split(' ')[0] || 'there'}! Tell me anything about your career — skills, experience, projects, certifications — and I'll index it into your profile.${hint}` }]);
+    }
+    if (tab === 'submit' && tailorMessages.length === 0) {
+      setTailorMessages([{ role: 'arjun', text: `Paste a job URL and I'll tailor your resume for it. I'll scrape the full job description, rewrite your bullets to match their keywords, score it against ATS, and email you the .docx.\n\nTry LinkedIn, Indeed, Greenhouse, or any job posting URL.` }]);
     }
   }, [tab]);
 
@@ -472,7 +546,7 @@ export default function Dashboard() {
               background: tab === id ? '#ffffff' : 'transparent',
               border: `1px solid ${tab === id ? '#d6d3d1' : 'transparent'}`,
               borderRadius: '6px', padding: '9px 12px', marginBottom: '3px',
-              color: tab === id ? '#f0ede8' : '#555', fontSize: '13px',
+              color: tab === id ? '#1c1917' : '#57534e', fontSize: '13px',
               transition: 'all 0.15s',
             }}>
               {label}
@@ -532,7 +606,7 @@ export default function Dashboard() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px' }}>Profile Index</h2>
                 {!editing ? (
-                  <button onClick={startEditing} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#c0bdb8', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                  <button onClick={startEditing} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#57534e', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
                     Edit Profile
                   </button>
                 ) : (
@@ -579,7 +653,7 @@ export default function Dashboard() {
                       <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>SKILLS — {profile.skills.length} TOTAL</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                         {profile.skills.map(skill => (
-                          <span key={skill} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#c0bdb8', fontFamily: "'DM Mono', monospace" }}>{skill}</span>
+                          <span key={skill} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{skill}</span>
                         ))}
                       </div>
                     </div>
@@ -675,7 +749,7 @@ export default function Dashboard() {
                     <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>SKILLS</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
                       {(editProfile.skills || []).map((skill, si) => (
-                        <span key={si} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 8px 4px 10px', fontSize: '11px', color: '#c0bdb8', fontFamily: "'DM Mono', monospace" }}>
+                        <span key={si} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 8px 4px 10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>
                           {skill}
                           <button onClick={() => removeSkill(si)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
                         </span>
@@ -689,7 +763,7 @@ export default function Dashboard() {
                         placeholder="Add a skill..."
                         style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', fontFamily: "'DM Mono', monospace", outline: 'none' }}
                       />
-                      <button onClick={addSkill} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#c0bdb8', padding: '8px 14px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>+ Add</button>
+                      <button onClick={addSkill} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#57534e', padding: '8px 14px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>+ Add</button>
                     </div>
                   </div>
 
@@ -697,7 +771,7 @@ export default function Dashboard() {
                   <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                       <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>EXPERIENCE</div>
-                      <button onClick={addExperience} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#c0bdb8', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add Role</button>
+                      <button onClick={addExperience} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#57534e', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add Role</button>
                     </div>
                     {(editProfile.experience || []).map((exp, ei) => (
                       <div key={ei} style={{ paddingBottom: '16px', borderBottom: ei < (editProfile.experience || []).length - 1 ? '1px solid #e7e5e4' : 'none', marginBottom: ei < (editProfile.experience || []).length - 1 ? '16px' : 0 }}>
@@ -721,7 +795,7 @@ export default function Dashboard() {
                               value={b}
                               onChange={e => updateBullet(ei, bi, e.target.value)}
                               rows={1}
-                              style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#c0bdb8', fontSize: '12px', padding: '8px 10px', outline: 'none', resize: 'vertical', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}
+                              style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#57534e', fontSize: '12px', padding: '8px 10px', outline: 'none', resize: 'vertical', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}
                             />
                             <button onClick={() => removeBullet(ei, bi)} style={{ background: 'none', border: 'none', color: '#ef444488', fontSize: '16px', cursor: 'pointer', padding: '4px', lineHeight: 1 }}>×</button>
                           </div>
@@ -735,7 +809,7 @@ export default function Dashboard() {
                   <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                       <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em' }}>EDUCATION</div>
-                      <button onClick={addEducation} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#c0bdb8', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add</button>
+                      <button onClick={addEducation} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#57534e', padding: '5px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>+ Add</button>
                     </div>
                     {(editProfile.education || []).map((edu, ei) => (
                       <div key={ei} style={{ display: 'flex', gap: '8px', marginBottom: '10px', alignItems: 'center' }}>
@@ -794,10 +868,10 @@ export default function Dashboard() {
                                   fontSize: '9px', color: '#1c1917', fontWeight: 700,
                                 }}>
                                   {done ? '✓' : active ? (
-                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #fafaf9', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #fff', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
                                   ) : (si + 1)}
                                 </div>
-                                <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#f0ede8' : '#555', fontFamily: "'DM Mono', monospace" }}>
+                                <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#1c1917' : '#78716c', fontFamily: "'DM Mono', monospace" }}>
                                   {stage}
                                 </span>
                               </div>
@@ -878,7 +952,7 @@ export default function Dashboard() {
                     <div style={{
                       maxWidth: '85%', padding: '12px 16px', borderRadius: '12px',
                       background: msg.role === 'user' ? '#f59e0b' : '#ffffff',
-                      color: msg.role === 'user' ? '#fafaf9' : '#c0bdb8',
+                      color: '#1c1917',
                       border: msg.role === 'user' ? 'none' : '1px solid #d6d3d1',
                       fontSize: '13px', lineHeight: 1.6,
                     }}>
@@ -897,7 +971,7 @@ export default function Dashboard() {
                               {item.section && (
                                 <span style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", minWidth: 70, flexShrink: 0, textTransform: 'uppercase' }}>{item.section}</span>
                               )}
-                              <span style={{ color: '#c0bdb8', fontSize: '12px' }}>{item.detail}</span>
+                              <span style={{ color: '#57534e', fontSize: '12px' }}>{item.detail}</span>
                             </div>
                           ))}
 
@@ -1101,60 +1175,173 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* ── SUBMIT JOB URL ── */}
+          {/* ── TAILOR RESUME (CHAT) ── */}
           {tab === 'submit' && (
-            <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '600px' }}>
-              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Submit a Job URL</h2>
-              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '28px', lineHeight: 1.6 }}>
-                Paste any LinkedIn job URL. We'll scrape the full description, tailor your resume, calculate ATS score, and email it to you.
+            <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '700px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)' }}>
+              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Tailor Resume</h2>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '20px', lineHeight: 1.6 }}>
+                Paste a job URL and Arjun will scrape the JD, tailor your resume, calculate ATS score, and deliver the .docx.
               </p>
 
-              <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '24px', marginBottom: '16px' }}>
-                <label style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '10px' }}>JOB URL</label>
+              <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
+                {tailorMessages.map((msg, i) => {
+                  const progressStages = [
+                    'Opening job page in headless browser...',
+                    'Reading job description...',
+                    'Tailoring your resume with AI...',
+                    'Calculating ATS match score...',
+                    'Improving resume if needed...',
+                  ];
+
+                  if (msg.type === 'progress') {
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
+                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>ARJUN — PROCESSING</div>
+                          {progressStages.map((stage, si) => {
+                            const done = si < msg.stage;
+                            const active = si === msg.stage;
+                            return (
+                              <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0', opacity: si > msg.stage ? 0.3 : 1 }}>
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  background: done ? '#22c55e' : active ? '#f59e0b' : '#e7e5e4',
+                                  fontSize: '9px', color: '#1c1917', fontWeight: 700,
+                                }}>
+                                  {done ? '✓' : active ? (
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #fff', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                                  ) : (si + 1)}
+                                </div>
+                                <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#1c1917' : '#78716c', fontFamily: "'DM Mono', monospace" }}>
+                                  {stage}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (msg.type === 'jobResult' && msg.job) {
+                    const j = msg.job;
+                    const scoreColor = (j.ats_score || 0) >= 90 ? '#22c55e' : (j.ats_score || 0) >= 75 ? '#f59e0b' : '#ef4444';
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ maxWidth: '90%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
+                          <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>ARJUN — RESUME READY</div>
+                          <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '4px' }}>{j.title}</div>
+                          <div style={{ fontSize: '12px', color: '#57534e', fontFamily: "'DM Mono', monospace", marginBottom: '14px' }}>{j.company}</div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                            <div style={{ fontSize: '28px', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: scoreColor }}>{j.ats_score || '—'}</div>
+                            <div>
+                              <div style={{ fontSize: '10px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>ATS SCORE</div>
+                              <div style={{ height: '4px', width: '120px', background: '#e7e5e4', borderRadius: '2px', marginTop: '4px' }}>
+                                <div style={{ height: '100%', width: `${j.ats_score || 0}%`, background: scoreColor, borderRadius: '2px', transition: 'width 1s ease' }} />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '14px' }}>
+                            <div>
+                              <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>MATCHED ({(j.matched_keywords || []).length})</div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                                {(j.matched_keywords || []).slice(0, 8).map(k => (
+                                  <span key={k} style={{ background: '#ecfdf5', border: '1px solid #22c55e22', borderRadius: '3px', padding: '2px 6px', fontSize: '10px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>{k}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>MISSING ({(j.missing_keywords || []).length})</div>
+                              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+                                {(j.missing_keywords || []).slice(0, 8).map(k => (
+                                  <span key={k} style={{ background: '#fef2f2', border: '1px solid #ef444422', borderRadius: '3px', padding: '2px 6px', fontSize: '10px', color: '#ef444488', fontFamily: "'DM Mono', monospace" }}>{k}</span>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          {(j.substitutions || []).length > 0 && (
+                            <div style={{ marginBottom: '14px' }}>
+                              <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>SYNONYM SUBSTITUTIONS ({j.substitutions.length})</div>
+                              {j.substitutions.map((s, si) => (
+                                <div key={si} style={{ fontSize: '11px', color: '#57534e', padding: '4px 0', borderBottom: '1px solid #e7e5e4', lineHeight: 1.5 }}>
+                                  <span style={{ color: '#ef444488' }}>{s.original_phrase}</span>
+                                  <span style={{ color: '#78716c' }}> → </span>
+                                  <span style={{ color: '#22c55e88' }}>{s.new_phrase}</span>
+                                  <span style={{ color: '#a8a29e', fontSize: '10px' }}> (JD: {s.jd_keyword})</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <button
+                            onClick={(e) => handleDownload(e, j.job_id)}
+                            disabled={downloading === j.job_id}
+                            style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '10px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer', opacity: downloading === j.job_id ? 0.7 : 1 }}
+                          >
+                            {downloading === j.job_id ? 'Downloading...' : 'Download Tailored Resume (.docx)'}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start', marginBottom: '12px' }}>
+                      <div style={{
+                        maxWidth: '85%', padding: '12px 16px', borderRadius: '12px',
+                        background: msg.role === 'user' ? '#f59e0b' : '#ffffff',
+                        color: '#1c1917',
+                        border: msg.role === 'user' ? 'none' : '1px solid #d6d3d1',
+                        fontSize: '13px', lineHeight: 1.6, whiteSpace: 'pre-line',
+                      }}>
+                        {msg.role === 'arjun' && (
+                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>ARJUN</div>
+                        )}
+                        {msg.text}
+                      </div>
+                    </div>
+                  );
+                })}
+                {tailorSending && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                    <div style={{ padding: '12px 16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px', color: '#78716c' }}>
+                      <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>ARJUN</div>
+                      Thinking...
+                    </div>
+                  </div>
+                )}
+                <div ref={tailorEndRef} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input
-                  value={jobUrl}
-                  onChange={e => setJobUrl(e.target.value)}
-                  placeholder="https://www.linkedin.com/jobs/view/4432548390"
+                  value={tailorInput}
+                  onChange={e => setTailorInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleTailorSend()}
+                  placeholder="Paste a job URL here..."
+                  disabled={tailorSending}
                   style={{
-                    width: '100%', background: '#fafaf9', border: '1px solid #d6d3d1',
-                    borderRadius: '6px', color: '#1c1917',
-                    fontFamily: "'DM Mono', monospace", fontSize: '13px',
-                    padding: '12px 16px', outline: 'none', marginBottom: '16px',
+                    flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1',
+                    borderRadius: '8px', color: '#1c1917', fontFamily: "'DM Sans', sans-serif",
+                    fontSize: '13px', padding: '12px 16px', outline: 'none',
                   }}
                 />
                 <button
-                  onClick={handleSubmitUrl}
-                  disabled={!jobUrl.trim() || submitting}
+                  onClick={handleTailorSend}
+                  disabled={!tailorInput.trim() || tailorSending}
                   style={{
-                    width: '100%', background: jobUrl.trim() ? '#f59e0b' : '#e7e5e4',
-                    color: jobUrl.trim() ? '#fafaf9' : '#444',
-                    border: 'none', padding: '12px', borderRadius: '6px',
-                    fontSize: '14px', fontWeight: 600,
-                    opacity: submitting ? 0.7 : 1,
+                    background: tailorInput.trim() ? '#f59e0b' : '#e7e5e4',
+                    color: tailorInput.trim() ? '#1c1917' : '#a8a29e',
+                    border: 'none', padding: '10px 20px', borderRadius: '8px',
+                    fontSize: '13px', fontWeight: 600, cursor: 'pointer', flexShrink: 0,
                   }}
                 >
-                  {submitting ? 'Processing...' : 'Tailor resume for this job →'}
+                  Send
                 </button>
-                {submitMsg && (
-                  <div style={{ marginTop: '12px', fontSize: '12px', fontFamily: "'DM Mono', monospace", color: submitMsg.startsWith('✓') ? '#22c55e' : '#ef4444' }}>
-                    {submitMsg}
-                  </div>
-                )}
-              </div>
-
-              <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px' }}>
-                <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>HOW IT WORKS</div>
-                {[
-                  { n: '01', text: 'Puppeteer opens the LinkedIn job page and scrapes the full JD' },
-                  { n: '02', text: 'OpenRouter tailors your resume using only facts from your profile' },
-                  { n: '03', text: 'ATS score calculated — if < 95, one improvement run' },
-                  { n: '04', text: 'Tailored .docx emailed to you with score + matched/missing keywords' },
-                ].map(({ n, text }) => (
-                  <div key={n} style={{ display: 'flex', gap: '14px', padding: '10px 0', borderBottom: '1px solid #e7e5e4' }}>
-                    <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: '#f59e0b', flexShrink: 0 }}>{n}</span>
-                    <span style={{ fontSize: '13px', color: '#57534e', lineHeight: 1.5 }}>{text}</span>
-                  </div>
-                ))}
               </div>
             </div>
           )}
