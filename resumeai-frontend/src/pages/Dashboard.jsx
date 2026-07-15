@@ -717,11 +717,23 @@ export default function Dashboard() {
       const missing = [];
       if (!profile?.contact?.phone) missing.push('phone number');
       if (!profile?.contact?.location) missing.push('location');
+      if (!(profile?.contact?.linkedin)) missing.push('LinkedIn URL');
       if ((profile?.experience?.length || 0) < 2) missing.push('more work experience');
       if ((profile?.projects?.length || 0) === 0) missing.push('projects');
       if ((profile?.education?.length || 0) === 0) missing.push('education');
-      const hint = missing.length > 0 ? ` I noticed you're missing: ${missing.slice(0, 3).join(', ')}. Want to start there?` : ' What would you like to add?';
-      setChatMessages([{ role: 'arjun', text: `Hey ${user?.displayName?.split(' ')[0] || 'there'}! Tell me anything about your career — skills, experience, projects, certifications — and I'll index it into your profile.${hint}` }]);
+      if (!(profile?.certifications?.length > 0)) missing.push('certifications');
+      const hint = missing.length > 0 ? `\n\nI noticed you're missing: ${missing.slice(0, 4).join(', ')}. Want to start there?` : '\n\nWhat would you like to add?';
+      setChatMessages([{
+        role: 'arjun',
+        type: 'welcome',
+        text: `Hey ${user?.displayName?.split(' ')[0] || 'there'}! Tell me anything about your career and I'll index it into your profile.${hint}`,
+        tips: [
+          { icon: '✅', text: 'Start with the company name: "At Zinnia, I owned the product roadmap for..."' },
+          { icon: '📋', text: 'One role at a time works best — include title, dates, and key achievements' },
+          { icon: '📊', text: 'Include numbers: "reduced costs by 12%", "managed $2M budget", "led team of 8"' },
+          { icon: '📄', text: 'Or upload files (PDF, DOCX, TXT, JSON) — I\'ll extract everything automatically' },
+        ],
+      }]);
     }
     if (tab === 'submit' && tailorMessages.length === 0) {
       setTailorMessages([{ role: 'arjun', text: `Paste a job URL and I'll tailor your resume for it. I'll scrape the full job description, rewrite your bullets to match their keywords, score it against ATS, and email you the .docx.\n\nTry LinkedIn, Indeed, Greenhouse, or any job posting URL.` }]);
@@ -1222,6 +1234,26 @@ export default function Dashboard() {
 
               <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
                 {chatMessages.map((msg, i) => {
+                  if (msg.type === 'welcome') {
+                    return (
+                      <div key={i} style={{ marginBottom: '16px' }}>
+                        <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '16px', marginBottom: '10px' }}>
+                          <div style={{ fontSize: '13px', color: '#1c1917', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{msg.text}</div>
+                        </div>
+                        {msg.tips && (
+                          <div style={{ background: '#fffbeb', border: '1px solid #f59e0b33', borderRadius: '10px', padding: '14px 16px' }}>
+                            <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '10px' }}>TIPS FOR BEST RESULTS</div>
+                            {msg.tips.map((tip, ti) => (
+                              <div key={ti} style={{ display: 'flex', gap: '10px', padding: '4px 0', fontSize: '12px', color: '#57534e', lineHeight: 1.5 }}>
+                                <span style={{ flexShrink: 0 }}>{tip.icon}</span>
+                                <span>{tip.text}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
                   if (msg.type === 'progress') {
                     const secs = msg.elapsed || 0;
                     const progressStages = [

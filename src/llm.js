@@ -301,6 +301,13 @@ BULLET FORMAT: When extracting experience bullets, use { text, metric, impact } 
 - impact = the MEANING (what changed for the business). Capture even without a metric.
 - Both can coexist. A bullet describing real work should almost always have at least an impact.
 
+GRAMMAR & POLISH:
+- If the user's input is rough, informal, or has grammar issues, clean it up into professional resume language BEFORE extracting.
+- Example: "i did product roadmap stuff at zinnia and handled api things" → extract as: "Owned product roadmap and led API integration strategy"
+- Always use strong action verbs (Owned, Led, Drove, Spearheaded, Architected, Reduced, Delivered).
+- If you polish the text significantly, mention what you improved in your reply: "I've polished your bullets into resume-ready language."
+- If the input is already well-written, extract as-is — don't over-edit.
+
 WHAT TO ASK ABOUT (priority order):
 1. Ambiguous context (which company/role does this belong to?)
 2. Missing contact info (phone, location, LinkedIn URL)
