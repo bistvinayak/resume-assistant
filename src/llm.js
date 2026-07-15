@@ -19,9 +19,17 @@ const langfuse = new Langfuse({
 const PROFILE_SCHEMA = `
 Return ONLY JSON matching this shape (omit fields you found nothing for):
 {
-  "contact": { "name": "", "email": "", "phone": "", "location": "", "links": [] },
+  "contact": { "name": "", "email": "", "phone": "", "location": "", "linkedin": "", "github": "", "portfolio": "" },
   "summary": "",
-  "skills": [],
+  "technical_skills": [
+    {
+      "name": "Skill name (e.g. SQL, Tableau, Python, Figma, JIRA)",
+      "experience": "Duration if known (e.g. '5 Years', '2 Years'). null if unknown.",
+      "last_used": "Year last used (e.g. '2025'). null if unknown."
+    }
+  ],
+  "soft_skills": ["Leadership", "Communication", "Cross-functional Collaboration", "Stakeholder Management"],
+  "skills": ["Flat array: ALL skill names (both technical and soft) for backward compat"],
   "experience": [
     {
       "id": "slug",
@@ -43,18 +51,35 @@ Return ONLY JSON matching this shape (omit fields you found nothing for):
     {
       "id": "slug",
       "name": "",
+      "url": "Project URL if available. null otherwise.",
       "description": "",
       "tags": [],
       "outcome": "Measurable result or impact of this project"
     }
   ],
   "education": [ { "school": "", "degree": "", "dates": "", "gpa": "", "honors": "" } ],
-  "certifications": [ { "name": "", "issuer": "", "date": "" } ],
-  "languages": [ { "name": "", "proficiency": "" } ],
+  "certifications": [ { "name": "", "issuer": "", "date": "", "validity": "" } ],
+  "languages": [ { "name": "", "proficiency": "", "read": true, "write": true, "speak": true } ],
+  "career": {
+    "current_industry": "",
+    "department": "",
+    "current_role": "",
+    "total_experience": "e.g. '5 Years 6 Months'",
+    "notice_period": "e.g. '15 Days or less'",
+    "preferred_locations": [],
+    "work_permit": [],
+    "desired_job_type": ""
+  },
   "activities": [],
   "interests": [],
   "custom_facts": []
-}`;
+}
+
+SKILL CLASSIFICATION RULES:
+- technical_skills: Programming languages, tools, frameworks, platforms, databases, analytics tools, methodologies (SQL, Python, Tableau, JIRA, Agile, REST APIs, Figma, Power BI, etc.)
+- soft_skills: Interpersonal, communication, organizational, leadership abilities (Leadership, Stakeholder Management, Cross-functional Collaboration, Problem Solving, Negotiation, etc.)
+- skills: Flat union of ALL skill names from both categories (for backward compatibility)
+- Infer skills from bullets: "Led cross-functional team" → soft_skills: "Cross-functional Leadership"; "Built dashboards in Tableau" → technical_skills: { name: "Tableau" }`;
 
 // ── PROMPT DEFINITIONS ──────────────────────────────────────────────────
 
@@ -96,11 +121,23 @@ COMPANY CONTEXT:
 - If no tagline is given, infer from context: industry, scale, product type.
 
 SKILL EXTRACTION RULES:
+- Split skills into technical_skills (with experience/last_used metadata when available) and soft_skills (flat strings).
+- Also populate the flat "skills" array with ALL skill names from both categories.
+- technical_skills: tools, programming languages, frameworks, platforms, databases, analytics tools, methodologies (SQL, Python, Tableau, JIRA, Agile, REST APIs, Figma, etc.)
+- soft_skills: interpersonal, communication, organizational, leadership (Stakeholder Management, Cross-functional Collaboration, Problem Solving, Negotiation, etc.)
 - Extract explicitly listed skills AND infer from bullets/context.
-- Skills in grouped sections (e.g., "Languages: SQL, Python | Tools: Tableau, Figma") — flatten into skills array.
-- Infer from bullets: "Built dashboards in Tableau" → add "Tableau"; "Led cross-functional team" → add "Cross-functional Leadership".
-- Deduplicate: don't add "Python" twice.
+- Skills in grouped sections (e.g., "Languages: SQL, Python | Tools: Tableau, Figma") — classify into the right category.
+- Infer from bullets: "Built dashboards in Tableau" → technical_skills: { name: "Tableau" }; "Led cross-functional team" → soft_skills: "Cross-functional Leadership".
+- Deduplicate within each category.
 - Only use information present in the text — do not hallucinate.
+
+CAREER METADATA:
+- Extract career preferences if present: current industry, department, notice period, preferred locations, work permit, total experience, desired job type.
+- These are typically found in Naukri/LinkedIn profile exports or when the user mentions them in conversation.
+
+CONTACT — ONLINE PROFILES:
+- Extract LinkedIn, GitHub, portfolio URLs into their dedicated contact fields (linkedin, github, portfolio).
+- If links are in a generic "links" array, move them to the appropriate named field.
 
 EDUCATION:
 - Extract ALL education entries including secondary school (12th, 10th) if listed.
@@ -209,19 +246,24 @@ MERGE RULES (in priority order):
 
 5. BULLET FORMAT: Every bullet must be { text, metric, impact }. Convert old string bullets: { "text": "the string", "metric": null, "impact": null } — then fill in metric/impact if inferrable from the text.
 
-6. SKILLS: Union all. Deduplicate semantically ("PM" → "Product Management", "ML" → "Machine Learning"). Keep canonical forms.
+6. SKILLS (three arrays):
+   - technical_skills: Union by name (case-insensitive). Deduplicate semantically ("PM" → "Product Management"). Keep richer metadata (experience, last_used) from whichever source has it.
+   - soft_skills: Union, deduplicate semantically. Keep canonical forms.
+   - skills: Flat union of ALL skill names from both categories. Backward compat.
 
-7. CONTACT: Per field, keep non-empty. Both filled → prefer NEW data.
+7. CONTACT: Per field, keep non-empty. Both filled → prefer NEW data. Move linkedin/github/portfolio URLs from generic "links" array into dedicated fields.
 
 8. SUMMARY: Both exist → combine best elements. One exists → keep it.
 
-9. PROJECTS: Match by name (fuzzy). Merge descriptions, keep richer outcome.
+9. PROJECTS: Match by name (fuzzy). Merge descriptions, keep richer outcome. Preserve project URLs.
 
 10. EDUCATION: Match by school+degree. Include secondary education (12th, 10th) if present. Keep entry with GPA/honors.
 
-11. LANGUAGES: Union by name, keep proficiency from whichever source provides it.
+11. LANGUAGES: Union by name, keep richer proficiency and read/write/speak flags.
 
-12. CERTIFICATIONS: Union by name, deduplicate.
+12. CERTIFICATIONS: Union by name, deduplicate. Keep issuer, date, validity from whichever source has them.
+
+13. CAREER: Merge per field, prefer NEW data. Keep notice_period, preferred_locations, work_permit, total_experience, etc.
 
 {{profile_schema}}`,
     config: { model: MODEL, temperature: 0.1 },

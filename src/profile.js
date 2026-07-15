@@ -134,10 +134,23 @@ function mergeProfile(base, incoming) {
   const out = JSON.parse(JSON.stringify(base));
   if (!incoming || typeof incoming !== 'object') return out;
 
-  if (incoming.contact) out.contact = { ...out.contact, ...incoming.contact };
+  if (incoming.contact) {
+    out.contact = { ...out.contact, ...incoming.contact };
+    // Move URLs from generic links array into dedicated fields
+    if (Array.isArray(out.contact.links)) {
+      for (const link of out.contact.links) {
+        const l = (link || '').toLowerCase();
+        if (l.includes('linkedin.com') && !out.contact.linkedin) out.contact.linkedin = link;
+        else if (l.includes('github.com') && !out.contact.github) out.contact.github = link;
+        else if (!out.contact.portfolio && (l.includes('portfolio') || l.match(/^https?:\/\/[^/]+\.(com|io|dev|me)$/))) out.contact.portfolio = link;
+      }
+    }
+  }
   if (incoming.summary) out.summary = incoming.summary;
 
   out.skills = unionCI(out.skills, incoming.skills);
+  out.technical_skills = upsertTechnicalSkills(out.technical_skills || [], incoming.technical_skills);
+  out.soft_skills = unionCI(out.soft_skills || [], incoming.soft_skills);
   out.experience = upsertExperience(out.experience, incoming.experience);
   out.projects = upsertProjects(out.projects, incoming.projects);
   out.education = upsertById(out.education, incoming.education, keyEdu);
@@ -145,6 +158,16 @@ function mergeProfile(base, incoming) {
   out.languages = upsertById(out.languages || [], incoming.languages, keyLang);
   out.activities = unionCI(out.activities || [], incoming.activities);
   out.interests = unionCI(out.interests || [], incoming.interests);
+
+  if (incoming.career && typeof incoming.career === 'object') {
+    out.career = { ...(out.career || {}), ...incoming.career };
+    if (Array.isArray(incoming.career.preferred_locations)) {
+      out.career.preferred_locations = [...new Set([...(out.career.preferred_locations || []), ...incoming.career.preferred_locations])];
+    }
+    if (Array.isArray(incoming.career.work_permit)) {
+      out.career.work_permit = [...new Set([...(out.career.work_permit || []), ...incoming.career.work_permit])];
+    }
+  }
 
   if (Array.isArray(incoming.custom_facts)) {
     const now = new Date().toISOString();
@@ -161,6 +184,28 @@ function mergeProfile(base, incoming) {
     if (loc) out.contact = { ...out.contact, location: loc };
   }
 
+  return out;
+}
+
+function upsertTechnicalSkills(existing = [], incoming = []) {
+  if (!Array.isArray(incoming)) return existing;
+  const out = [...(existing || [])];
+  const index = new Map(out.map((s, i) => [(s.name || '').toLowerCase(), i]));
+  for (const skill of incoming) {
+    if (!skill || !skill.name) continue;
+    const k = skill.name.toLowerCase();
+    if (index.has(k)) {
+      const prev = out[index.get(k)];
+      out[index.get(k)] = {
+        ...prev,
+        experience: skill.experience || prev.experience,
+        last_used: skill.last_used || prev.last_used,
+      };
+    } else {
+      out.push(skill);
+      index.set(k, out.length - 1);
+    }
+  }
   return out;
 }
 

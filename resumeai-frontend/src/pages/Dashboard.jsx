@@ -694,6 +694,12 @@ export default function Dashboard() {
   }, [tailorMessages]);
 
   useEffect(() => {
+    if (tab === 'profile') {
+      api.getProfile().then(p => setProfile(p)).catch(() => {});
+    }
+  }, [tab]);
+
+  useEffect(() => {
     if (tab === 'chat' && chatMessages.length === 0) {
       const missing = [];
       if (!profile?.contact?.phone) missing.push('phone number');
@@ -711,15 +717,18 @@ export default function Dashboard() {
 
   const allSkills = profile ? [
     ...(profile.skills || []),
-  ] : [];
+    ...(profile.technical_skills || []).map(s => s.name || s),
+    ...(profile.soft_skills || []),
+  ].filter((s, i, a) => a.findIndex(x => (x || '').toString().toLowerCase() === (s || '').toString().toLowerCase()) === i) : [];
 
+  const hasLinkedIn = !!(profile?.contact?.linkedin || profile?.contact?.linkedIn || profile?.contact?.LinkedIn);
   const completeness = profile ? {
-    contact: profile.contact?.name && profile.contact?.email ? 100 : 40,
+    contact: profile.contact?.name && profile.contact?.email ? (hasLinkedIn ? 100 : 80) : 40,
     summary: (profile.summary?.length || 0) > 50 ? 100 : 20,
     skills: allSkills.length > 10 ? 100 : allSkills.length > 0 ? 60 : 0,
     experience: (profile.experience?.length || 0) >= 2 ? 100 : (profile.experience?.length || 0) > 0 ? 50 : 0,
     education: (profile.education?.length || 0) > 0 ? 100 : 0,
-    certifications: 0,
+    certifications: (profile.certifications?.length || 0) > 0 ? 100 : 0,
     projects: (profile.projects?.length || 0) > 0 ? 100 : 0,
   } : {};
 
@@ -897,7 +906,7 @@ export default function Dashboard() {
                       <ProgressBar value={completeness.skills || 0} label="Skills" sublabel={`${allSkills.length} indexed`} />
                       <ProgressBar value={completeness.experience || 0} label="Experience" sublabel={`${profile?.experience?.length || 0} roles`} />
                       <ProgressBar value={completeness.education || 0} label="Education" />
-                      <ProgressBar value={0} label="Certifications" sublabel="none added" />
+                      <ProgressBar value={completeness.certifications || 0} label="Certifications" sublabel={`${profile?.certifications?.length || 0} added`} />
                       <ProgressBar value={completeness.projects || 0} label="Projects" />
                     </div>
                     <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px' }}>
@@ -911,14 +920,45 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {profile?.skills && profile.skills.length > 0 && (
+                  {allSkills.length > 0 && (
                     <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
-                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>SKILLS — {profile.skills.length} TOTAL</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {profile.skills.map(skill => (
-                          <span key={skill} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{skill}</span>
-                        ))}
-                      </div>
+                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>SKILLS — {allSkills.length} TOTAL</div>
+
+                      {(profile.technical_skills?.length > 0) && (
+                        <>
+                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '8px', marginTop: '4px' }}>TECHNICAL</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+                            {profile.technical_skills.map((s, i) => {
+                              const name = typeof s === 'string' ? s : s.name;
+                              const exp = typeof s === 'object' ? s.experience : null;
+                              return (
+                                <span key={i} title={exp ? `Experience: ${exp}` : undefined} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>
+                                  {name}{exp ? <span style={{ color: '#a8a29e', fontSize: '9px', marginLeft: '4px' }}>{exp}</span> : ''}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        </>
+                      )}
+
+                      {(profile.soft_skills?.length > 0) && (
+                        <>
+                          <div style={{ fontSize: '10px', color: '#8b5cf6', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>INTERPERSONAL</div>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '14px' }}>
+                            {profile.soft_skills.map((skill, i) => (
+                              <span key={i} style={{ background: '#f3f0ff', border: '1px solid #ddd6fe', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#6d28d9', fontFamily: "'DM Mono', monospace" }}>{skill}</span>
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {(!profile.technical_skills?.length && !profile.soft_skills?.length && profile.skills?.length > 0) && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                          {profile.skills.map(skill => (
+                            <span key={skill} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{skill}</span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -980,16 +1020,62 @@ export default function Dashboard() {
                     </div>
                   )}
 
-                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '20px' }}>
-                    <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '12px' }}>⚠ MISSING</div>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                      {['Certifications', 'Projects', 'Awards', 'LinkedIn URL'].map(item => (
-                        <button key={item} onClick={() => setTab('chat')} style={{ background: 'transparent', border: '1px dashed #fecaca', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', color: '#78716c', fontFamily: "'DM Sans', sans-serif", cursor: 'pointer' }}>
-                          + Add {item}
-                        </button>
-                      ))}
+                  {profile?.certifications && profile.certifications.length > 0 && (
+                    <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>CERTIFICATIONS — {profile.certifications.length}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {profile.certifications.map((c, i) => {
+                          const name = typeof c === 'string' ? c : (c.name || '');
+                          return (
+                            <span key={i} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{name}</span>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
+                  )}
+
+                  {profile?.languages && profile.languages.length > 0 && (
+                    <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>LANGUAGES — {profile.languages.length}</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {profile.languages.map((l, i) => {
+                          const name = typeof l === 'string' ? l : (l.name || '');
+                          const level = typeof l === 'object' ? l.proficiency || l.level : null;
+                          return (
+                            <span key={i} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>
+                              {name}{level ? ` · ${level}` : ''}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {(() => {
+                    const missingItems = [];
+                    if (!(profile?.certifications?.length > 0)) missingItems.push('Certifications');
+                    if (!(profile?.projects?.length > 0)) missingItems.push('Projects');
+                    if (!hasLinkedIn) missingItems.push('LinkedIn URL');
+                    if (!(profile?.contact?.phone)) missingItems.push('Phone');
+                    if (!(profile?.contact?.location)) missingItems.push('Location');
+                    if ((profile?.experience?.length || 0) < 2) missingItems.push('More Experience');
+                    return missingItems.length > 0 ? (
+                      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '12px', padding: '20px' }}>
+                        <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '12px' }}>⚠ MISSING</div>
+                        <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                          {missingItems.map(item => (
+                            <button key={item} onClick={() => setTab('chat')} style={{ background: 'transparent', border: '1px dashed #fecaca', borderRadius: '6px', padding: '7px 14px', fontSize: '12px', color: '#78716c', fontFamily: "'DM Sans', sans-serif", cursor: 'pointer' }}>
+                              + Add {item}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ background: '#ecfdf5', border: '1px solid #22c55e22', borderRadius: '12px', padding: '20px', textAlign: 'center' }}>
+                        <span style={{ fontSize: '12px', color: '#22c55e', fontFamily: "'DM Mono', monospace" }}>✓ Profile complete</span>
+                      </div>
+                    );
+                  })()}
                 </>
               ) : editProfile && (
                 <>
