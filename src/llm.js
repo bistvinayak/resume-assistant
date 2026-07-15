@@ -170,20 +170,6 @@ If nothing to delete, return "deletions": {}.`,
     config: { model: MODEL, temperature: 0.2 },
   },
 
-  chat_job_analysis: {
-    prompt: `You are Arjun, an AI career assistant. The user wants to apply for a job. Analyze their profile against the job description.
-
-Return ONLY JSON:
-{
-  "ats_score": <0-100 integer estimating how well their profile matches>,
-  "matched_keywords": ["keyword1", "keyword2"],
-  "missing_keywords": ["keyword1", "keyword2"],
-  "strengths": ["strength1", "strength2"],
-  "gaps": ["gap1", "gap2"],
-  "reply": "A friendly 3-5 sentence analysis: mention the ATS score, top strengths for this role, key gaps to address, and offer to tailor their resume for this job. Be specific about what's missing."
-}`,
-    config: { model: MODEL, temperature: 0.2 },
-  },
 };
 
 // ── SYNC PROMPTS TO LANGFUSE ────────────────────────────────────────────
@@ -334,15 +320,4 @@ async function chatEnrich(userMessage, currentProfile) {
   return result;
 }
 
-async function chatJobAnalysis(currentProfile, job) {
-  const trace = langfuse.trace({ name: 'chat_job_analysis' });
-  const { text: system, langfusePrompt } = await getPrompt('chat_job_analysis');
-
-  const user = `JOB:\nTitle: ${job.title}\nCompany: ${job.company}\nDescription:\n${job.jd_text}\n\nCANDIDATE PROFILE:\n${JSON.stringify(currentProfile)}`;
-
-  const result = await askJson(system, user, 'chat_job_analysis', trace, langfusePrompt);
-  result._traceId = trace.id;
-  return result;
-}
-
-module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, chatEnrich, chatJobAnalysis, langfuse, syncPrompts };
+module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, chatEnrich, langfuse, syncPrompts };

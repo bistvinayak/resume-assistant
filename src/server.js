@@ -15,7 +15,7 @@ const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { renderResumeDocx } = require('./renderDocx');
-const { chatEnrich, chatJobAnalysis, langfuse, syncPrompts } = require('./llm');
+const { chatEnrich, langfuse, syncPrompts } = require('./llm');
 const { mergeProfile, applyDeletions } = require('./profile');
 
 // Normalize LinkedIn URLs to direct job view format
