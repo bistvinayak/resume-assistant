@@ -335,12 +335,17 @@ export default function Dashboard() {
         });
       }
       if (changes.summary) parts.push({ section: 'Summary', detail: changes.summary.slice(0, 100) + (changes.summary.length > 100 ? '...' : '') });
-      if (changes.skills?.length) parts.push({ section: 'Skills', detail: changes.skills.join(', ') });
+      if (changes.skills?.length) parts.push({ section: 'Skills', detail: changes.skills.map(s => typeof s === 'object' ? s.name : s).join(', ') });
+      if (changes.technical_skills?.length) parts.push({ section: 'Technical Skills', detail: changes.technical_skills.map(s => typeof s === 'object' ? s.name : s).join(', ') });
+      if (changes.soft_skills?.length) parts.push({ section: 'Soft Skills', detail: changes.soft_skills.join(', ') });
       if (changes.experience?.length) {
         changes.experience.forEach(exp => {
           const line = [exp.title, exp.company, exp.dates].filter(Boolean).join(' · ');
           parts.push({ section: 'Experience', detail: line || 'New role' });
-          if (exp.bullets?.length) exp.bullets.forEach(b => parts.push({ section: '', detail: `  · ${b}` }));
+          if (exp.bullets?.length) exp.bullets.forEach(b => {
+            const text = typeof b === 'string' ? b : (b.text || JSON.stringify(b));
+            parts.push({ section: '', detail: `  · ${text}` });
+          });
         });
       }
       if (changes.projects?.length) {
@@ -350,10 +355,18 @@ export default function Dashboard() {
         changes.education.forEach(e => parts.push({ section: 'Education', detail: [e.degree, e.school].filter(Boolean).join(' — ') }));
       }
       if (changes.certifications?.length) {
-        changes.certifications.forEach(c => parts.push({ section: 'Certification', detail: typeof c === 'string' ? c : c.name }));
+        changes.certifications.forEach(c => parts.push({ section: 'Certification', detail: typeof c === 'string' ? c : (c.name || '') }));
+      }
+      if (changes.languages?.length) {
+        changes.languages.forEach(l => parts.push({ section: 'Language', detail: typeof l === 'string' ? l : `${l.name}${l.proficiency ? ` (${l.proficiency})` : ''}` }));
+      }
+      if (changes.career && Object.keys(changes.career).length) {
+        Object.entries(changes.career).forEach(([k, v]) => {
+          if (v) parts.push({ section: 'Career', detail: `${k.replace(/_/g, ' ')}: ${Array.isArray(v) ? v.join(', ') : v}` });
+        });
       }
       if (changes.custom_facts?.length) {
-        changes.custom_facts.forEach(f => parts.push({ section: 'Fact', detail: f }));
+        changes.custom_facts.forEach(f => parts.push({ section: 'Fact', detail: typeof f === 'string' ? f : (f.text || JSON.stringify(f)) }));
       }
     }
     if (deletions) {
