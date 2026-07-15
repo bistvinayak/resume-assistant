@@ -82,11 +82,17 @@ export const api = {
     for (const file of files) {
       form.append('files', file);
     }
-    const res = await checkedFetch(`${BASE}/ingest/files`, {
+    const url = `${BASE}/ingest/files`;
+    const res = await checkedFetch(url, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}`, 'X-Session-Id': SESSION_ID },
       body: form,
     });
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+      const text = await res.text();
+      throw new Error(`Server returned HTML instead of JSON (status ${res.status}, url: ${url}). This usually means the request didn't reach the API.`);
+    }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Upload failed');
     return data;

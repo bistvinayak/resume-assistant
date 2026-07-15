@@ -127,8 +127,13 @@ const uploadMultiple = multer({
 }).array('files', 5);
 
 app.post(['/ingest/files', '/api/ingest/files'], (req, res, next) => {
+  console.log(`→ ingest/files: ${req.userId}, content-type: ${req.headers['content-type']}`);
   uploadMultiple(req, res, (err) => {
-    if (err) return res.status(400).json({ error: err.message });
+    if (err) {
+      console.error(`✗ ingest/files multer error: ${err.message}`);
+      return res.status(400).json({ error: err.message });
+    }
+    console.log(`✓ ingest/files: ${(req.files || []).length} file(s) received`);
     next();
   });
 }, async (req, res, next) => {
