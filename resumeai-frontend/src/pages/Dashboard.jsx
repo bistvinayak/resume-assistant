@@ -476,56 +476,79 @@ export default function Dashboard() {
   const diffProfiles = (before, after) => {
     const changes = [];
     const bText = (b) => typeof b === 'string' ? b : (b.text || '');
+    const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
     if (after.summary && after.summary !== before.summary) {
       changes.push({ section: 'Summary', type: before.summary ? 'updated' : 'added', detail: after.summary.slice(0, 80) + (after.summary.length > 80 ? '...' : '') });
     }
 
-    const newSkills = (after.skills || []).filter(s => !(before.skills || []).some(bs => bs.toLowerCase() === s.toLowerCase()));
-    if (newSkills.length) changes.push({ section: 'Skills', type: 'added', detail: newSkills.join(', ') });
+    // Collect ALL before-skills across all formats for dedup
+    const beforeAllSkills = new Set([
+      ...(before.skills || []).map(s => norm(typeof s === 'object' ? s.name : s)),
+      ...(before.technical_skills || []).map(s => norm(typeof s === 'object' ? s.name : s)),
+      ...(before.soft_skills || []).map(s => norm(s)),
+    ]);
+    const afterAllSkills = [
+      ...(after.skills || []).map(s => typeof s === 'object' ? s.name : s),
+      ...(after.technical_skills || []).map(s => typeof s === 'object' ? s.name : s),
+      ...(after.soft_skills || []),
+    ];
+    const newSkills = afterAllSkills.filter(s => !beforeAllSkills.has(norm(s)));
+    const uniqueNewSkills = [...new Set(newSkills.map(s => s))];
+    if (uniqueNewSkills.length) changes.push({ section: 'Skills', type: 'added', detail: uniqueNewSkills.join(', ') });
 
-    const beforeExpKeys = new Set((before.experience || []).map(e => `${(e.company||'').toLowerCase()}|${(e.title||'').toLowerCase()}`));
+    const beforeExpKeys = new Set((before.experience || []).map(e => `${norm(e.company)}|${norm(e.title)}`));
     for (const exp of (after.experience || [])) {
-      const key = `${(exp.company||'').toLowerCase()}|${(exp.title||'').toLowerCase()}`;
+      const key = `${norm(exp.company)}|${norm(exp.title)}`;
       if (!beforeExpKeys.has(key)) {
         changes.push({ section: 'Experience', type: 'added', detail: `${exp.title} at ${exp.company}` });
       } else {
-        const prev = (before.experience || []).find(e => `${(e.company||'').toLowerCase()}|${(e.title||'').toLowerCase()}` === key);
-        const newBullets = (exp.bullets || []).filter(b => !(prev?.bullets || []).some(pb => bText(pb).toLowerCase() === bText(b).toLowerCase()));
+        const prev = (before.experience || []).find(e => `${norm(e.company)}|${norm(e.title)}` === key);
+        const prevBulletTexts = new Set((prev?.bullets || []).map(pb => norm(bText(pb))));
+        const newBullets = (exp.bullets || []).filter(b => !prevBulletTexts.has(norm(bText(b))));
         if (newBullets.length) changes.push({ section: 'Experience', type: 'enriched', detail: `${exp.title} at ${exp.company} — ${newBullets.length} new bullet${newBullets.length > 1 ? 's' : ''}` });
       }
     }
 
-    const beforeProjKeys = new Set((before.projects || []).map(p => (p.name||'').toLowerCase()));
+    const beforeProjKeys = new Set((before.projects || []).map(p => norm(p.name)));
     for (const p of (after.projects || [])) {
-      if (!beforeProjKeys.has((p.name||'').toLowerCase())) {
+      if (!beforeProjKeys.has(norm(p.name))) {
         changes.push({ section: 'Project', type: 'added', detail: p.name });
       }
     }
 
-    const beforeEduKeys = new Set((before.education || []).map(e => `${(e.school||'').toLowerCase()}|${(e.degree||'').toLowerCase()}`));
+    // Fuzzy education match — match if school name contains the other
+    const beforeEdus = (before.education || []);
     for (const e of (after.education || [])) {
-      if (!beforeEduKeys.has(`${(e.school||'').toLowerCase()}|${(e.degree||'').toLowerCase()}`)) {
+      const matched = beforeEdus.some(be =>
+        norm(be.school).includes(norm(e.school)) || norm(e.school).includes(norm(be.school)) ||
+        (norm(be.degree).includes(norm(e.degree)) && norm(be.school).includes(norm(e.school).slice(0, 6)))
+      );
+      if (!matched) {
         changes.push({ section: 'Education', type: 'added', detail: `${e.degree} — ${e.school}` });
       }
     }
 
     const newLangs = (after.languages || []).filter(l => {
       const name = typeof l === 'string' ? l : l.name || '';
-      return !(before.languages || []).some(bl => (typeof bl === 'string' ? bl : bl.name || '').toLowerCase() === name.toLowerCase());
+      return !(before.languages || []).some(bl => norm(typeof bl === 'string' ? bl : bl.name) === norm(name));
     });
     if (newLangs.length) changes.push({ section: 'Languages', type: 'added', detail: newLangs.map(l => typeof l === 'string' ? l : l.name).join(', ') });
 
     const newCerts = (after.certifications || []).filter(c => {
       const name = typeof c === 'string' ? c : c.name || '';
-      return !(before.certifications || []).some(bc => (typeof bc === 'string' ? bc : bc.name || '').toLowerCase() === name.toLowerCase());
+      return !(before.certifications || []).some(bc => norm(typeof bc === 'string' ? bc : bc.name) === norm(name));
     });
     if (newCerts.length) changes.push({ section: 'Certifications', type: 'added', detail: newCerts.map(c => typeof c === 'string' ? c : c.name).join(', ') });
 
     if (after.contact) {
       for (const [k, v] of Object.entries(after.contact)) {
-        if (v && (!before.contact || before.contact[k] !== v)) {
-          changes.push({ section: 'Contact', type: before.contact?.[k] ? 'updated' : 'added', detail: `${k}: ${Array.isArray(v) ? v.join(', ') : v}` });
+        if (!v || k === 'links') continue;
+        const beforeVal = before.contact?.[k];
+        if (!beforeVal) {
+          changes.push({ section: 'Contact', type: 'added', detail: `${k}: ${Array.isArray(v) ? v.join(', ') : v}` });
+        } else if (norm(String(beforeVal)) !== norm(String(v))) {
+          changes.push({ section: 'Contact', type: 'updated', detail: `${k}: ${Array.isArray(v) ? v.join(', ') : v}` });
         }
       }
     }

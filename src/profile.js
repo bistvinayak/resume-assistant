@@ -32,8 +32,30 @@ async function extractTextFromFile(filePath, originalName) {
   }
 
   if (ext === '.pdf') {
-    const data = await pdfParse(fs.readFileSync(filePath));
-    return data.text;
+    const buf = fs.readFileSync(filePath);
+    const data = await pdfParse(buf);
+    let text = data.text;
+
+    // Extract hyperlink URLs from PDF annotations (pdf-parse exposes raw page data)
+    try {
+      const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+      const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buf) }).promise;
+      const urls = new Set();
+      for (let i = 1; i <= doc.numPages; i++) {
+        const page = await doc.getPage(i);
+        const annotations = await page.getAnnotations();
+        for (const ann of annotations) {
+          if (ann.subtype === 'Link' && ann.url) urls.add(ann.url);
+        }
+      }
+      if (urls.size) {
+        text += '\n\n--- Hyperlinks found in document ---\n' + [...urls].join('\n');
+      }
+    } catch (_) {
+      // pdfjs-dist not available or failed — fall back to text-only
+    }
+
+    return text;
   }
 
   if (ext === '.docx' || ext === '.doc') {
@@ -120,6 +142,7 @@ async function applyPartial(partial, userId = 'me', ctx = {}) {
   } else {
     try {
       merged = await smartMerge(current, partial, { userId, ...ctx });
+      merged = validateMerge(current, partial, merged);
     } catch (e) {
       console.error('Smart merge failed, falling back to programmatic:', e.message);
       merged = mergeProfile(current, partial);
@@ -127,6 +150,36 @@ async function applyPartial(partial, userId = 'me', ctx = {}) {
   }
 
   await saveProfile(merged, userId);
+  return merged;
+}
+
+function validateMerge(current, partial, merged) {
+  const issues = [];
+  const check = (section, keyFn) => {
+    const curItems = current[section] || [];
+    const mergedItems = merged[section] || [];
+    if (!curItems.length) return;
+    const mergedKeys = new Set(mergedItems.map(keyFn));
+    const missing = curItems.filter(item => !mergedKeys.has(keyFn(item)));
+    if (missing.length) issues.push({ section, missing: missing.length, total: curItems.length });
+  };
+
+  check('experience', e => `${(e.company||'').toLowerCase()}|${(e.title||'').toLowerCase()}`);
+  check('projects', p => (p.name||'').toLowerCase());
+  check('education', e => (e.school||'').toLowerCase());
+  check('certifications', c => (typeof c === 'string' ? c : c.name || '').toLowerCase());
+  check('languages', l => (typeof l === 'string' ? l : l.name || '').toLowerCase());
+
+  if ((current.skills?.length || 0) > 0 && (merged.skills?.length || 0) < (current.skills.length * 0.5)) {
+    issues.push({ section: 'skills', missing: current.skills.length - (merged.skills?.length || 0), total: current.skills.length });
+  }
+
+  if (issues.length) {
+    console.warn('Smart merge dropped data, patching with programmatic merge:', JSON.stringify(issues));
+    merged = mergeProfile(merged, current);
+    merged = mergeProfile(merged, partial);
+  }
+
   return merged;
 }
 
