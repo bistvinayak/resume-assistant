@@ -103,6 +103,20 @@ export const api = {
     return res.json();
   },
 
+  async getProfileVersions() {
+    const res = await checkedFetch(`${BASE}/profile/versions`, { headers: await getHeaders() });
+    return res.json();
+  },
+
+  async restoreProfileVersion(version) {
+    const res = await checkedFetch(`${BASE}/profile/restore`, {
+      method: 'POST',
+      headers: await getHeaders(),
+      body: JSON.stringify({ version }),
+    });
+    return res.json();
+  },
+
   async submitJobUrl(url) {
     const res = await checkedFetch(`${BASE}/jobs/submit-url`, {
       method: 'POST',

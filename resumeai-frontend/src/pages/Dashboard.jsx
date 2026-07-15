@@ -145,6 +145,9 @@ export default function Dashboard() {
   const [tailorInput, setTailorInput] = useState('');
   const [tailorSending, setTailorSending] = useState(false);
   const [feedbackMap, setFeedbackMap] = useState({});
+  const [showVersions, setShowVersions] = useState(false);
+  const [versions, setVersions] = useState([]);
+  const [restoringVersion, setRestoringVersion] = useState(null);
   const chatEndRef = useRef(null);
   const tailorEndRef = useRef(null);
 
@@ -197,6 +200,25 @@ export default function Dashboard() {
       console.error('Save failed:', e);
     }
     setSaving(false);
+  };
+
+  const loadVersions = async () => {
+    try {
+      const v = await api.getProfileVersions();
+      setVersions(v);
+      setShowVersions(true);
+    } catch (e) { console.error('Failed to load versions:', e); }
+  };
+
+  const restoreVersion = async (version) => {
+    setRestoringVersion(version);
+    try {
+      const restored = await api.restoreProfileVersion(version);
+      setProfile(restored);
+      setShowVersions(false);
+      setVersions([]);
+    } catch (e) { console.error('Restore failed:', e); }
+    setRestoringVersion(null);
   };
 
   const updateContact = (field, value) => {
@@ -926,9 +948,14 @@ export default function Dashboard() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                 <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px' }}>Profile Index</h2>
                 {!editing ? (
-                  <button onClick={startEditing} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#57534e', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
-                    Edit Profile
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button onClick={loadVersions} style={{ background: 'transparent', border: '1px solid #d6d3d1', color: '#78716c', padding: '7px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                      {showVersions ? 'Hide History' : 'Version History'}
+                    </button>
+                    <button onClick={startEditing} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#57534e', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                      Edit Profile
+                    </button>
+                  </div>
                 ) : (
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={cancelEditing} style={{ background: 'transparent', border: '1px solid #d6d3d1', color: '#57534e', padding: '7px 16px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
@@ -940,9 +967,46 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
-              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '28px' }}>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: showVersions ? '16px' : '28px' }}>
                 {editing ? 'Edit your profile details below. Click Save when done.' : 'Everything the system knows about you.'}
               </p>
+
+              {showVersions && versions.length > 0 && (
+                <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '16px', marginBottom: '20px', animation: 'fadeIn 0.2s ease' }}>
+                  <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '12px' }}>PROFILE VERSIONS (last 3)</div>
+                  {versions.map((v, i) => {
+                    const date = new Date(v.updated_at);
+                    const timeAgo = Math.round((Date.now() - date.getTime()) / 60000);
+                    const when = timeAgo < 60 ? `${timeAgo}m ago` : timeAgo < 1440 ? `${Math.round(timeAgo / 60)}h ago` : date.toLocaleDateString();
+                    const sourceLabel = { manual_edit: 'Manual Edit', chat_confirm: 'Chat', ingestion: 'File Upload', unknown: 'Update' }[v.change_source] || v.change_source;
+                    return (
+                      <div key={v.version} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: i < versions.length - 1 ? '1px solid #e7e5e4' : 'none' }}>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span style={{ fontSize: '12px', fontWeight: 500, color: i === 0 ? '#22c55e' : '#1c1917' }}>
+                              {i === 0 ? 'Current' : `v${v.version}`}
+                            </span>
+                            <span style={{ background: '#e7e5e4', borderRadius: '4px', padding: '2px 8px', fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{sourceLabel}</span>
+                            <span style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{when}</span>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#78716c', marginTop: '2px', fontFamily: "'DM Mono', monospace" }}>
+                            {v.exp_count} roles · {v.skills_count} skills · {v.projects_count} projects · {v.certs_count} certs
+                          </div>
+                        </div>
+                        {i > 0 && (
+                          <button
+                            onClick={() => restoreVersion(v.version)}
+                            disabled={restoringVersion !== null}
+                            style={{ background: '#f59e0b', border: 'none', color: '#1c1917', padding: '6px 14px', borderRadius: '6px', fontSize: '11px', fontWeight: 600, cursor: 'pointer', opacity: restoringVersion === v.version ? 0.7 : 1 }}
+                          >
+                            {restoringVersion === v.version ? 'Restoring...' : 'Restore'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
               {!editing ? (
                 <>

@@ -66,6 +66,12 @@ async function initSchema() {
     CREATE INDEX IF NOT EXISTS idx_master_profile_user ON master_profile(user_id);
     CREATE INDEX IF NOT EXISTS idx_jobs_user ON jobs(user_id);
     CREATE INDEX IF NOT EXISTS idx_tailored_user ON tailored_resume(user_id);
+
+    -- Profile versioning: add version column and change PK to support multiple rows
+    DO $$ BEGIN
+      ALTER TABLE master_profile ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE master_profile ADD COLUMN IF NOT EXISTS change_source TEXT DEFAULT 'unknown';
+    EXCEPTION WHEN others THEN NULL; END $$;
   `);
 }
 
@@ -77,14 +83,57 @@ async function getProfile(userId = 'me') {
   return rows.length ? { ...EMPTY_PROFILE, ...rows[0].profile } : { ...EMPTY_PROFILE };
 }
 
-async function saveProfile(profile, userId = 'me') {
-  await pool.query(
-    `INSERT INTO master_profile (id, user_id, profile, updated_at)
-     VALUES ($1, $2, $3, now())
-     ON CONFLICT (id) DO UPDATE SET profile = $3, updated_at = now()`,
-    [userId, userId, profile]
+async function saveProfile(profile, userId = 'me', source = 'unknown') {
+  // Get current version number
+  const { rows: verRows } = await pool.query(
+    'SELECT COALESCE(MAX(version), 0) AS max_ver FROM master_profile WHERE user_id = $1',
+    [userId]
   );
+  const nextVersion = (verRows[0]?.max_ver || 0) + 1;
+
+  // Insert new version
+  await pool.query(
+    `INSERT INTO master_profile (id, user_id, profile, updated_at, version, change_source)
+     VALUES ($1, $2, $3, now(), $4, $5)
+     ON CONFLICT (id) DO UPDATE SET profile = $3, updated_at = now(), version = $4, change_source = $5`,
+    [`${userId}_v${nextVersion}`, userId, profile, nextVersion, source]
+  );
+
+  // Keep only the last 3 versions — delete older ones
+  await pool.query(
+    `DELETE FROM master_profile
+     WHERE user_id = $1 AND id NOT IN (
+       SELECT id FROM master_profile WHERE user_id = $1 ORDER BY version DESC LIMIT 3
+     )`,
+    [userId]
+  );
+
   return profile;
+}
+
+async function getProfileVersions(userId = 'me') {
+  const { rows } = await pool.query(
+    `SELECT version, updated_at, change_source,
+       jsonb_array_length(COALESCE(profile->'experience', '[]')) AS exp_count,
+       jsonb_array_length(COALESCE(profile->'skills', '[]')) AS skills_count,
+       jsonb_array_length(COALESCE(profile->'projects', '[]')) AS projects_count,
+       jsonb_array_length(COALESCE(profile->'certifications', '[]')) AS certs_count,
+       length(COALESCE(profile->>'summary', '')) AS summary_len
+     FROM master_profile WHERE user_id = $1
+     ORDER BY version DESC LIMIT 3`,
+    [userId]
+  );
+  return rows;
+}
+
+async function restoreProfileVersion(userId, version) {
+  const { rows } = await pool.query(
+    'SELECT profile FROM master_profile WHERE user_id = $1 AND version = $2',
+    [userId, version]
+  );
+  if (!rows.length) throw new Error(`Version ${version} not found`);
+  await saveProfile(rows[0].profile, userId, `restore_v${version}`);
+  return { ...EMPTY_PROFILE, ...rows[0].profile };
 }
 
 async function seenJobBefore(job, userId = 'me') {
@@ -191,6 +240,7 @@ async function getJobsForUser(userId = 'me', limit = 50) {
 
 module.exports = {
   pool, initSchema, getProfile, saveProfile,
+  getProfileVersions, restoreProfileVersion,
   seenJobBefore, saveTailored, markDelivered,
   getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs,
   EMPTY_PROFILE,

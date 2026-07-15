@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile } = require('./profile');
 const { processJob } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
@@ -98,8 +98,22 @@ app.put(['/profile', '/api/profile'], async (req, res, next) => {
   try {
     const { profile } = req.body || {};
     if (!profile) return res.status(400).json({ error: 'profile required' });
-    await saveProfile(profile, req.userId);
+    await saveProfile(profile, req.userId, 'manual_edit');
     res.json(await getProfile(req.userId));
+  } catch (e) { next(e); }
+});
+
+// ── PROFILE VERSIONS ─────────────────────────────────────────────────────
+app.get(['/profile/versions', '/api/profile/versions'], async (req, res, next) => {
+  try { res.json(await getProfileVersions(req.userId)); } catch (e) { next(e); }
+});
+
+app.post(['/profile/restore', '/api/profile/restore'], async (req, res, next) => {
+  try {
+    const { version } = req.body || {};
+    if (!version) return res.status(400).json({ error: 'version required' });
+    const profile = await restoreProfileVersion(req.userId, version);
+    res.json(profile);
   } catch (e) { next(e); }
 });
 
@@ -305,7 +319,7 @@ app.post(['/chat/confirm', '/api/chat/confirm'], async (req, res, next) => {
     if (deletions && Object.keys(deletions).length) {
       currentProfile = applyDeletions(currentProfile, deletions);
     }
-    await saveProfile(currentProfile, req.userId);
+    await saveProfile(currentProfile, req.userId, 'chat_confirm');
 
     res.json({ ok: true, profile: currentProfile });
   } catch (e) { next(e); }

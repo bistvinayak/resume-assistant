@@ -135,6 +135,7 @@ async function ingestFiles(files, userId = 'me', ctx = {}) {
 
 async function applyPartial(partial, userId = 'me', ctx = {}) {
   const current = await getProfile(userId);
+  const source = ctx.source || 'ingestion';
 
   let merged;
   if (isEmptyProfile(current)) {
@@ -149,7 +150,7 @@ async function applyPartial(partial, userId = 'me', ctx = {}) {
     }
   }
 
-  await saveProfile(merged, userId);
+  await saveProfile(merged, userId, source);
   return merged;
 }
 
