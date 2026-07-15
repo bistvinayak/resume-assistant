@@ -8,7 +8,7 @@ const os = require('os');
 const cors = require('cors');
 
 const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs } = require('./db');
-const { ingestText, ingestPdf, ingestFiles } = require('./profile');
+const { ingestText, ingestPdf, ingestFiles, extractTextFromFile } = require('./profile');
 const { processJob } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
 const { authMiddleware } = require('./auth');
@@ -56,6 +56,9 @@ app.use(cors({
 
 app.use(express.json());
 const upload = multer({ dest: os.tmpdir() });
+
+// In-memory ingestion status per user (cleared on completion)
+const ingestionStatus = new Map();
 
 function langfuseCtx(req) {
   return {
@@ -139,8 +142,59 @@ app.post(['/ingest/files', '/api/ingest/files'], (req, res, next) => {
 }, async (req, res, next) => {
   try {
     if (!req.files?.length) return res.status(400).json({ error: 'At least one file required' });
-    res.json(await ingestFiles(req.files, req.userId, langfuseCtx(req)));
+
+    // Step 1: Extract text from all files (fast — no LLM)
+    const texts = [];
+    const errors = [];
+    for (const file of req.files) {
+      try {
+        const text = await extractTextFromFile(file.path, file.originalname);
+        if (text && text.trim().length > 10) texts.push(text.trim());
+      } catch (e) {
+        errors.push({ file: file.originalname, error: e.message });
+      }
+    }
+
+    if (!texts.length) {
+      const detail = errors.length ? errors.map(e => `${e.file}: ${e.error}`).join('; ') : 'No readable text found';
+      return res.status(400).json({ error: `Could not extract text from any file. ${detail}` });
+    }
+
+    // Step 2: Respond immediately with extraction results
+    const status = { stage: 'processing', filesExtracted: texts.length, filesSkipped: errors.length, errors };
+    ingestionStatus.set(req.userId, status);
+
+    res.json({ processing: true, filesExtracted: texts.length, filesSkipped: errors.length, errors: errors.length ? errors : undefined });
+
+    // Step 3: Run LLM ingestion in background
+    const ctx = langfuseCtx(req);
+    const userId = req.userId;
+    (async () => {
+      try {
+        console.log(`→ ingest/files background: extracting facts for ${userId} (${texts.length} docs, ~${texts.reduce((a, t) => a + t.length, 0)} chars)`);
+        const result = await ingestFiles(req.files, userId, ctx);
+        ingestionStatus.set(userId, { stage: 'done', profile: result, filesExtracted: texts.length, filesSkipped: errors.length, errors });
+        console.log(`✓ ingest/files background: done for ${userId}`);
+      } catch (e) {
+        console.error(`✗ ingest/files background error: ${e.message}`);
+        ingestionStatus.set(userId, { stage: 'failed', error: e.message, filesExtracted: texts.length, filesSkipped: errors.length, errors });
+      }
+      setTimeout(() => ingestionStatus.delete(userId), 5 * 60 * 1000);
+    })();
   } catch (e) { next(e); }
+});
+
+// Poll ingestion status
+app.get(['/ingest/status', '/api/ingest/status'], async (req, res) => {
+  const status = ingestionStatus.get(req.userId);
+  if (!status) {
+    return res.json({ stage: 'idle' });
+  }
+  if (status.stage === 'done') {
+    ingestionStatus.delete(req.userId);
+    return res.json(status);
+  }
+  res.json(status);
 });
 
 // ── CHAT ENRICH ──────────────────────────────────────────────────────────

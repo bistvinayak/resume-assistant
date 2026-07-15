@@ -301,4 +301,4 @@ function applyDeletions(profile, deletions) {
   return out;
 }
 
-module.exports = { ingestText, ingestPdf, ingestFiles, mergeProfile, applyDeletions, ALLOWED_EXTENSIONS };
+module.exports = { ingestText, ingestPdf, ingestFiles, extractTextFromFile, mergeProfile, applyDeletions, ALLOWED_EXTENSIONS };

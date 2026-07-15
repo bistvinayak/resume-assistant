@@ -140,12 +140,25 @@ export default function Onboarding() {
                 onClick={async () => {
                   if (!files.length && bio.trim().length < 50) return;
                   setLoading(true);
+                  setError('');
                   try {
                     if (bio.trim().length >= 50) await api.ingestText(bio);
-                    if (files.length) await api.ingestFiles(files);
+                    if (files.length) {
+                      const result = await api.ingestFiles(files);
+                      if (result.processing) {
+                        let done = false;
+                        for (let i = 0; i < 90 && !done; i++) {
+                          await new Promise(r => setTimeout(r, 2000));
+                          const status = await api.getIngestionStatus();
+                          if (status.stage === 'done') done = true;
+                          else if (status.stage === 'failed') throw new Error(status.error || 'Processing failed');
+                        }
+                        if (!done) throw new Error('Processing timed out. Please try again.');
+                      }
+                    }
                     setStep(2);
                   } catch (e) {
-                    setError('Failed to save. Please try again.');
+                    setError(e.message || 'Failed to save. Please try again.');
                   }
                   setLoading(false);
                 }}
@@ -158,7 +171,7 @@ export default function Onboarding() {
                   opacity: loading ? 0.7 : 1,
                 }}
               >
-                {loading ? 'Processing...' : 'Continue →'}
+                {loading ? 'Analyzing your profile...' : 'Continue →'}
               </button>
             </div>
           </>

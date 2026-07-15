@@ -90,12 +90,17 @@ export const api = {
     });
     const contentType = res.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
-      const text = await res.text();
+      await res.text();
       throw new Error(`Server returned HTML instead of JSON (status ${res.status}, url: ${url}). This usually means the request didn't reach the API.`);
     }
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Upload failed');
     return data;
+  },
+
+  async getIngestionStatus() {
+    const res = await checkedFetch(`${BASE}/ingest/status`, { headers: await getHeaders() });
+    return res.json();
   },
 
   async submitJobUrl(url) {

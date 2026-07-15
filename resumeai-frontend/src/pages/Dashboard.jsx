@@ -534,7 +534,7 @@ export default function Dashboard() {
       setChatMessages(prev => prev.map(m => {
         if (m.id !== progressId) return m;
         const elapsed = Math.floor((Date.now() - m.startTime) / 1000);
-        const newStage = elapsed < 2 ? 0 : elapsed < 6 ? 1 : elapsed < 12 ? 2 : 3;
+        const newStage = elapsed < 3 ? 0 : elapsed < 8 ? 1 : elapsed < 20 ? 2 : 3;
         return { ...m, elapsed, stage: newStage };
       }));
     }, 1000);
@@ -542,16 +542,58 @@ export default function Dashboard() {
     const beforeProfile = profile ? JSON.parse(JSON.stringify(profile)) : {};
 
     try {
-      const updated = await api.ingestFiles(files);
-      clearInterval(stageTimer);
-      setProfile(updated);
-      const ingestion = updated._ingestion || {};
-      const changes = diffProfiles(beforeProfile, updated);
+      const uploadResult = await api.ingestFiles(files);
 
-      setChatMessages(prev => [
-        ...prev.filter(m => m.id !== progressId),
-        { role: 'arjun', type: 'ingestResult', changes, ingestion, fileCount: files.length },
-      ]);
+      if (uploadResult.processing) {
+        setChatMessages(prev => prev.map(m =>
+          m.id === progressId ? { ...m, stage: 1, filesExtracted: uploadResult.filesExtracted } : m
+        ));
+
+        const poll = () => new Promise((resolve, reject) => {
+          let attempts = 0;
+          const iv = setInterval(async () => {
+            try {
+              const status = await api.getIngestionStatus();
+              attempts++;
+              if (status.stage === 'done') {
+                clearInterval(iv);
+                resolve(status);
+              } else if (status.stage === 'failed') {
+                clearInterval(iv);
+                reject(new Error(status.error || 'Processing failed'));
+              } else if (attempts > 90) {
+                clearInterval(iv);
+                reject(new Error('Processing timed out. Check the Jobs tab or try again.'));
+              }
+            } catch (e) {
+              clearInterval(iv);
+              reject(e);
+            }
+          }, 2000);
+        });
+
+        const result = await poll();
+        clearInterval(stageTimer);
+
+        const updated = await api.getProfile();
+        setProfile(updated);
+        const changes = diffProfiles(beforeProfile, updated);
+        const ingestion = { filesProcessed: result.filesExtracted, filesSkipped: result.filesSkipped, errors: result.errors };
+
+        setChatMessages(prev => [
+          ...prev.filter(m => m.id !== progressId),
+          { role: 'arjun', type: 'ingestResult', changes, ingestion, fileCount: files.length },
+        ]);
+      } else {
+        clearInterval(stageTimer);
+        setProfile(uploadResult);
+        const ingestion = uploadResult._ingestion || {};
+        const changes = diffProfiles(beforeProfile, uploadResult);
+        setChatMessages(prev => [
+          ...prev.filter(m => m.id !== progressId),
+          { role: 'arjun', type: 'ingestResult', changes, ingestion, fileCount: files.length },
+        ]);
+      }
     } catch (e) {
       clearInterval(stageTimer);
       setChatMessages(prev => [
