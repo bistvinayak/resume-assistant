@@ -3,15 +3,20 @@
 const admin = require('firebase-admin');
 
 if (!admin.apps.length) {
-  const privateKey = process.env.FIREBASE_PRIVATE_KEY
+  let privateKey = process.env.FIREBASE_PRIVATE_KEY
     ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
     : null;
+
+  if (!privateKey) {
+    try { privateKey = require('./firebase-key.json').private_key; }
+    catch { throw new Error('FIREBASE_PRIVATE_KEY env var is required (firebase-key.json not found)'); }
+  }
 
   admin.initializeApp({
     credential: admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID || 'resume-assist-f8361',
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL || 'firebase-adminsdk-fbsvc@resume-assist-f8361.iam.gserviceaccount.com',
-      privateKey: privateKey || require('./firebase-key.json').private_key,
+      privateKey,
     }),
   });
 }
