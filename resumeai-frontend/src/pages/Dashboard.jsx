@@ -460,23 +460,104 @@ export default function Dashboard() {
     setChatSending(false);
   };
 
+  const diffProfiles = (before, after) => {
+    const changes = [];
+    const bText = (b) => typeof b === 'string' ? b : (b.text || '');
+
+    if (after.summary && after.summary !== before.summary) {
+      changes.push({ section: 'Summary', type: before.summary ? 'updated' : 'added', detail: after.summary.slice(0, 80) + (after.summary.length > 80 ? '...' : '') });
+    }
+
+    const newSkills = (after.skills || []).filter(s => !(before.skills || []).some(bs => bs.toLowerCase() === s.toLowerCase()));
+    if (newSkills.length) changes.push({ section: 'Skills', type: 'added', detail: newSkills.join(', ') });
+
+    const beforeExpKeys = new Set((before.experience || []).map(e => `${(e.company||'').toLowerCase()}|${(e.title||'').toLowerCase()}`));
+    for (const exp of (after.experience || [])) {
+      const key = `${(exp.company||'').toLowerCase()}|${(exp.title||'').toLowerCase()}`;
+      if (!beforeExpKeys.has(key)) {
+        changes.push({ section: 'Experience', type: 'added', detail: `${exp.title} at ${exp.company}` });
+      } else {
+        const prev = (before.experience || []).find(e => `${(e.company||'').toLowerCase()}|${(e.title||'').toLowerCase()}` === key);
+        const newBullets = (exp.bullets || []).filter(b => !(prev?.bullets || []).some(pb => bText(pb).toLowerCase() === bText(b).toLowerCase()));
+        if (newBullets.length) changes.push({ section: 'Experience', type: 'enriched', detail: `${exp.title} at ${exp.company} — ${newBullets.length} new bullet${newBullets.length > 1 ? 's' : ''}` });
+      }
+    }
+
+    const beforeProjKeys = new Set((before.projects || []).map(p => (p.name||'').toLowerCase()));
+    for (const p of (after.projects || [])) {
+      if (!beforeProjKeys.has((p.name||'').toLowerCase())) {
+        changes.push({ section: 'Project', type: 'added', detail: p.name });
+      }
+    }
+
+    const beforeEduKeys = new Set((before.education || []).map(e => `${(e.school||'').toLowerCase()}|${(e.degree||'').toLowerCase()}`));
+    for (const e of (after.education || [])) {
+      if (!beforeEduKeys.has(`${(e.school||'').toLowerCase()}|${(e.degree||'').toLowerCase()}`)) {
+        changes.push({ section: 'Education', type: 'added', detail: `${e.degree} — ${e.school}` });
+      }
+    }
+
+    const newLangs = (after.languages || []).filter(l => {
+      const name = typeof l === 'string' ? l : l.name || '';
+      return !(before.languages || []).some(bl => (typeof bl === 'string' ? bl : bl.name || '').toLowerCase() === name.toLowerCase());
+    });
+    if (newLangs.length) changes.push({ section: 'Languages', type: 'added', detail: newLangs.map(l => typeof l === 'string' ? l : l.name).join(', ') });
+
+    const newCerts = (after.certifications || []).filter(c => {
+      const name = typeof c === 'string' ? c : c.name || '';
+      return !(before.certifications || []).some(bc => (typeof bc === 'string' ? bc : bc.name || '').toLowerCase() === name.toLowerCase());
+    });
+    if (newCerts.length) changes.push({ section: 'Certifications', type: 'added', detail: newCerts.map(c => typeof c === 'string' ? c : c.name).join(', ') });
+
+    if (after.contact) {
+      for (const [k, v] of Object.entries(after.contact)) {
+        if (v && (!before.contact || before.contact[k] !== v)) {
+          changes.push({ section: 'Contact', type: before.contact?.[k] ? 'updated' : 'added', detail: `${k}: ${Array.isArray(v) ? v.join(', ') : v}` });
+        }
+      }
+    }
+
+    return changes;
+  };
+
   const handleChatFiles = async (fileList) => {
     const files = [...fileList];
     if (!files.length) return;
     setFilesUploading(true);
     const names = files.map(f => f.name).join(', ');
     setChatMessages(prev => [...prev, { role: 'user', text: `Uploading: ${names}` }]);
+
+    const progressId = Date.now();
+    setChatMessages(prev => [...prev, { role: 'arjun', type: 'ingestProgress', id: progressId, startTime: Date.now(), stage: 0, fileCount: files.length }]);
+
+    const stageTimer = setInterval(() => {
+      setChatMessages(prev => prev.map(m => {
+        if (m.id !== progressId) return m;
+        const elapsed = Math.floor((Date.now() - m.startTime) / 1000);
+        const newStage = elapsed < 2 ? 0 : elapsed < 6 ? 1 : elapsed < 12 ? 2 : 3;
+        return { ...m, elapsed, stage: newStage };
+      }));
+    }, 1000);
+
+    const beforeProfile = profile ? JSON.parse(JSON.stringify(profile)) : {};
+
     try {
       const updated = await api.ingestFiles(files);
+      clearInterval(stageTimer);
       setProfile(updated);
-      const count = updated._ingestion?.filesProcessed || files.length;
-      const skipped = updated._ingestion?.filesSkipped || 0;
-      let msg = `Got it — extracted details from ${count} file${count > 1 ? 's' : ''} and merged into your profile.`;
-      if (skipped) msg += ` (${skipped} file${skipped > 1 ? 's' : ''} couldn't be read.)`;
-      msg += ' What else would you like to add?';
-      setChatMessages(prev => [...prev, { role: 'arjun', text: msg }]);
-    } catch {
-      setChatMessages(prev => [...prev, { role: 'arjun', text: 'File upload failed. Please try again.' }]);
+      const ingestion = updated._ingestion || {};
+      const changes = diffProfiles(beforeProfile, updated);
+
+      setChatMessages(prev => [
+        ...prev.filter(m => m.id !== progressId),
+        { role: 'arjun', type: 'ingestResult', changes, ingestion, fileCount: files.length },
+      ]);
+    } catch (e) {
+      clearInterval(stageTimer);
+      setChatMessages(prev => [
+        ...prev.filter(m => m.id !== progressId),
+        { role: 'arjun', type: 'ingestError', error: e.message || 'Upload failed' },
+      ]);
     }
     setFilesUploading(false);
   };
@@ -1037,6 +1118,132 @@ export default function Dashboard() {
                               </div>
                             );
                           })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (msg.type === 'ingestProgress') {
+                    const secs = msg.elapsed || 0;
+                    const stages = [
+                      `Uploading ${msg.fileCount} file${msg.fileCount > 1 ? 's' : ''}...`,
+                      'Extracting text from documents...',
+                      'Analyzing content with AI...',
+                      'Merging into your profile...',
+                    ];
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                            <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace" }}>ARJUN — INGESTING</div>
+                            <div style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{secs}s</div>
+                          </div>
+                          {stages.map((stage, si) => {
+                            const done = si < msg.stage;
+                            const active = si === msg.stage;
+                            return (
+                              <div key={si} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '5px 0', opacity: si > msg.stage ? 0.3 : 1 }}>
+                                <div style={{
+                                  width: 16, height: 16, borderRadius: '50%', flexShrink: 0,
+                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  background: done ? '#22c55e' : active ? '#f59e0b' : '#e7e5e4',
+                                  fontSize: '9px', color: done ? '#fff' : '#1c1917', fontWeight: 700,
+                                }}>
+                                  {done ? '✓' : active ? (
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', border: '2px solid #fff', borderTopColor: 'transparent', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+                                  ) : (si + 1)}
+                                </div>
+                                <span style={{ fontSize: '12px', color: done ? '#22c55e' : active ? '#1c1917' : '#78716c', fontFamily: "'DM Mono', monospace" }}>
+                                  {stage}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (msg.type === 'ingestResult') {
+                    const { changes, ingestion } = msg;
+                    const processed = ingestion?.filesProcessed || msg.fileCount;
+                    const skipped = ingestion?.filesSkipped || 0;
+                    const errors = ingestion?.errors || [];
+                    const typeColor = { added: '#22c55e', updated: '#f59e0b', enriched: '#8b5cf6' };
+                    const typeLabel = { added: 'NEW', updated: 'UPDATED', enriched: 'ENRICHED' };
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ maxWidth: '90%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #d6d3d1', fontSize: '13px' }}>
+                          <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>
+                            ARJUN — PROFILE UPDATED
+                          </div>
+
+                          <div style={{ display: 'flex', gap: '16px', marginBottom: '14px' }}>
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: '#22c55e' }}>{processed}</div>
+                              <div style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>file{processed > 1 ? 's' : ''} read</div>
+                            </div>
+                            <div style={{ textAlign: 'center' }}>
+                              <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: '#f59e0b' }}>{changes.length}</div>
+                              <div style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>change{changes.length !== 1 ? 's' : ''}</div>
+                            </div>
+                            {skipped > 0 && (
+                              <div style={{ textAlign: 'center' }}>
+                                <div style={{ fontSize: '22px', fontWeight: 700, fontFamily: "'DM Mono', monospace", color: '#ef4444' }}>{skipped}</div>
+                                <div style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>skipped</div>
+                              </div>
+                            )}
+                          </div>
+
+                          {changes.length > 0 && (
+                            <div style={{ background: '#fafaf9', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                              <div style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '8px' }}>WHAT CHANGED</div>
+                              {changes.map((c, ci) => (
+                                <div key={ci} style={{ display: 'flex', gap: '8px', padding: '4px 0', borderBottom: ci < changes.length - 1 ? '1px solid #e7e5e4' : 'none', alignItems: 'flex-start' }}>
+                                  <span style={{
+                                    fontSize: '9px', fontFamily: "'DM Mono', monospace", fontWeight: 700,
+                                    color: typeColor[c.type] || '#78716c',
+                                    background: (typeColor[c.type] || '#78716c') + '15',
+                                    border: `1px solid ${(typeColor[c.type] || '#78716c')}33`,
+                                    borderRadius: '3px', padding: '1px 5px', flexShrink: 0, marginTop: '2px',
+                                  }}>
+                                    {typeLabel[c.type] || c.type.toUpperCase()}
+                                  </span>
+                                  <div>
+                                    <span style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{c.section}</span>
+                                    <div style={{ fontSize: '12px', color: '#57534e', lineHeight: 1.4 }}>{c.detail}</div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {errors.length > 0 && (
+                            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px', marginBottom: '12px' }}>
+                              <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>FILES SKIPPED</div>
+                              {errors.map((e, ei) => (
+                                <div key={ei} style={{ fontSize: '11px', color: '#57534e', padding: '2px 0' }}>
+                                  <span style={{ fontFamily: "'DM Mono', monospace", color: '#ef4444' }}>{e.file}</span>: {e.error}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div style={{ fontSize: '12px', color: '#78716c', lineHeight: 1.5 }}>
+                            {changes.length === 0 ? 'No new information found — your profile already had this data.' : 'What else would you like to add?'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (msg.type === 'ingestError') {
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ maxWidth: '85%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #fecaca', fontSize: '13px' }}>
+                          <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>ARJUN — UPLOAD FAILED</div>
+                          <div style={{ fontSize: '12px', color: '#57534e', lineHeight: 1.5, marginBottom: '8px' }}>{msg.error}</div>
+                          <div style={{ fontSize: '11px', color: '#a8a29e' }}>Check the file format and try again. Supported: PDF, DOCX, TXT, JSON.</div>
                         </div>
                       </div>
                     );

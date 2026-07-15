@@ -70,7 +70,9 @@ export const api = {
       headers: { 'Authorization': `Bearer ${token}`, 'X-Session-Id': SESSION_ID },
       body: form,
     });
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    return data;
   },
 
   async ingestFiles(files) {
@@ -85,7 +87,9 @@ export const api = {
       headers: { 'Authorization': `Bearer ${token}`, 'X-Session-Id': SESSION_ID },
       body: form,
     });
-    return res.json();
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    return data;
   },
 
   async submitJobUrl(url) {
