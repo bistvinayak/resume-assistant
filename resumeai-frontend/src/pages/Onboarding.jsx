@@ -10,7 +10,7 @@ export default function Onboarding() {
   const [searchParams] = useSearchParams();
   const [step, setStep] = useState(searchParams.get('step') === 'gmail' ? 2 : 1);
   const [bio, setBio] = useState('');
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [gmailVerified, setGmailVerified] = useState(false);
@@ -86,19 +86,19 @@ export default function Onboarding() {
             {/* Document upload */}
             <label style={{
               display: 'flex', alignItems: 'center', gap: '14px',
-              border: `2px dashed ${file ? '#22c55e44' : '#d6d3d1'}`,
+              border: `2px dashed ${files.length ? '#22c55e44' : '#d6d3d1'}`,
               borderRadius: '10px', padding: '16px 20px', cursor: 'pointer',
-              background: file ? '#ecfdf5' : '#fafaf9',
+              background: files.length ? '#ecfdf5' : '#fafaf9',
               transition: 'all 0.2s', marginBottom: '16px',
             }}>
-              <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => setFile(e.target.files[0])} />
-              <span style={{ fontSize: '24px', flexShrink: 0 }}>{file ? '✅' : '📄'}</span>
+              <input type="file" accept=".pdf,.docx,.doc,.txt,.json" multiple style={{ display: 'none' }} onChange={e => setFiles([...e.target.files])} />
+              <span style={{ fontSize: '24px', flexShrink: 0 }}>{files.length ? '✅' : '📄'}</span>
               <div>
-                <div style={{ fontSize: '13px', fontWeight: 500, color: file ? '#22c55e' : '#1c1917' }}>
-                  {file ? file.name : 'Upload resume PDF'}
+                <div style={{ fontSize: '13px', fontWeight: 500, color: files.length ? '#22c55e' : '#1c1917' }}>
+                  {files.length > 1 ? `${files.length} files selected` : files.length === 1 ? files[0].name : 'Upload resume'}
                 </div>
                 <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '2px' }}>
-                  {file ? 'Click to change' : 'We\'ll extract all your details automatically'}
+                  {files.length ? (files.length > 1 ? files.map(f => f.name).join(', ') : 'Click to change') : 'PDF, DOCX, TXT, or JSON — up to 5 files'}
                 </div>
               </div>
             </label>
@@ -133,26 +133,26 @@ export default function Onboarding() {
               }}
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '12px' }}>
-              <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: (file || bio.length >= 50) ? '#22c55e' : '#444' }}>
-                {file && bio.length >= 50 ? '✓ resume + bio ready' : file ? '✓ resume uploaded' : bio.length < 50 ? `${50 - bio.length} more chars or upload a PDF` : '✓ ready'}
+              <span style={{ fontSize: '11px', fontFamily: "'DM Mono', monospace", color: (files.length || bio.length >= 50) ? '#22c55e' : '#444' }}>
+                {files.length && bio.length >= 50 ? `✓ ${files.length} file${files.length > 1 ? 's' : ''} + bio ready` : files.length ? `✓ ${files.length} file${files.length > 1 ? 's' : ''} uploaded` : bio.length < 50 ? `${50 - bio.length} more chars or upload a file` : '✓ ready'}
               </span>
               <button
                 onClick={async () => {
-                  if (!file && bio.trim().length < 50) return;
+                  if (!files.length && bio.trim().length < 50) return;
                   setLoading(true);
                   try {
                     if (bio.trim().length >= 50) await api.ingestText(bio);
-                    if (file) await api.ingestPdf(file);
+                    if (files.length) await api.ingestFiles(files);
                     setStep(2);
                   } catch (e) {
                     setError('Failed to save. Please try again.');
                   }
                   setLoading(false);
                 }}
-                disabled={(!file && bio.trim().length < 50) || loading}
+                disabled={(!files.length && bio.trim().length < 50) || loading}
                 style={{
-                  background: (file || bio.trim().length >= 50) ? '#f59e0b' : '#e7e5e4',
-                  color: (file || bio.trim().length >= 50) ? '#1c1917' : '#78716c',
+                  background: (files.length || bio.trim().length >= 50) ? '#f59e0b' : '#e7e5e4',
+                  color: (files.length || bio.trim().length >= 50) ? '#1c1917' : '#78716c',
                   border: 'none', padding: '10px 24px', borderRadius: '6px',
                   fontSize: '13px', fontWeight: 600,
                   opacity: loading ? 0.7 : 1,

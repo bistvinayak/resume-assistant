@@ -11,7 +11,7 @@ const pool = new Pool({
 const EMPTY_PROFILE = {
   contact: {}, summary: '', skills: [],
   experience: [], projects: [], education: [],
-  certifications: [], activities: [], interests: [],
+  certifications: [], languages: [], activities: [], interests: [],
   custom_facts: [],
 };
 
@@ -166,6 +166,16 @@ async function markJobFailed(jobId, reason) {
   );
 }
 
+async function recoverStaleJobs(minutes = 10) {
+  const { rows } = await pool.query(
+    `UPDATE jobs SET status = 'failed', jd_text = COALESCE(jd_text, 'Timed out — processing took too long or server restarted')
+     WHERE status = 'processing' AND seen_at < now() - interval '1 minute' * $1
+     RETURNING job_id, user_id, title, company, jd_text, url`,
+    [minutes]
+  );
+  return rows;
+}
+
 async function getJobsForUser(userId = 'me', limit = 50) {
   const { rows } = await pool.query(
     `SELECT j.*, t.created_at, t.file_path
@@ -182,7 +192,7 @@ async function getJobsForUser(userId = 'me', limit = 50) {
 module.exports = {
   pool, initSchema, getProfile, saveProfile,
   seenJobBefore, saveTailored, markDelivered,
-  getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed,
+  getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs,
   EMPTY_PROFILE,
 };
 

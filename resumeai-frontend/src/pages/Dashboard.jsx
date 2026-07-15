@@ -136,7 +136,7 @@ export default function Dashboard() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
-  const [pdfUploading, setPdfUploading] = useState(false);
+  const [filesUploading, setFilesUploading] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editProfile, setEditProfile] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -460,18 +460,25 @@ export default function Dashboard() {
     setChatSending(false);
   };
 
-  const handleChatPdf = async (file) => {
-    if (!file) return;
-    setPdfUploading(true);
-    setChatMessages(prev => [...prev, { role: 'user', text: `Uploading: ${file.name}` }]);
+  const handleChatFiles = async (fileList) => {
+    const files = [...fileList];
+    if (!files.length) return;
+    setFilesUploading(true);
+    const names = files.map(f => f.name).join(', ');
+    setChatMessages(prev => [...prev, { role: 'user', text: `Uploading: ${names}` }]);
     try {
-      const updated = await api.ingestPdf(file);
+      const updated = await api.ingestFiles(files);
       setProfile(updated);
-      setChatMessages(prev => [...prev, { role: 'arjun', text: `Got it — extracted details from ${file.name} and merged into your profile. What else would you like to add?` }]);
+      const count = updated._ingestion?.filesProcessed || files.length;
+      const skipped = updated._ingestion?.filesSkipped || 0;
+      let msg = `Got it — extracted details from ${count} file${count > 1 ? 's' : ''} and merged into your profile.`;
+      if (skipped) msg += ` (${skipped} file${skipped > 1 ? 's' : ''} couldn't be read.)`;
+      msg += ' What else would you like to add?';
+      setChatMessages(prev => [...prev, { role: 'arjun', text: msg }]);
     } catch {
-      setChatMessages(prev => [...prev, { role: 'arjun', text: 'PDF upload failed. Please try again.' }]);
+      setChatMessages(prev => [...prev, { role: 'arjun', text: 'File upload failed. Please try again.' }]);
     }
-    setPdfUploading(false);
+    setFilesUploading(false);
   };
 
   const handleTailorSend = async () => {
@@ -669,7 +676,7 @@ export default function Dashboard() {
           {/* Nav tabs */}
           {[
             { id: 'profile', label: 'Profile Index', desc: 'Your indexed career data' },
-            { id: 'chat', label: 'Build Profile', desc: 'Chat or upload PDF to add info' },
+            { id: 'chat', label: 'Build Profile', desc: 'Chat or upload files to add info' },
             { id: 'submit', label: 'Tailor Resume', desc: 'Paste a job URL to get a resume' },
             { id: 'jobs', label: 'Job Activity', desc: 'All requests & results' },
             { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords' },
@@ -811,12 +818,26 @@ export default function Dashboard() {
                           </div>
                           {(exp.bullets || []).length > 0 && (
                             <div style={{ marginTop: '8px', paddingLeft: '48px' }}>
-                              {exp.bullets.map((b, bi) => (
-                                <div key={bi} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '12px', color: '#57534e', lineHeight: 1.5 }}>
-                                  <span style={{ color: '#c4c0bc', flexShrink: 0 }}>·</span>
-                                  <span>{b}</span>
-                                </div>
-                              ))}
+                              {exp.bullets.map((b, bi) => {
+                                const text = typeof b === 'string' ? b : (b.text || '');
+                                const metric = typeof b === 'object' ? b.metric : null;
+                                const impact = typeof b === 'object' ? b.impact : null;
+                                return (
+                                  <div key={bi} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '12px', color: '#57534e', lineHeight: 1.5 }}>
+                                    <span style={{ color: '#c4c0bc', flexShrink: 0 }}>·</span>
+                                    <span>
+                                      {text}
+                                      {(metric || impact) && (
+                                        <span style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginLeft: '6px' }}>
+                                          {metric && <span style={{ color: '#f59e0b' }}>{metric}</span>}
+                                          {metric && impact && ' · '}
+                                          {impact && <span>{impact}</span>}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -921,18 +942,21 @@ export default function Dashboard() {
                           <input value={exp.location || ''} onChange={e => updateExperience(ei, 'location', e.target.value)} placeholder="Location" style={{ background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '8px 12px', outline: 'none' }} />
                         </div>
                         <div style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", marginBottom: '6px', marginTop: '4px' }}>BULLETS</div>
-                        {(exp.bullets || []).map((b, bi) => (
+                        {(exp.bullets || []).map((b, bi) => {
+                          const bulletText = typeof b === 'string' ? b : (b.text || '');
+                          return (
                           <div key={bi} style={{ display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'flex-start' }}>
                             <span style={{ color: '#c4c0bc', marginTop: '8px', flexShrink: 0 }}>·</span>
                             <textarea
-                              value={b}
-                              onChange={e => updateBullet(ei, bi, e.target.value)}
+                              value={bulletText}
+                              onChange={e => updateBullet(ei, bi, typeof b === 'object' ? { ...b, text: e.target.value } : e.target.value)}
                               rows={1}
                               style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#57534e', fontSize: '12px', padding: '8px 10px', outline: 'none', resize: 'vertical', fontFamily: "'DM Sans', sans-serif", lineHeight: 1.5 }}
                             />
                             <button onClick={() => removeBullet(ei, bi)} style={{ background: 'none', border: 'none', color: '#ef444488', fontSize: '16px', cursor: 'pointer', padding: '4px', lineHeight: 1 }}>×</button>
                           </div>
-                        ))}
+                          );
+                        })}
                         <button onClick={() => addBullet(ei)} style={{ background: 'none', border: '1px dashed #d6d3d1', color: '#78716c', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', marginTop: '4px' }}>+ Add bullet</button>
                       </div>
                     ))}
@@ -971,7 +995,7 @@ export default function Dashboard() {
             <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '700px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)' }}>
               <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Build Profile</h2>
               <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '20px', lineHeight: 1.6 }}>
-                Tell Arjun about your career — type anything or upload a PDF resume. It gets indexed into your profile for resume tailoring.
+                Tell Arjun about your career — type anything or upload documents (PDF, DOCX, TXT, JSON). It gets indexed into your profile for resume tailoring.
               </p>
 
               <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px', padding: '4px' }}>
@@ -1140,9 +1164,9 @@ export default function Dashboard() {
               </div>
 
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <label style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', flexShrink: 0, opacity: pdfUploading ? 0.5 : 1 }}>
-                  <input type="file" accept=".pdf" style={{ display: 'none' }} onChange={e => { handleChatPdf(e.target.files[0]); e.target.value = ''; }} disabled={pdfUploading} />
-                  <span style={{ fontSize: '14px' }}>{pdfUploading ? '...' : '📄'}</span>
+                <label style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', flexShrink: 0, opacity: filesUploading ? 0.5 : 1 }} title="Upload PDF, DOCX, TXT, or JSON">
+                  <input type="file" accept=".pdf,.docx,.doc,.txt,.json" multiple style={{ display: 'none' }} onChange={e => { handleChatFiles(e.target.files); e.target.value = ''; }} disabled={filesUploading} />
+                  <span style={{ fontSize: '14px' }}>{filesUploading ? '...' : '📄'}</span>
                 </label>
                 <input
                   value={chatInput}

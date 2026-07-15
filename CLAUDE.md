@@ -64,8 +64,16 @@ Railway runs: Express server (port 3000) serving:
 
 ## Key Flows
 
-### Profile Ingestion
-`PDF/text → extractFacts (LLM) → mergeProfile → saveProfile (PostgreSQL)`
+### Profile Ingestion (Smart Merge Pipeline)
+```
+PDF/text → extractFacts (LLM) → is profile empty?
+  ├── YES (1st time) → programmatic mergeProfile → saveProfile
+  └── NO  (2nd+ time) → smartMerge (LLM) → saveProfile
+                         ↳ fallback: programmatic mergeProfile
+```
+- Bullets are structured: `{ text, metric, impact }` — metrics and business impact extracted per bullet
+- Smart merge: LLM matches experience entries by company+title (fuzzy), keeps richer bullets, deduplicates skills semantically, preserves all metrics
+- Programmatic merge (fallback + chat confirm): upserts by key, merges bullets by text match, unions skills case-insensitively
 
 ### Resume Tailoring (job URL submitted)
 `scrapeJob → tailorResume (LLM) → atsScore (LLM) → [if <95: improveResume → atsScore] → renderDocx → save → email (if cron)`
@@ -75,7 +83,8 @@ Railway runs: Express server (port 3000) serving:
 
 ## LLM Prompts (Langfuse Prompt Management)
 All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
-- `extract_facts` — parse resume/text into profile JSON
+- `extract_facts` — parse resume/text into structured profile (with metrics, impact, company context)
+- `smart_merge` — LLM-powered intelligent merge of existing + new profile data
 - `tailor_resume` — rewrite profile into job-tailored resume
 - `improve_resume` — rephrase bullets using missing JD keywords
 - `ats_score` — score resume vs job description
@@ -84,7 +93,7 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 ## Langfuse Observability
 - **Traces:** every LLM call creates a trace with userId, sessionId, userEmail
 - **Sessions:** frontend generates session ID per page load (X-Session-Id header)
-- **Evaluations:** auto-scored on every call (extraction-fields, ats-score, skills-extracted, etc.)
+- **Evaluations:** auto-scored on every call (extraction-fields, ats-score, skills-extracted, metric-coverage, merge-metrics-preserved, etc.)
 - **Feedback:** thumbs up/down on both chat interfaces → Langfuse scores
 - **Prompts:** fetched from Langfuse at runtime (production label), fallback to hardcoded
 

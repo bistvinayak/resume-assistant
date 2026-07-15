@@ -73,6 +73,21 @@ export const api = {
     return res.json();
   },
 
+  async ingestFiles(files) {
+    const user = await waitForAuth();
+    const token = await user.getIdToken(true);
+    const form = new FormData();
+    for (const file of files) {
+      form.append('files', file);
+    }
+    const res = await checkedFetch(`${BASE}/ingest/files`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'X-Session-Id': SESSION_ID },
+      body: form,
+    });
+    return res.json();
+  },
+
   async submitJobUrl(url) {
     const res = await checkedFetch(`${BASE}/jobs/submit-url`, {
       method: 'POST',

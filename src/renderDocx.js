@@ -55,7 +55,8 @@ async function renderResumeDocx(resume, outPath) {
         ],
       }));
       for (const b of job.bullets || []) {
-        children.push(new Paragraph({ text: b, bullet: { level: 0 } }));
+        const text = typeof b === 'string' ? b : (b.text || '');
+        children.push(new Paragraph({ text, bullet: { level: 0 } }));
       }
     }
   }

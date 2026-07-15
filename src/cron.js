@@ -4,6 +4,7 @@ const cron = require('node-cron');
 const { processJob } = require('./pipeline');
 const { fetchLinkedInJobs } = require('./gmail');
 const { scrapeLinkedInJob } = require('./scraper');
+const { recoverStaleJobs, insertJobProcessing } = require('./db');
 
 async function runBatch(userId = 'me') {
   console.log(`⏱  cron: checking LinkedIn job alert emails for ${userId}...`);
@@ -72,7 +73,26 @@ async function runBatch(userId = 'me') {
 
 function startCron() {
   cron.schedule('0 */2 * * *', () => runBatch('me'));
-  console.log('✓ cron scheduled (every 2 hours)');
+  cron.schedule('*/5 * * * *', async () => {
+    const recovered = await recoverStaleJobs(10).catch(() => []);
+    if (!recovered.length) return;
+    console.log(`⚠ recovered ${recovered.length} stale job(s) — retrying those with JD text`);
+    for (const job of recovered) {
+      if (!job.jd_text || job.jd_text.length < 50) {
+        console.log(`  · ${job.company} — no JD text, staying failed`);
+        continue;
+      }
+      try {
+        console.log(`  ↻ retrying ${job.company} - ${job.title}`);
+        await insertJobProcessing({ job_id: job.job_id, url: job.url }, job.user_id);
+        await processJob(job, job.user_id, { source: 'recovery' });
+        console.log(`  ✓ ${job.company} recovered successfully`);
+      } catch (e) {
+        console.error(`  ✗ ${job.company} retry failed: ${e.message}`);
+      }
+    }
+  });
+  console.log('✓ cron scheduled (jobs every 2h, stale recovery every 5min)');
 }
 
 module.exports = { startCron, runBatch };

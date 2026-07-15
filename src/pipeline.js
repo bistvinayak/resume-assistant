@@ -2,12 +2,27 @@
 
 const path = require('path');
 const os = require('os');
-const { getProfile, seenJobBefore, saveTailored, markDelivered } = require('./db');
+const { getProfile, seenJobBefore, saveTailored, markDelivered, markJobFailed } = require('./db');
 const { tailorResume, calculateAtsScore, improveResume, createJobTrace } = require('./llm');
 const { renderResumeDocx } = require('./renderDocx');
 const { sendResumeEmail } = require('./mailer');
 
 const ATS_IMPROVEMENT_THRESHOLD = 95;
+const MAX_RETRIES = 2;
+const BASE_DELAY_MS = 2000;
+
+async function withRetry(fn, label, retries = MAX_RETRIES) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt === retries) throw e;
+      const wait = BASE_DELAY_MS * Math.pow(2, attempt);
+      console.log(`  ↻ ${label} attempt ${attempt + 1}/${retries + 1} failed: ${e.message}. Retrying in ${wait}ms...`);
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+}
 
 async function processJob(job, userId = 'me', { source = 'app', sessionId, userEmail, userName } = {}) {
   const alreadySeen = await seenJobBefore(job, userId);
@@ -21,31 +36,59 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   const trace = createJobTrace(job, { userId, sessionId, userEmail, userName });
   const profile = await getProfile(userId);
 
-  // First tailoring pass
-  const tailorResult = await tailorResume(profile, job, trace);
-  const tailoringNotes = tailorResult.tailoring_notes || [];
-  delete tailorResult.tailoring_notes;
-  let resume = tailorResult;
-  let ats = await calculateAtsScore(resume, job, trace);
-  let improved = false;
-  let substitutions = [];
+  // Step 1: Tailor resume (retryable — LLM call)
+  let resume, tailoringNotes;
+  try {
+    const tailorResult = await withRetry(
+      () => tailorResume(profile, job, trace),
+      `tailor:${job.company}`
+    );
+    tailoringNotes = tailorResult.tailoring_notes || [];
+    delete tailorResult.tailoring_notes;
+    resume = tailorResult;
+  } catch (e) {
+    await markJobFailed(job.job_id, `Tailoring failed after retries: ${e.message}`);
+    throw e;
+  }
+
+  // Step 2: ATS score (retryable, degrades gracefully)
+  let ats;
+  try {
+    ats = await withRetry(
+      () => calculateAtsScore(resume, job, trace),
+      `ats:${job.company}`
+    );
+  } catch (e) {
+    console.error(`⚠ ATS scoring failed, proceeding without score: ${e.message}`);
+    ats = { score: 0, matched_keywords: [], missing_keywords: [], summary: 'Scoring unavailable' };
+  }
 
   console.log(`✓ ATS Score for ${job.company}: ${ats.score}/100`);
 
-  // Improvement iteration if score < threshold
-  if (ats.score < ATS_IMPROVEMENT_THRESHOLD) {
+  // Step 3: Improvement pass (optional, already fault-tolerant)
+  let improved = false;
+  let substitutions = [];
+  if (ats.score > 0 && ats.score < ATS_IMPROVEMENT_THRESHOLD) {
     console.log(`↑ Score ${ats.score} < ${ATS_IMPROVEMENT_THRESHOLD} — running improvement pass...`);
     try {
-      const improveResult = await improveResume(resume, job, ats, trace);
+      const improveResult = await withRetry(
+        () => improveResume(resume, job, ats, trace),
+        `improve:${job.company}`,
+        1
+      );
       const improvedResume = improveResult.resume || improveResult;
       substitutions = improveResult.substitutions || [];
-      const improvedAts = await calculateAtsScore(improvedResume, job, trace);
+
+      const improvedAts = await withRetry(
+        () => calculateAtsScore(improvedResume, job, trace),
+        `ats-improved:${job.company}`,
+        1
+      );
       console.log(`✓ Improved ATS: ${improvedAts.score}/100`);
       if (substitutions.length) {
         console.log(`↳ ${substitutions.length} synonym substitution(s):`);
         substitutions.forEach(s => console.log(`  "${s.original_phrase}" → "${s.new_phrase}" (JD: ${s.jd_keyword})`));
       }
-      // Use improved version only if it's actually better
       if (improvedAts.score > ats.score) {
         resume = improvedResume;
         ats = improvedAts;
@@ -54,15 +97,26 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
         substitutions = [];
       }
     } catch (e) {
-      console.error('Improvement pass failed:', e.message);
+      console.error(`⚠ Improvement pass failed (using original resume): ${e.message}`);
     }
   }
 
+  // Step 4: Render (retryable — file system)
   const safe = (s) => String(s || 'x').replace(/[^a-z0-9]+/gi, '_');
   const fileName = `resume_${safe(job.company)}_${safe(job.title)}.docx`;
   const filePath = path.join(os.tmpdir(), fileName);
-  await renderResumeDocx(resume, filePath);
+  try {
+    await withRetry(
+      () => renderResumeDocx(resume, filePath),
+      `render:${job.company}`,
+      1
+    );
+  } catch (e) {
+    await markJobFailed(job.job_id, `Rendering failed: ${e.message}`);
+    throw e;
+  }
 
+  // Step 5: Save & deliver
   const tailoredId = await saveTailored(job.job_id, resume, filePath, userId);
   await markDelivered(tailoredId, job.job_id, { ...ats, improved, substitutions, tailoring_notes: tailoringNotes });
 
@@ -78,7 +132,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
       });
       console.log(`✓ Resume emailed to ${userEmail || 'default TO_EMAIL'}`);
     } catch (e) {
-      console.error(`⚠ Email failed for ${job.job_id} (resume still saved):`, e.message);
+      console.error(`⚠ Email failed for ${job.job_id} (resume still saved): ${e.message}`);
     }
   } else {
     console.log(`· Skipping email — job submitted in-app, user can download from Job Activity`);
@@ -101,15 +155,15 @@ ${job.url ? `Job URL:  ${job.url}` : ''}
 ATS MATCH SCORE: ${ats.score}/100 ${improved ? '(improved)' : ''}
 ${ats.summary}
 
-✅ Matched Keywords:
-${(ats.matched_keywords || []).map((k) => `  • ${k}`).join('\n')}
+Matched Keywords:
+${(ats.matched_keywords || []).map((k) => `  - ${k}`).join('\n')}
 
-⚠️  Missing Keywords:
-${(ats.missing_keywords || []).map((k) => `  • ${k}`).join('\n')}`;
+Missing Keywords:
+${(ats.missing_keywords || []).map((k) => `  - ${k}`).join('\n')}`;
 
   if (substitutions && substitutions.length > 0) {
-    body += `\n\n🔄 Synonym Substitutions Applied:
-${substitutions.map((s) => `  • "${s.original_phrase}" → "${s.new_phrase}"\n    (JD keyword: ${s.jd_keyword})`).join('\n')}
+    body += `\n\nSynonym Substitutions Applied:
+${substitutions.map((s) => `  - "${s.original_phrase}" -> "${s.new_phrase}"\n    (JD keyword: ${s.jd_keyword})`).join('\n')}
 
 These substitutions use JD terminology where your existing
 experience is semantically equivalent. No new facts were added.`;

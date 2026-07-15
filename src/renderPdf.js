@@ -79,8 +79,9 @@ async function renderResumePdf(resume, outPath) {
           doc.fillColor('#000000');
         }
         for (const b of job.bullets || []) {
+          const text = typeof b === 'string' ? b : (b.text || '');
           doc.fontSize(10).font('Helvetica')
-            .text(`•  ${b}`, { indent: 12, lineGap: 1.5 });
+            .text(`•  ${text}`, { indent: 12, lineGap: 1.5 });
         }
       }
     }

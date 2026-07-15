@@ -7,8 +7,8 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getJobByJobId, insertJobProcessing, markJobFailed } = require('./db');
-const { ingestText, ingestPdf } = require('./profile');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs } = require('./db');
+const { ingestText, ingestPdf, ingestFiles } = require('./profile');
 const { processJob } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
 const { authMiddleware } = require('./auth');
@@ -114,6 +114,30 @@ app.post(['/ingest/pdf', '/api/ingest/pdf'], upload.single('file'), async (req, 
   } catch (e) { next(e); }
 });
 
+// Multi-file ingestion: PDF, DOCX, TXT, JSON (up to 5 files at once)
+const { ALLOWED_EXTENSIONS } = require('./profile');
+const uploadMultiple = multer({
+  dest: os.tmpdir(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_EXTENSIONS.has(ext)) cb(null, true);
+    else cb(new Error(`Unsupported format: ${ext}. Allowed: ${[...ALLOWED_EXTENSIONS].join(', ')}`));
+  },
+}).array('files', 5);
+
+app.post(['/ingest/files', '/api/ingest/files'], (req, res, next) => {
+  uploadMultiple(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message });
+    next();
+  });
+}, async (req, res, next) => {
+  try {
+    if (!req.files?.length) return res.status(400).json({ error: 'At least one file required' });
+    res.json(await ingestFiles(req.files, req.userId, langfuseCtx(req)));
+  } catch (e) { next(e); }
+});
+
 // ── CHAT ENRICH ──────────────────────────────────────────────────────────
 app.post(['/chat', '/api/chat'], async (req, res, next) => {
   try {
@@ -130,7 +154,10 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       // Normalize LinkedIn URLs — extract the actual job view URL
       url = normalizeJobUrl(url);
 
-      const jobId = `url_${Buffer.from(url).toString('base64url').slice(0, 40)}`;
+      const linkedInMatch = url.match(/\/jobs\/view\/(\d+)/);
+      const jobId = linkedInMatch
+        ? `linkedin_${linkedInMatch[1]}`
+        : `url_${require('crypto').createHash('sha256').update(url).digest('hex').slice(0, 16)}`;
 
       // Check if this job is currently being processed
       const existing = await getJobByJobId(jobId, req.userId);
@@ -337,6 +364,8 @@ initSchema()
     app.listen(PORT, () => console.log(`✓ resume-assistant listening on ${PORT}`));
     startCron();
     await syncPrompts().catch(e => console.error('⚠ prompt sync failed (non-fatal):', e.message));
+    const stale = await recoverStaleJobs(10).catch(() => []);
+    if (stale.length) console.log(`⚠ startup: recovered ${stale.length} stale job(s) — cron will retry them`);
   })
   .catch((e) => { console.error('startup failed:', e); process.exit(1); });
 
