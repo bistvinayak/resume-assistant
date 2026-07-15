@@ -1,3 +1,5 @@
 node_modules/
 .env
+_env
 *.docx
+src/firebase-key.json
