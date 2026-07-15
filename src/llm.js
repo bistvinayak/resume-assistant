@@ -299,27 +299,31 @@ async function askJson(system, user, generationName, trace, langfusePrompt) {
 }
 
 // ── TRACE HELPERS ───────────────────────────────────────────────────────
-function createJobTrace(job, ctx = {}) {
+function makeTrace(name, ctx = {}, extra = {}) {
   return langfuse.trace({
-    name: 'process_job',
+    name,
     ...(ctx.userId ? { userId: ctx.userId } : {}),
     ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
     metadata: {
-      job_id: job.job_id,
-      title: job.title,
-      company: job.company,
-      url: job.url || null,
+      ...(ctx.userEmail ? { userEmail: ctx.userEmail } : {}),
+      ...(ctx.userName ? { userName: ctx.userName } : {}),
+      ...extra,
     },
+  });
+}
+
+function createJobTrace(job, ctx = {}) {
+  return makeTrace('process_job', ctx, {
+    job_id: job.job_id,
+    title: job.title,
+    company: job.company,
+    url: job.url || null,
   });
 }
 
 // ── PUBLIC FUNCTIONS ────────────────────────────────────────────────────
 async function extractFacts(rawText, ctx = {}) {
-  const trace = langfuse.trace({
-    name: 'extract_facts',
-    ...(ctx.userId ? { userId: ctx.userId } : {}),
-    ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
-  });
+  const trace = makeTrace('extract_facts', ctx);
   const { text: system, langfusePrompt } = await getPrompt('extract_facts', { profile_schema: PROFILE_SCHEMA });
   return askJson(system, `Extract facts from:\n\n"""${rawText}"""`, 'extract_facts', trace, langfusePrompt);
 }
@@ -365,12 +369,7 @@ async function calculateAtsScore(resume, job, trace) {
 }
 
 async function chatEnrich(userMessage, currentProfile, ctx = {}) {
-  const trace = langfuse.trace({
-    name: 'chat_enrich',
-    ...(ctx.userId ? { userId: ctx.userId } : {}),
-    ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
-    metadata: { mode: 'profile' },
-  });
+  const trace = makeTrace('chat_enrich', ctx, { mode: 'profile' });
   const { text: system, langfusePrompt } = await getPrompt('chat_enrich', { profile_schema: PROFILE_SCHEMA.trim() });
 
   const user = `CURRENT PROFILE:\n${JSON.stringify(currentProfile)}\n\nUSER MESSAGE:\n${userMessage}`;

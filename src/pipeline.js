@@ -9,7 +9,7 @@ const { sendResumeEmail } = require('./mailer');
 
 const ATS_IMPROVEMENT_THRESHOLD = 95;
 
-async function processJob(job, userId = 'me', { source = 'app', sessionId } = {}) {
+async function processJob(job, userId = 'me', { source = 'app', sessionId, userEmail, userName } = {}) {
   const alreadySeen = await seenJobBefore(job, userId);
   if (alreadySeen) return { skipped: true };
 
@@ -18,7 +18,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId } = {}
     return { skipped: true };
   }
 
-  const trace = createJobTrace(job, { userId, sessionId });
+  const trace = createJobTrace(job, { userId, sessionId, userEmail, userName });
   const profile = await getProfile(userId);
 
   // First tailoring pass

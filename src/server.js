@@ -57,6 +57,15 @@ app.use(cors({
 app.use(express.json());
 const upload = multer({ dest: os.tmpdir() });
 
+function langfuseCtx(req) {
+  return {
+    userId: req.userId,
+    sessionId: req.headers['x-session-id'],
+    userEmail: req.userEmail,
+    userName: req.userName,
+  };
+}
+
 // Serve built React frontend
 app.use('/projects/arjun', express.static(path.join(__dirname, '../public')));
 
@@ -94,14 +103,14 @@ app.put(['/profile', '/api/profile'], async (req, res, next) => {
 app.post(['/ingest/text', '/api/ingest/text'], async (req, res, next) => {
   try {
     if (!req.body?.text) return res.status(400).json({ error: 'text required' });
-    res.json(await ingestText(req.body.text, req.userId, { sessionId: req.headers['x-session-id'] }));
+    res.json(await ingestText(req.body.text, req.userId, langfuseCtx(req)));
   } catch (e) { next(e); }
 });
 
 app.post(['/ingest/pdf', '/api/ingest/pdf'], upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'file required' });
-    res.json(await ingestPdf(req.file.path, req.userId, { sessionId: req.headers['x-session-id'] }));
+    res.json(await ingestPdf(req.file.path, req.userId, langfuseCtx(req)));
   } catch (e) { next(e); }
 });
 
@@ -155,7 +164,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       // Insert job as 'processing' immediately so it's visible
       await insertJobProcessing({ job_id: jobId, url }, req.userId);
 
-      const sessionId = req.headers['x-session-id'];
+      const ctx = langfuseCtx(req);
       res.json({ reply: profileSummary, profile: currentProfile, scraping: true });
 
       (async () => {
@@ -173,7 +182,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
             company: scraped.company || 'Unknown Company',
             jd_text: scraped.jd_text,
             url,
-          }, req.userId, { source: 'app', sessionId });
+          }, req.userId, { source: 'app', ...ctx });
         } catch (e) {
           console.error('Chat job processing error:', e.message);
           await markJobFailed(jobId, e.message).catch(() => {});
@@ -182,8 +191,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       return;
     }
 
-    const ctx = { userId: req.userId, sessionId: req.headers['x-session-id'] };
-    const result = await chatEnrich(message, currentProfile, ctx);
+    const result = await chatEnrich(message, currentProfile, langfuseCtx(req));
 
     const hasExtracted = result.extracted && Object.keys(result.extracted).length > 0;
     const hasDeletions = result.deletions && Object.keys(result.deletions).length > 0;
