@@ -15,7 +15,7 @@ const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { renderResumeDocx } = require('./renderDocx');
-const { chatEnrich, chatJobAnalysis } = require('./llm');
+const { chatEnrich, chatJobAnalysis, langfuse, syncPrompts } = require('./llm');
 const { mergeProfile, applyDeletions } = require('./profile');
 
 // Normalize LinkedIn URLs to direct job view format
@@ -188,6 +188,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
     res.json({
       reply: result.reply,
       profile: currentProfile,
+      traceId: result._traceId,
       ...(hasExtracted ? { pendingChanges: result.extracted } : {}),
       ...(hasDeletions ? { pendingDeletions: result.deletions } : {}),
     });
@@ -210,6 +211,24 @@ app.post(['/chat/confirm', '/api/chat/confirm'], async (req, res, next) => {
     await saveProfile(currentProfile, req.userId);
 
     res.json({ ok: true, profile: currentProfile });
+  } catch (e) { next(e); }
+});
+
+// ── FEEDBACK ─────────────────────────────────────────────────────────────
+app.post(['/feedback', '/api/feedback'], async (req, res, next) => {
+  try {
+    const { traceId, score, comment } = req.body || {};
+    if (!traceId || score === undefined) return res.status(400).json({ error: 'traceId and score required' });
+
+    langfuse.score({
+      traceId,
+      name: 'user-feedback',
+      value: score,
+      ...(comment ? { comment } : {}),
+    });
+    await langfuse.flushAsync();
+
+    res.json({ ok: true });
   } catch (e) { next(e); }
 });
 
@@ -303,9 +322,10 @@ app.use((err, _req, res, _next) => {
 
 const PORT = process.env.PORT || 3000;
 initSchema()
-  .then(() => {
+  .then(async () => {
     app.listen(PORT, () => console.log(`✓ resume-assistant listening on ${PORT}`));
     startCron();
+    await syncPrompts().catch(e => console.error('⚠ prompt sync failed (non-fatal):', e.message));
   })
   .catch((e) => { console.error('startup failed:', e); process.exit(1); });
 

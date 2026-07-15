@@ -65,6 +65,42 @@ const ThinkingSection = ({ job }) => {
   );
 };
 
+const FeedbackButtons = ({ traceId, feedback, onFeedback }) => {
+  if (!traceId) return null;
+  return (
+    <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
+      <button
+        onClick={() => onFeedback(traceId, 1)}
+        disabled={feedback !== undefined}
+        style={{
+          background: feedback === 1 ? '#ecfdf5' : 'transparent',
+          border: `1px solid ${feedback === 1 ? '#22c55e44' : '#e7e5e4'}`,
+          borderRadius: '4px', padding: '3px 8px', cursor: feedback !== undefined ? 'default' : 'pointer',
+          fontSize: '13px', opacity: feedback !== undefined && feedback !== 1 ? 0.3 : 1,
+          transition: 'all 0.15s',
+        }}
+        title="Helpful"
+      >
+        {feedback === 1 ? '👍' : '👍'}
+      </button>
+      <button
+        onClick={() => onFeedback(traceId, 0)}
+        disabled={feedback !== undefined}
+        style={{
+          background: feedback === 0 ? '#fef2f2' : 'transparent',
+          border: `1px solid ${feedback === 0 ? '#ef444444' : '#e7e5e4'}`,
+          borderRadius: '4px', padding: '3px 8px', cursor: feedback !== undefined ? 'default' : 'pointer',
+          fontSize: '13px', opacity: feedback !== undefined && feedback !== 0 ? 0.3 : 1,
+          transition: 'all 0.15s',
+        }}
+        title="Not helpful"
+      >
+        {feedback === 0 ? '👎' : '👎'}
+      </button>
+    </div>
+  );
+};
+
 const DownloadButtons = ({ jobId, downloading, onDownload }) => (
   <div style={{ display: 'flex', gap: '8px' }}>
     <button
@@ -108,8 +144,14 @@ export default function Dashboard() {
   const [tailorMessages, setTailorMessages] = useState([]);
   const [tailorInput, setTailorInput] = useState('');
   const [tailorSending, setTailorSending] = useState(false);
+  const [feedbackMap, setFeedbackMap] = useState({});
   const chatEndRef = useRef(null);
   const tailorEndRef = useRef(null);
+
+  const handleFeedback = async (traceId, score) => {
+    setFeedbackMap(prev => ({ ...prev, [traceId]: score }));
+    try { await api.sendFeedback(traceId, score); } catch {}
+  };
 
   const handleDownload = async (e, jobId, format = 'docx') => {
     e.stopPropagation();
@@ -340,12 +382,13 @@ export default function Dashboard() {
         setChatMessages(prev => [...prev, {
           role: 'arjun',
           text: res.reply,
+          traceId: res.traceId,
           ...(hasChanges ? { pendingChanges: res.pendingChanges } : {}),
           ...(hasDeletions ? { pendingDeletions: res.pendingDeletions } : {}),
           confirmState: null,
         }]);
       } else {
-        setChatMessages(prev => [...prev, { role: 'arjun', text: res.reply }]);
+        setChatMessages(prev => [...prev, { role: 'arjun', text: res.reply, traceId: res.traceId }]);
       }
 
       if (res.profile) setProfile(res.profile);
@@ -441,7 +484,7 @@ export default function Dashboard() {
       const res = await api.chat(msg, 'tailor');
 
       if (res.reply) {
-        setTailorMessages(prev => [...prev, { role: 'arjun', text: res.reply }]);
+        setTailorMessages(prev => [...prev, { role: 'arjun', text: res.reply, traceId: res.traceId }]);
       }
 
       if (res.profile) setProfile(res.profile);
@@ -1078,6 +1121,9 @@ export default function Dashboard() {
                           )}
                         </div>
                       )}
+                      {msg.role === 'arjun' && (
+                        <FeedbackButtons traceId={msg.traceId} feedback={feedbackMap[msg.traceId]} onFeedback={handleFeedback} />
+                      )}
                     </div>
                   </div>
                   );
@@ -1374,6 +1420,9 @@ export default function Dashboard() {
                           <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>ARJUN</div>
                         )}
                         {msg.text}
+                        {msg.role === 'arjun' && (
+                          <FeedbackButtons traceId={msg.traceId} feedback={feedbackMap[msg.traceId]} onFeedback={handleFeedback} />
+                        )}
                       </div>
                     </div>
                   );

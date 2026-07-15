@@ -182,4 +182,13 @@ export const api = {
     const res = await checkedFetch(`${BASE}/admin/settings`, { method: 'PATCH', headers: await getHeaders(), body: JSON.stringify(settings) });
     return res.json();
   },
+
+  async sendFeedback(traceId, score, comment) {
+    const res = await checkedFetch(`${BASE}/feedback`, {
+      method: 'POST',
+      headers: await getHeaders(),
+      body: JSON.stringify({ traceId, score, ...(comment ? { comment } : {}) }),
+    });
+    return res.json();
+  },
 };
