@@ -51,6 +51,7 @@ app.use(cors({
     process.env.FRONTEND_URL,
   ].filter(Boolean),
   credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Session-Id'],
 }));
 
 app.use(express.json());
@@ -93,14 +94,14 @@ app.put(['/profile', '/api/profile'], async (req, res, next) => {
 app.post(['/ingest/text', '/api/ingest/text'], async (req, res, next) => {
   try {
     if (!req.body?.text) return res.status(400).json({ error: 'text required' });
-    res.json(await ingestText(req.body.text, req.userId));
+    res.json(await ingestText(req.body.text, req.userId, { sessionId: req.headers['x-session-id'] }));
   } catch (e) { next(e); }
 });
 
 app.post(['/ingest/pdf', '/api/ingest/pdf'], upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'file required' });
-    res.json(await ingestPdf(req.file.path, req.userId));
+    res.json(await ingestPdf(req.file.path, req.userId, { sessionId: req.headers['x-session-id'] }));
   } catch (e) { next(e); }
 });
 
@@ -154,6 +155,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       // Insert job as 'processing' immediately so it's visible
       await insertJobProcessing({ job_id: jobId, url }, req.userId);
 
+      const sessionId = req.headers['x-session-id'];
       res.json({ reply: profileSummary, profile: currentProfile, scraping: true });
 
       (async () => {
@@ -171,7 +173,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
             company: scraped.company || 'Unknown Company',
             jd_text: scraped.jd_text,
             url,
-          }, req.userId);
+          }, req.userId, { source: 'app', sessionId });
         } catch (e) {
           console.error('Chat job processing error:', e.message);
           await markJobFailed(jobId, e.message).catch(() => {});
@@ -180,7 +182,8 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       return;
     }
 
-    const result = await chatEnrich(message, currentProfile);
+    const ctx = { userId: req.userId, sessionId: req.headers['x-session-id'] };
+    const result = await chatEnrich(message, currentProfile, ctx);
 
     const hasExtracted = result.extracted && Object.keys(result.extracted).length > 0;
     const hasDeletions = result.deletions && Object.keys(result.deletions).length > 0;

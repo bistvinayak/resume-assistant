@@ -5,14 +5,14 @@ const pdfParse = require('pdf-parse');
 const { getProfile, saveProfile } = require('./db');
 const { extractFacts } = require('./llm');
 
-async function ingestText(text, userId = 'me') {
-  const partial = await extractFacts(text);
+async function ingestText(text, userId = 'me', ctx = {}) {
+  const partial = await extractFacts(text, { userId, ...ctx });
   return applyPartial(partial, userId);
 }
 
-async function ingestPdf(filePath, userId = 'me') {
+async function ingestPdf(filePath, userId = 'me', ctx = {}) {
   const data = await pdfParse(fs.readFileSync(filePath));
-  const partial = await extractFacts(data.text);
+  const partial = await extractFacts(data.text, { userId, ...ctx });
   return applyPartial(partial, userId);
 }
 

@@ -32,8 +32,6 @@ Return ONLY JSON matching this shape (omit fields you found nothing for):
 }`;
 
 // ── PROMPT DEFINITIONS ──────────────────────────────────────────────────
-// Each prompt is registered in Langfuse's Prompts section on startup.
-// Edit them in the Langfuse UI to iterate without redeploying.
 
 const PROMPT_DEFS = {
   extract_facts: {
@@ -194,7 +192,6 @@ async function syncPrompts() {
   }
 }
 
-// Fetch a prompt from Langfuse, fall back to hardcoded if unavailable
 async function getPrompt(name, variables = {}) {
   try {
     const prompt = await langfuse.getPrompt(name, undefined, { label: 'production' });
@@ -207,6 +204,50 @@ async function getPrompt(name, variables = {}) {
     }
     return { text, langfusePrompt: null };
   }
+}
+
+// ── EVALUATIONS ─────────────────────────────────────────────────────────
+function evalExtraction(trace, result) {
+  const ext = result.extracted || {};
+  const fields = ['contact', 'summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'activities', 'interests'];
+  let populated = 0;
+  for (const f of fields) {
+    const v = ext[f];
+    if (!v) continue;
+    if (Array.isArray(v) && v.length > 0) populated++;
+    else if (typeof v === 'object' && Object.keys(v).length > 0) populated++;
+    else if (typeof v === 'string' && v.length > 0) populated++;
+  }
+  langfuse.score({ traceId: trace.id, name: 'extraction-fields', value: populated, comment: `${populated}/${fields.length} profile sections populated` });
+
+  const skillCount = (ext.skills || []).length;
+  langfuse.score({ traceId: trace.id, name: 'skills-extracted', value: skillCount });
+
+  const hasReply = result.reply && result.reply.length > 10;
+  langfuse.score({ traceId: trace.id, name: 'has-reply', value: hasReply ? 1 : 0 });
+}
+
+function evalAtsScore(trace, result) {
+  langfuse.score({ traceId: trace.id, name: 'ats-score', value: result.score || 0, comment: result.summary });
+  langfuse.score({ traceId: trace.id, name: 'matched-keywords', value: (result.matched_keywords || []).length });
+  langfuse.score({ traceId: trace.id, name: 'missing-keywords', value: (result.missing_keywords || []).length });
+}
+
+function evalTailoring(trace, result) {
+  const bulletCount = (result.experience || []).reduce((sum, e) => sum + (e.bullets || []).length, 0);
+  langfuse.score({ traceId: trace.id, name: 'total-bullets', value: bulletCount });
+
+  const noteCount = (result.tailoring_notes || []).length;
+  langfuse.score({ traceId: trace.id, name: 'tailoring-notes', value: noteCount });
+
+  const skillCount = (result.skills_product || []).length + (result.skills_technical || []).length + (result.skills_ai_tools || []).length;
+  langfuse.score({ traceId: trace.id, name: 'skills-count', value: skillCount });
+}
+
+function evalImprovement(trace, result, originalAts) {
+  const subCount = (result.substitutions || []).length;
+  langfuse.score({ traceId: trace.id, name: 'substitutions', value: subCount });
+  langfuse.score({ traceId: trace.id, name: 'original-ats', value: originalAts || 0 });
 }
 
 // ── ASK JSON ────────────────────────────────────────────────────────────
@@ -257,9 +298,12 @@ async function askJson(system, user, generationName, trace, langfusePrompt) {
   }
 }
 
-function createJobTrace(job) {
+// ── TRACE HELPERS ───────────────────────────────────────────────────────
+function createJobTrace(job, ctx = {}) {
   return langfuse.trace({
     name: 'process_job',
+    ...(ctx.userId ? { userId: ctx.userId } : {}),
+    ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
     metadata: {
       job_id: job.job_id,
       title: job.title,
@@ -269,8 +313,13 @@ function createJobTrace(job) {
   });
 }
 
-async function extractFacts(rawText) {
-  const trace = langfuse.trace({ name: 'extract_facts' });
+// ── PUBLIC FUNCTIONS ────────────────────────────────────────────────────
+async function extractFacts(rawText, ctx = {}) {
+  const trace = langfuse.trace({
+    name: 'extract_facts',
+    ...(ctx.userId ? { userId: ctx.userId } : {}),
+    ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
+  });
   const { text: system, langfusePrompt } = await getPrompt('extract_facts', { profile_schema: PROFILE_SCHEMA });
   return askJson(system, `Extract facts from:\n\n"""${rawText}"""`, 'extract_facts', trace, langfusePrompt);
 }
@@ -283,7 +332,9 @@ async function tailorResume(profile, job, trace) {
     `Description:\n${job.jd_text}\n\n` +
     `CANDIDATE PROFILE:\n${JSON.stringify(profile)}`;
 
-  return askJson(system, user, 'tailor_resume', trace, langfusePrompt);
+  const result = await askJson(system, user, 'tailor_resume', trace, langfusePrompt);
+  evalTailoring(trace, result);
+  return result;
 }
 
 async function improveResume(resume, job, ats, trace) {
@@ -295,7 +346,9 @@ async function improveResume(resume, job, ats, trace) {
     `JOB DESCRIPTION:\n${job.jd_text}\n\n` +
     `CURRENT RESUME:\n${JSON.stringify(resume)}`;
 
-  return askJson(system, user, 'improve_resume', trace, langfusePrompt);
+  const result = await askJson(system, user, 'improve_resume', trace, langfusePrompt);
+  evalImprovement(trace, result, ats.score);
+  return result;
 }
 
 async function calculateAtsScore(resume, job, trace) {
@@ -306,16 +359,24 @@ async function calculateAtsScore(resume, job, trace) {
     `JOB DESCRIPTION:\n${job.jd_text}\n\n` +
     `FULL RESUME:\n${JSON.stringify(resume)}`;
 
-  return askJson(system, user, 'ats_score', trace, langfusePrompt);
+  const result = await askJson(system, user, 'ats_score', trace, langfusePrompt);
+  evalAtsScore(trace, result);
+  return result;
 }
 
-async function chatEnrich(userMessage, currentProfile) {
-  const trace = langfuse.trace({ name: 'chat_enrich', metadata: { mode: 'profile' } });
+async function chatEnrich(userMessage, currentProfile, ctx = {}) {
+  const trace = langfuse.trace({
+    name: 'chat_enrich',
+    ...(ctx.userId ? { userId: ctx.userId } : {}),
+    ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
+    metadata: { mode: 'profile' },
+  });
   const { text: system, langfusePrompt } = await getPrompt('chat_enrich', { profile_schema: PROFILE_SCHEMA.trim() });
 
   const user = `CURRENT PROFILE:\n${JSON.stringify(currentProfile)}\n\nUSER MESSAGE:\n${userMessage}`;
 
   const result = await askJson(system, user, 'chat_enrich', trace, langfusePrompt);
+  evalExtraction(trace, result);
   result._traceId = trace.id;
   return result;
 }

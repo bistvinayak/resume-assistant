@@ -1,6 +1,7 @@
 import { auth } from './firebase';
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
+const SESSION_ID = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
 function waitForAuth() {
   return new Promise((resolve) => {
@@ -21,6 +22,7 @@ async function getHeaders() {
   return {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`,
+    'X-Session-Id': SESSION_ID,
   };
 }
 
@@ -65,7 +67,7 @@ export const api = {
     form.append('file', file);
     const res = await checkedFetch(`${BASE}/ingest/pdf`, {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { 'Authorization': `Bearer ${token}`, 'X-Session-Id': SESSION_ID },
       body: form,
     });
     return res.json();
@@ -136,7 +138,7 @@ export const api = {
     const user = await waitForAuth();
     const token = await user.getIdToken(true);
     const res = await checkedFetch(`${BASE}/jobs/${jobId}/download?format=${format}`, {
-      headers: { 'Authorization': `Bearer ${token}` },
+      headers: { 'Authorization': `Bearer ${token}`, 'X-Session-Id': SESSION_ID },
     });
     if (!res.ok) throw new Error('Download failed');
     const blob = await res.blob();
