@@ -59,6 +59,11 @@ const upload = multer({ dest: os.tmpdir() });
 // Serve built React frontend
 app.use('/projects/arjun', express.static(path.join(__dirname, '../public')));
 
+// SPA catch-all: serve index.html for client-side routes
+app.get('/projects/arjun/*', (_req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
 // Auth on all API routes
 app.use('/api', authMiddleware);
 // Keep legacy routes working too
