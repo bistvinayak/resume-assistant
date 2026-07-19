@@ -490,13 +490,13 @@ export default function Dashboard() {
                 ...prev.filter(m => m.id !== progressId),
                 { role: 'arjun', text: `Scraping failed for this job — the page may require login or the URL couldn't be read. Try a different URL or paste the job description directly.` },
               ]);
-            } else if (pollCount >= 12) {
+            } else if (pollCount >= 30) {
               clearInterval(pollJobs);
               clearInterval(elapsedTimer);
               setJobs(allJobs);
               setChatMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: 'Still processing after 2 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
+                { role: 'arjun', text: 'Still processing after 5 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
               ]);
             }
           } catch {}
@@ -834,13 +834,13 @@ export default function Dashboard() {
                 ...prev.filter(m => m.id !== progressId),
                 { role: 'arjun', text: `Scraping failed for this job — the page may require login or the URL couldn't be read. Try a different URL or paste the job description directly.` },
               ]);
-            } else if (pollCount >= 12) {
+            } else if (pollCount >= 30) {
               clearInterval(pollJobs);
               clearInterval(elapsedTimer);
               setJobs(allJobs);
               setTailorMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: 'Still processing after 2 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
+                { role: 'arjun', text: 'Still processing after 5 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
               ]);
             }
           } catch {}

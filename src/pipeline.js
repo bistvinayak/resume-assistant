@@ -25,9 +25,11 @@ async function withRetry(fn, label, retries = MAX_RETRIES) {
   }
 }
 
-async function processJob(job, userId = 'me', { source = 'app', sessionId, userEmail, userName } = {}) {
-  const alreadySeen = await seenJobBefore(job, userId);
-  if (alreadySeen) return { skipped: true };
+async function processJob(job, userId = 'me', { source = 'app', sessionId, userEmail, userName, force = false } = {}) {
+  if (!force) {
+    const alreadySeen = await seenJobBefore(job, userId);
+    if (alreadySeen) return { skipped: true };
+  }
 
   if (!job.jd_text || job.jd_text.trim().length < 50) {
     console.log(`· Skipping ${job.job_id} — no JD`);

@@ -284,6 +284,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       if (existing && existing.status === 'processing') {
         return res.json({ reply: `This job is already being processed — hang tight! You'll see the result in the Job Activity tab once it's ready.`, profile: currentProfile, duplicate: true });
       }
+      const isRerun = existing && existing.status === 'delivered';
 
       const p = currentProfile;
       const skills = (p.skills || []).slice(0, 10).join(', ') || 'none listed';
@@ -315,7 +316,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
             await markJobFailed(jobId, 'Could not scrape job page — page may require login or URL is invalid');
             return;
           }
-          await processJob({ job_id: jobId, title: scraped.title || 'Unknown Role', company: scraped.company || 'Unknown Company', jd_text: scraped.jd_text, url }, req.userId, { source: 'app', ...ctx });
+          await processJob({ job_id: jobId, title: scraped.title || 'Unknown Role', company: scraped.company || 'Unknown Company', jd_text: scraped.jd_text, url }, req.userId, { source: 'app', force: isRerun, ...ctx });
         } catch (e) {
           console.error('Chat job processing error:', e.message);
           await markJobFailed(jobId, e.message).catch(() => {});
@@ -445,14 +446,15 @@ app.post(['/jobs/submit-url', '/api/jobs/submit-url'], async (req, res, next) =>
       return res.json({ ok: true, job_id, duplicate: true, message: 'This job is already being processed' });
     }
 
+    const isRerun = existing && existing.status === 'delivered';
     await insertJobProcessing({ job_id, url }, req.userId);
 
-    res.json({ ok: true, job_id, message: 'Job queued — resume will be emailed shortly' });
+    res.json({ ok: true, job_id, rerun: isRerun, message: isRerun ? 'Re-tailoring with updated profile...' : 'Job queued — resume will be emailed shortly' });
 
     // Background: scrape + process
     (async () => {
       try {
-        console.log(`→ Scraping ${url} for user ${req.userId}`);
+        console.log(`→ Scraping ${url} for user ${req.userId}${isRerun ? ' (re-run)' : ''}`);
         const scraped = await scrapeLinkedInJob(url);
         if (!scraped || !scraped.jd_text) {
           console.error(`✗ Could not scrape ${url}`);
@@ -465,7 +467,7 @@ app.post(['/jobs/submit-url', '/api/jobs/submit-url'], async (req, res, next) =>
           company: scraped.company,
           jd_text: scraped.jd_text,
           url,
-        }, req.userId);
+        }, req.userId, { force: isRerun });
       } catch (e) {
         console.error('submit-url background error:', e.message);
         await markJobFailed(job_id, e.message).catch(() => {});

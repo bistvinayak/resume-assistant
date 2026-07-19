@@ -21,24 +21,24 @@ Quick-lookup graph of the codebase. Check here FIRST before reading files — go
 | POST | /ingest/files | server.js:183 | extractTextFromFile, ingestFiles |
 | GET | /ingest/status | server.js:247 | — |
 | POST | /chat | server.js:260 | getProfile, getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, processJob, classifyIntent, saveProfile, chatEnrich |
-| POST | /chat/confirm | server.js:374 | getProfile, mergeProfile, applyDeletions, saveProfile |
-| POST | /feedback | server.js:393 | — |
-| GET | /jobs | server.js:412 | getJobsForUser |
-| POST | /jobs/process | server.js:420 | processJob |
-| POST | /jobs/submit-url | server.js:429 | getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, processJob |
-| POST | /jobs/run-batch | server.js:478 | runBatch |
-| POST | /gmail/connect | server.js:485 | connectGmail |
-| GET | /projects/arjun | server.js:488 | — |
-| GET | /admin/stats | server.js:514 | adminOnly, getStats, authMiddleware |
-| GET | /admin/users | server.js:515 | adminOnly, getUsers, authMiddleware |
-| PATCH | /admin/users/:userId | server.js:516 | adminOnly, updateUser, authMiddleware |
-| DELETE | /admin/users/:userId | server.js:517 | adminOnly, deleteUser, authMiddleware |
-| GET | /admin/jobs | server.js:518 | adminOnly, authMiddleware |
-| POST | /admin/cron/run | server.js:519 | adminOnly, triggerCron, authMiddleware |
-| GET | /admin/settings | server.js:520 | adminOnly, getSettings, authMiddleware |
-| PATCH | /admin/settings | server.js:521 | adminOnly, updateSettings, authMiddleware |
-| GET | /jobs/:jobId/download | server.js:527 | renderResumePdf, renderResumeDocx |
-| POST | /gmail/verify | server.js:568 | — |
+| POST | /chat/confirm | server.js:375 | getProfile, mergeProfile, applyDeletions, saveProfile |
+| POST | /feedback | server.js:394 | — |
+| GET | /jobs | server.js:413 | getJobsForUser |
+| POST | /jobs/process | server.js:421 | processJob |
+| POST | /jobs/submit-url | server.js:430 | getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, processJob |
+| POST | /jobs/run-batch | server.js:480 | runBatch |
+| POST | /gmail/connect | server.js:487 | connectGmail |
+| GET | /projects/arjun | server.js:490 | — |
+| GET | /admin/stats | server.js:516 | adminOnly, getStats, authMiddleware |
+| GET | /admin/users | server.js:517 | adminOnly, getUsers, authMiddleware |
+| PATCH | /admin/users/:userId | server.js:518 | adminOnly, updateUser, authMiddleware |
+| DELETE | /admin/users/:userId | server.js:519 | adminOnly, deleteUser, authMiddleware |
+| GET | /admin/jobs | server.js:520 | adminOnly, authMiddleware |
+| POST | /admin/cron/run | server.js:521 | adminOnly, triggerCron, authMiddleware |
+| GET | /admin/settings | server.js:522 | adminOnly, getSettings, authMiddleware |
+| PATCH | /admin/settings | server.js:523 | adminOnly, updateSettings, authMiddleware |
+| GET | /jobs/:jobId/download | server.js:529 | renderResumePdf, renderResumeDocx |
+| POST | /gmail/verify | server.js:570 | — |
 
 ## Chat Flow (server.js:260)
 
@@ -197,14 +197,14 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:605] — O
 | api.restoreProfileVersion() | /api/profile/restore | server.js:93 |
 | api.resolveAmbiguities() | /api/profile/resolve-ambiguities | server.js:93 |
 | api.resolveConflicts() | /api/profile/resolve-conflicts | server.js:93 |
-| api.submitJobUrl() | /api/jobs/submit-url | server.js:412 |
-| api.getJobs() | /api/jobs | server.js:412 |
-| api.runBatch() | /api/jobs/run-batch | server.js:412 |
+| api.submitJobUrl() | /api/jobs/submit-url | server.js:413 |
+| api.getJobs() | /api/jobs | server.js:413 |
+| api.runBatch() | /api/jobs/run-batch | server.js:413 |
 | api.chat() | /api/chat | server.js:260 |
 | api.connectGmail() | /api/gmail/connect | — |
 | api.verifyGmailFilter() | /api/gmail/verify | — |
 | api.confirmChanges() | /api/chat/confirm | server.js:260 |
-| api.downloadResume() | /api/jobs/:id/download | server.js:412 |
+| api.downloadResume() | /api/jobs/:id/download | server.js:413 |
 | api.adminGetStats() | /api/admin/stats | — |
 | api.adminGetUsers() | /api/admin/users | — |
 | api.adminUpdateUser() | /api/admin/users/:id | — |
@@ -213,7 +213,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:605] — O
 | api.adminTriggerCron() | /api/admin/cron/run | — |
 | api.adminGetSettings() | /api/admin/settings | — |
 | api.adminUpdateSettings() | /api/admin/settings | — |
-| api.sendFeedback() | /api/feedback | server.js:393 |
+| api.sendFeedback() | /api/feedback | server.js:394 |
 
 ## Backend Functions (all files)
 
@@ -314,7 +314,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:605] — O
 |----------|------|----------|
 | withRetry | 15 | no |
 | processJob | 28 | yes |
-| buildEmailBody | 173 | no |
+| buildEmailBody | 175 | no |
 
 ### profile.js
 
