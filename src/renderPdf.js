@@ -145,7 +145,10 @@ async function renderResumePdf(resume, outPath) {
 }
 
 async function measureResumePdf(resume) {
-  return new Promise((resolve, reject) => {
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('measureResumePdf timed out after 10s')), 10000)
+  );
+  return Promise.race([timeout, new Promise((resolve, reject) => {
     const doc = new PDFDocument({
       size: 'LETTER',
       margins: { top: 50, bottom: 50, left: 55, right: 55 },
@@ -256,17 +259,17 @@ async function measureResumePdf(resume) {
     const lastPageY = doc.y - doc.page.margins.top;
     const lastPageFill = Math.round(100 * lastPageY / pageHeight);
 
-    doc.end();
-    doc.on('end', () => {
-      resolve({
-        pages: pageCount,
-        lastPageFill,
-        needsAdjustment: pageCount === 1 ? false : lastPageFill < 70,
-        directive: pageCount === 1 ? null : (lastPageFill < 70 ? 'TIGHTEN' : 'EXPAND'),
-      });
-    });
+    const result = {
+      pages: pageCount,
+      lastPageFill,
+      needsAdjustment: pageCount === 1 ? false : lastPageFill < 70,
+      directive: pageCount === 1 ? null : (lastPageFill < 70 ? 'TIGHTEN' : 'EXPAND'),
+    };
+
+    doc.on('end', () => resolve(result));
     doc.on('error', reject);
-  });
+    doc.end();
+  })]);
 }
 
 function sectionHeading(doc, text, pageWidth) {

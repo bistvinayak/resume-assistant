@@ -357,7 +357,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:605] — O
 |----------|------|----------|
 | renderResumePdf | 7 | yes |
 | measureResumePdf | 147 | yes |
-| sectionHeading | 272 | no |
+| sectionHeading | 275 | no |
 
 ### scraper.js
 
