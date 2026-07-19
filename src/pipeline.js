@@ -9,6 +9,28 @@ const { measureResumePdf } = require('./renderPdf');
 const { sendResumeEmail } = require('./mailer');
 
 const ATS_IMPROVEMENT_THRESHOLD = 95;
+
+function validateResumeContent(resume, profile) {
+  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const resumeCompanies = new Set((resume.experience || []).map(e => norm(e.company)));
+  const missingRoles = [];
+  const thinRoles = [];
+
+  for (const exp of (profile.experience || [])) {
+    const company = norm(exp.company);
+    if (!company) continue;
+    if (!resumeCompanies.has(company)) {
+      missingRoles.push(exp.company);
+    } else {
+      const resumeRole = (resume.experience || []).find(e => norm(e.company) === company);
+      if (resumeRole && (resumeRole.bullets || []).length <= 1) {
+        thinRoles.push(exp.company);
+      }
+    }
+  }
+
+  return { missingRoles, thinRoles };
+}
 const MAX_RETRIES = 2;
 const BASE_DELAY_MS = 2000;
 
@@ -54,7 +76,30 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     throw e;
   }
 
-  // Step 1.5: Page-fit loop — measure rendered PDF, adjust if needed
+  // Step 1.5: Content integrity check — verify resume content traces back to profile
+  const integrityIssues = validateResumeContent(resume, profile);
+  if (integrityIssues.missingRoles.length) {
+    console.warn(`⚠ Tailoring dropped ${integrityIssues.missingRoles.length} role(s): ${integrityIssues.missingRoles.join(', ')} — patching`);
+    for (const role of integrityIssues.missingRoles) {
+      const profileRole = profile.experience.find(e => (e.company || '').toLowerCase() === role.toLowerCase());
+      if (profileRole) {
+        const bullets = (profileRole.bullets || []).slice(0, 2).map(b => typeof b === 'string' ? b : b.text || '');
+        resume.experience.push({
+          company: profileRole.company,
+          tagline: profileRole.company_description || '',
+          title: profileRole.title,
+          location: profileRole.location || '',
+          dates: profileRole.dates || '',
+          bullets,
+        });
+      }
+    }
+  }
+  if (integrityIssues.thinRoles.length) {
+    console.log(`ℹ Thin roles (≤1 bullet): ${integrityIssues.thinRoles.join(', ')}`);
+  }
+
+  // Step 1.6: Page-fit loop — measure rendered PDF, adjust if needed
   try {
     const measurement = await measureResumePdf(resume);
     console.log(`📐 Page measurement for ${job.company}: ${measurement.pages} page(s), last page ${measurement.lastPageFill}% filled`);

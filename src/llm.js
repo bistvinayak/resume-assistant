@@ -184,31 +184,38 @@ If everything is clear and complete, return an empty ambiguities array.
   },
 
   tailor_resume: {
-    prompt: `You are a senior resume writer. Build a tailored resume using ONLY facts from the candidate profile.
+    prompt: `You are selecting and reframing profile content for a targeted resume. You are NOT writing a resume from scratch.
 
-JD-DRIVEN BULLET SELECTION (most important):
-- First, identify the job description's MUST-HAVE requirements and NICE-TO-HAVE requirements
-- Then select bullets from the profile based on RELEVANCE TO THE JD, not by role recency
-- A bullet from an older role that directly matches a JD requirement beats a recent bullet that doesn't
-- Include ALL experience roles from the profile — do not drop any role. Give more bullets to roles with higher JD relevance
-- Bullets with specific metrics ($, %, numbers) that match JD requirements always get priority
+YOUR JOB IS SELECT + REFRAME, NOT REWRITE:
+1. SELECT which bullets from the profile are most relevant to this JD
+2. REFRAME the wording to use JD keywords where the candidate has equivalent experience
+3. The core fact, metric, and impact of each bullet MUST be preserved
+4. NEVER invent new bullets, combine two bullets into one, or summarize multiple achievements into a single line
+5. NEVER drop a metric ($, %, number) from a bullet — metrics are sacred
 
-BULLET RULES:
-- Never invent experience, employers, dates, or metrics
-- Where a JD keyword is semantically equivalent to existing experience, rephrase that bullet to use the JD's exact terminology. If unsure, keep original wording
-- Sub-point bullets (e.g. "Price Monitor — ...", "Brand Protector — ...") are distinct achievements. Include them as separate bullets, do NOT collapse multiple sub-points into one generic bullet
+CONTENT INTEGRITY RULES:
+- Every bullet in the output MUST trace back to a specific bullet in the profile
+- You may rephrase "Spearheaded a centralized Content Management Tool" → "Led development of a centralized Content Management Tool" (same fact, JD-aligned wording)
+- You may NOT rephrase "Built 4 separate analytics products" → "Owned analytics suite" (lost the detail)
+- Sub-point bullets (e.g. "Price Monitor — ...", "Brand Protector — ...") are distinct achievements. Each one is its own bullet. NEVER collapse them.
+- If the profile says "$0.5M revenue" the resume must say "$0.5M revenue", not "significant revenue"
 
-PAGE TARGETING:
-- Be GREEDY — include all JD-relevant bullets. More content is better; we will trim later if needed
-- For roles highly relevant to the JD: include 5-8 bullets
-- For roles somewhat relevant: include 3-4 bullets
-- For roles with minimal JD overlap: include 2 bullets (still include the role)
+WHAT TO INCLUDE:
+- ALL experience roles from the profile — never drop a role entirely
+- Be GREEDY with bullets — include all JD-relevant bullets. We trim for page fit separately.
+- For highly relevant roles: include ALL bullets (up to 8)
+- For somewhat relevant roles: include 3-5 bullets, prioritize ones with metrics
+- For roles with minimal JD overlap: include 2 bullets minimum
+- Bullets with specific metrics that match JD requirements always get priority
+- Contact: use exactly what the profile has (name, email, phone, location, links)
 
-OTHER RULES:
-- Summary: 2-3 sentences tuned to this specific job
-- Skills: most relevant to JD first, max 15, grouped as: Product | Technical & Analytics | AI & Tools
-- Keep company tagline (one italic line)
-- Projects: if JD relates to something the candidate built, expand with tech stack, architecture, and outcomes. If not, keep to 1 line each.
+SUMMARY: 2-3 sentences. Reuse profile facts. Tune to JD but do not fabricate.
+
+SKILLS: Select from profile skills, reorder with JD-relevant first. Max 15. Group as: Product | Technical & Analytics | AI & Tools
+
+PROJECTS: Copy name and description from profile. If JD relates to the project's domain, expand description with tech stack and outcomes FROM the profile. Do not invent project details.
+
+COMPANY TAGLINE: Copy verbatim from the profile's company_description field.
 
 Return ONLY JSON:
 {
@@ -227,8 +234,8 @@ Return ONLY JSON:
     "Short sentence explaining a key tailoring decision"
   ]
 }
-tailoring_notes: 4-6 brief sentences explaining your most important decisions. Focus on WHAT you changed and WHY (which JD requirement it targets). Be specific — reference actual keywords and roles.`,
-    config: { model: MODEL, temperature: 0.2 },
+tailoring_notes: 4-6 sentences. For each note: which profile bullet you reframed, what JD keyword you targeted, and what you changed. Be specific.`,
+    config: { model: MODEL, temperature: 0.1 },
   },
 
   fit_resume: {

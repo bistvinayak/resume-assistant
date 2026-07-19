@@ -47,7 +47,7 @@ POST /api/chat { message, mode, history }
   │
   ├─ mode=tailor + URL → scrapeLinkedInJob → processJob (background)
   │
-  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:744]
+  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:751]
   │    ├─ URL structural detection (no LLM)
   │    │    ├─ url_job → "switch to Tailor tab" response
   │    │    └─ url_profile → save to contact field → done
@@ -57,7 +57,7 @@ POST /api/chat { message, mode, history }
   │         ├─ question → reply from intent gate using profile, done
   │         └─ add_info/delete/clarify → in_scope=true, continue ↓
   │
-  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:783]
+  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:790]
        └─ Returns { reply, extracted, deletions }
             → frontend shows pendingChanges for confirm/reject
 ```
@@ -66,7 +66,7 @@ POST /api/chat { message, mode, history }
 
 ```
 ingestText(text, userId) [profile.js:100]
-  → extractFacts(text) [llm.js:676]  — LLM extracts structured profile
+  → extractFacts(text) [llm.js:683]  — LLM extracts structured profile
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestPdf(filePath, userId) [profile.js:105]
@@ -74,7 +74,7 @@ ingestPdf(filePath, userId) [profile.js:105]
        ├─ .pdf → pdf-parse + pdfjs hyperlink extraction
        ├─ .docx/.doc → mammoth (text + HTML hyperlink extraction)
        └─ .txt → fs.readFile
-  → extractFacts(text) [llm.js:676]
+  → extractFacts(text) [llm.js:683]
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestFiles(files[], userId) [profile.js:111]
@@ -83,22 +83,22 @@ ingestFiles(files[], userId) [profile.js:111]
 applyPartial(partial, userId) [profile.js:259]
   → getProfile(userId)
   → if empty profile: mergeProfile (programmatic)
-  → if existing profile: smartMerge (LLM) [llm.js:795]
+  → if existing profile: smartMerge (LLM) [llm.js:802]
        └─ fallback: mergeProfile + detectConflicts
   → saveProfile(merged, userId)
   → returns merged (with _conflicts if any)
 ```
 
-## Job Processing Pipeline (pipeline.js:28)
+## Job Processing Pipeline (pipeline.js:50)
 
 ```
-processJob(job, userId) [pipeline.js:28]
+processJob(job, userId) [pipeline.js:50]
   → seenJobBefore(job) [db.js:141]
   → getProfile(userId) [db.js:78]
-  → tailorResume(profile, job, trace) [llm.js:690]  — LLM
-  → calculateAtsScore(resume, job, trace) [llm.js:729]  — LLM
+  → tailorResume(profile, job, trace) [llm.js:697]  — LLM
+  → calculateAtsScore(resume, job, trace) [llm.js:736]  — LLM
   → if ats < 95:
-       → improveResume(resume, job, ats, trace) [llm.js:715]  — LLM
+       → improveResume(resume, job, ats, trace) [llm.js:722]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:9]
   → saveTailored(jobId, resume, filePath) [db.js:157]
@@ -114,7 +114,7 @@ startCron() [cron.js:74]  — runs every 2 hours
   → runBatch(userId) [cron.js:9]
        → fetchLinkedInJobs() [gmail.js:7]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
-       → per job: processJob(job, userId) [pipeline.js:28]
+       → per job: processJob(job, userId) [pipeline.js:50]
 ```
 
 ## Merge Logic (profile.js:407)
@@ -137,15 +137,15 @@ mergeProfile(base, incoming, conflicts) [profile.js:407]
 
 | Function | Line | Purpose |
 |----------|------|---------|
-| extractFacts | 676 | Parse raw text → structured profile JSON |
-| tailorResume | 690 | Rewrite profile into job-tailored resume |
-| improveResume | 715 | Rewrite bullets with missing JD keywords |
-| calculateAtsScore | 729 | Score resume vs JD |
-| classifyIntent | 744 | Intent gate: scope check + direct reply for questions |
-| chatEnrich | 783 | Extract profile data from conversation |
-| smartMerge | 795 | LLM-powered merge of existing + new profile |
+| extractFacts | 683 | Parse raw text → structured profile JSON |
+| tailorResume | 697 | Rewrite profile into job-tailored resume |
+| improveResume | 722 | Rewrite bullets with missing JD keywords |
+| calculateAtsScore | 736 | Score resume vs JD |
+| classifyIntent | 751 | Intent gate: scope check + direct reply for questions |
+| chatEnrich | 790 | Extract profile data from conversation |
+| smartMerge | 802 | LLM-powered merge of existing + new profile |
 
-All use `askJson(system, user, name, trace, prompt, history)` [llm.js:605] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
+All use `askJson(system, user, name, trace, prompt, history)` [llm.js:612] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
 
 ## Database (db.js)
 
@@ -280,26 +280,26 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:605] — O
 
 | Function | Line | Exported |
 |----------|------|----------|
-| syncPrompts | 496 | yes |
-| getPrompt | 517 | no |
-| evalExtraction | 532 | no |
-| evalAtsScore | 560 | no |
-| evalTailoring | 566 | no |
-| evalImprovement | 577 | no |
-| countProfileBullets | 583 | no |
-| evalSmartMerge | 587 | no |
-| askJson | 605 | no |
-| makeTrace | 653 | no |
-| createJobTrace | 666 | yes |
-| extractFacts | 676 | yes |
-| tailorResume | 690 | yes |
-| fitResume | 703 | yes |
-| improveResume | 715 | yes |
-| calculateAtsScore | 729 | yes |
-| classifyIntent | 744 | yes |
-| chatEnrich | 783 | yes |
-| smartMerge | 795 | yes |
-| scoreIngestionCoverage | 807 | yes |
+| syncPrompts | 503 | yes |
+| getPrompt | 524 | no |
+| evalExtraction | 539 | no |
+| evalAtsScore | 567 | no |
+| evalTailoring | 573 | no |
+| evalImprovement | 584 | no |
+| countProfileBullets | 590 | no |
+| evalSmartMerge | 594 | no |
+| askJson | 612 | no |
+| makeTrace | 660 | no |
+| createJobTrace | 673 | yes |
+| extractFacts | 683 | yes |
+| tailorResume | 697 | yes |
+| fitResume | 710 | yes |
+| improveResume | 722 | yes |
+| calculateAtsScore | 736 | yes |
+| classifyIntent | 751 | yes |
+| chatEnrich | 790 | yes |
+| smartMerge | 802 | yes |
+| scoreIngestionCoverage | 814 | yes |
 
 ### mailer.js
 
@@ -312,9 +312,10 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:605] — O
 
 | Function | Line | Exported |
 |----------|------|----------|
-| withRetry | 15 | no |
-| processJob | 28 | yes |
-| buildEmailBody | 175 | no |
+| validateResumeContent | 13 | no |
+| withRetry | 37 | no |
+| processJob | 50 | yes |
+| buildEmailBody | 220 | no |
 
 ### profile.js
 
