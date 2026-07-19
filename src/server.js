@@ -282,9 +282,12 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
 
       const existing = await getJobByJobId(jobId, req.userId);
       if (existing && existing.status === 'processing') {
-        return res.json({ reply: `This job is already being processed — hang tight! You'll see the result in the Job Activity tab once it's ready.`, profile: currentProfile, duplicate: true });
+        const ageMs = Date.now() - new Date(existing.seen_at).getTime();
+        if (ageMs < 5 * 60 * 1000) {
+          return res.json({ reply: `This job is already being processed — hang tight! You'll see the result in the Job Activity tab once it's ready.`, profile: currentProfile, duplicate: true });
+        }
       }
-      const isRerun = existing && existing.status === 'delivered';
+      const isRerun = existing && (existing.status === 'delivered' || existing.status === 'processing');
 
       const p = currentProfile;
       const skills = (p.skills || []).slice(0, 10).join(', ') || 'none listed';
@@ -440,13 +443,17 @@ app.post(['/jobs/submit-url', '/api/jobs/submit-url'], async (req, res, next) =>
 
     const job_id = `linkedin_${jobIdMatch[1]}`;
 
-    // Block only if actively processing right now
+    // Block only if actively processing right now (but not if stale > 5 min)
     const existing = await getJobByJobId(job_id, req.userId);
     if (existing && existing.status === 'processing') {
-      return res.json({ ok: true, job_id, duplicate: true, message: 'This job is already being processed' });
+      const ageMs = Date.now() - new Date(existing.seen_at).getTime();
+      if (ageMs < 5 * 60 * 1000) {
+        return res.json({ ok: true, job_id, duplicate: true, message: 'This job is already being processed' });
+      }
+      console.log(`⚠ Stale processing job ${job_id} (${Math.round(ageMs / 1000)}s old) — allowing re-run`);
     }
 
-    const isRerun = existing && existing.status === 'delivered';
+    const isRerun = existing && (existing.status === 'delivered' || existing.status === 'processing');
     await insertJobProcessing({ job_id, url }, req.userId);
 
     res.json({ ok: true, job_id, rerun: isRerun, message: isRerun ? 'Re-tailoring with updated profile...' : 'Job queued — resume will be emailed shortly' });
