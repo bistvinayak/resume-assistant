@@ -377,6 +377,24 @@ function validateMerge(current, partial, merged) {
     issues.push({ section: 'skills', missing: current.skills.length - (merged.skills?.length || 0), total: current.skills.length });
   }
 
+  // Bullet-level check: smartMerge must not drop bullets from current OR partial
+  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 30);
+  for (const source of [current, partial]) {
+    for (const exp of (source.experience || [])) {
+      const mergedExp = (merged.experience || []).find(m =>
+        (m.company || '').toLowerCase() === (exp.company || '').toLowerCase() &&
+        (m.title || '').toLowerCase() === (exp.title || '').toLowerCase()
+      );
+      if (!mergedExp) continue;
+      const mergedBullets = new Set((mergedExp.bullets || []).map(b => norm(typeof b === 'string' ? b : b.text)));
+      const sourceBullets = (exp.bullets || []).map(b => typeof b === 'string' ? b : b.text).filter(Boolean);
+      const missing = sourceBullets.filter(b => !mergedBullets.has(norm(b)) && ![...mergedBullets].some(mb => mb.includes(norm(b).slice(0, 20))));
+      if (missing.length > 0) {
+        issues.push({ section: 'experience_bullets', company: exp.company, missing: missing.length, total: sourceBullets.length });
+      }
+    }
+  }
+
   if (issues.length) {
     console.warn('Smart merge dropped data, patching with programmatic merge:', JSON.stringify(issues));
     merged = mergeProfile(merged, current);

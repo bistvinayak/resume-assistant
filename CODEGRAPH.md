@@ -47,7 +47,7 @@ POST /api/chat { message, mode, history }
   │
   ├─ mode=tailor + URL → scrapeLinkedInJob → processJob (background)
   │
-  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:723]
+  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:744]
   │    ├─ URL structural detection (no LLM)
   │    │    ├─ url_job → "switch to Tailor tab" response
   │    │    └─ url_profile → save to contact field → done
@@ -57,7 +57,7 @@ POST /api/chat { message, mode, history }
   │         ├─ question → reply from intent gate using profile, done
   │         └─ add_info/delete/clarify → in_scope=true, continue ↓
   │
-  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:762]
+  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:783]
        └─ Returns { reply, extracted, deletions }
             → frontend shows pendingChanges for confirm/reject
 ```
@@ -66,7 +66,7 @@ POST /api/chat { message, mode, history }
 
 ```
 ingestText(text, userId) [profile.js:100]
-  → extractFacts(text) [llm.js:655]  — LLM extracts structured profile
+  → extractFacts(text) [llm.js:676]  — LLM extracts structured profile
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestPdf(filePath, userId) [profile.js:105]
@@ -74,7 +74,7 @@ ingestPdf(filePath, userId) [profile.js:105]
        ├─ .pdf → pdf-parse + pdfjs hyperlink extraction
        ├─ .docx/.doc → mammoth (text + HTML hyperlink extraction)
        └─ .txt → fs.readFile
-  → extractFacts(text) [llm.js:655]
+  → extractFacts(text) [llm.js:676]
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestFiles(files[], userId) [profile.js:111]
@@ -83,7 +83,7 @@ ingestFiles(files[], userId) [profile.js:111]
 applyPartial(partial, userId) [profile.js:259]
   → getProfile(userId)
   → if empty profile: mergeProfile (programmatic)
-  → if existing profile: smartMerge (LLM) [llm.js:774]
+  → if existing profile: smartMerge (LLM) [llm.js:795]
        └─ fallback: mergeProfile + detectConflicts
   → saveProfile(merged, userId)
   → returns merged (with _conflicts if any)
@@ -95,10 +95,10 @@ applyPartial(partial, userId) [profile.js:259]
 processJob(job, userId) [pipeline.js:28]
   → seenJobBefore(job) [db.js:141]
   → getProfile(userId) [db.js:78]
-  → tailorResume(profile, job, trace) [llm.js:669]  — LLM
-  → calculateAtsScore(resume, job, trace) [llm.js:708]  — LLM
+  → tailorResume(profile, job, trace) [llm.js:690]  — LLM
+  → calculateAtsScore(resume, job, trace) [llm.js:729]  — LLM
   → if ats < 95:
-       → improveResume(resume, job, ats, trace) [llm.js:694]  — LLM
+       → improveResume(resume, job, ats, trace) [llm.js:715]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:9]
   → saveTailored(jobId, resume, filePath) [db.js:157]
@@ -117,19 +117,19 @@ startCron() [cron.js:74]  — runs every 2 hours
        → per job: processJob(job, userId) [pipeline.js:28]
 ```
 
-## Merge Logic (profile.js:389)
+## Merge Logic (profile.js:407)
 
 ```
-mergeProfile(base, incoming, conflicts) [profile.js:389]
+mergeProfile(base, incoming, conflicts) [profile.js:407]
   ├─ contact: shallow merge
-  ├─ experience: upsertExperience [profile.js:524]
-  │    └─ fuzzyMatchExperience (normCompany) [profile.js:487]
-  ├─ education: upsertById with fuzzyMatchEducation [profile.js:576]
-  │    └─ fuzzyMatchEducation (normSchool + normDegree) [profile.js:491]
-  ├─ projects: upsertProjects [profile.js:555]
-  ├─ certifications: upsertById [profile.js:576]
-  ├─ technical_skills: upsertTechnicalSkills [profile.js:454]
-  ├─ skills/soft_skills: unionCI [profile.js:497]
+  ├─ experience: upsertExperience [profile.js:542]
+  │    └─ fuzzyMatchExperience (normCompany) [profile.js:505]
+  ├─ education: upsertById with fuzzyMatchEducation [profile.js:594]
+  │    └─ fuzzyMatchEducation (normSchool + normDegree) [profile.js:509]
+  ├─ projects: upsertProjects [profile.js:573]
+  ├─ certifications: upsertById [profile.js:594]
+  ├─ technical_skills: upsertTechnicalSkills [profile.js:472]
+  ├─ skills/soft_skills: unionCI [profile.js:515]
   └─ cross-array skill dedup (tech > soft > flat)
 ```
 
@@ -137,15 +137,15 @@ mergeProfile(base, incoming, conflicts) [profile.js:389]
 
 | Function | Line | Purpose |
 |----------|------|---------|
-| extractFacts | 655 | Parse raw text → structured profile JSON |
-| tailorResume | 669 | Rewrite profile into job-tailored resume |
-| improveResume | 694 | Rewrite bullets with missing JD keywords |
-| calculateAtsScore | 708 | Score resume vs JD |
-| classifyIntent | 723 | Intent gate: scope check + direct reply for questions |
-| chatEnrich | 762 | Extract profile data from conversation |
-| smartMerge | 774 | LLM-powered merge of existing + new profile |
+| extractFacts | 676 | Parse raw text → structured profile JSON |
+| tailorResume | 690 | Rewrite profile into job-tailored resume |
+| improveResume | 715 | Rewrite bullets with missing JD keywords |
+| calculateAtsScore | 729 | Score resume vs JD |
+| classifyIntent | 744 | Intent gate: scope check + direct reply for questions |
+| chatEnrich | 783 | Extract profile data from conversation |
+| smartMerge | 795 | LLM-powered merge of existing + new profile |
 
-All use `askJson(system, user, name, trace, prompt, history)` [llm.js:584] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
+All use `askJson(system, user, name, trace, prompt, history)` [llm.js:605] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
 
 ## Database (db.js)
 
@@ -280,26 +280,26 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:584] — O
 
 | Function | Line | Exported |
 |----------|------|----------|
-| syncPrompts | 475 | yes |
-| getPrompt | 496 | no |
-| evalExtraction | 511 | no |
-| evalAtsScore | 539 | no |
-| evalTailoring | 545 | no |
-| evalImprovement | 556 | no |
-| countProfileBullets | 562 | no |
-| evalSmartMerge | 566 | no |
-| askJson | 584 | no |
-| makeTrace | 632 | no |
-| createJobTrace | 645 | yes |
-| extractFacts | 655 | yes |
-| tailorResume | 669 | yes |
-| fitResume | 682 | yes |
-| improveResume | 694 | yes |
-| calculateAtsScore | 708 | yes |
-| classifyIntent | 723 | yes |
-| chatEnrich | 762 | yes |
-| smartMerge | 774 | yes |
-| scoreIngestionCoverage | 786 | yes |
+| syncPrompts | 496 | yes |
+| getPrompt | 517 | no |
+| evalExtraction | 532 | no |
+| evalAtsScore | 560 | no |
+| evalTailoring | 566 | no |
+| evalImprovement | 577 | no |
+| countProfileBullets | 583 | no |
+| evalSmartMerge | 587 | no |
+| askJson | 605 | no |
+| makeTrace | 653 | no |
+| createJobTrace | 666 | yes |
+| extractFacts | 676 | yes |
+| tailorResume | 690 | yes |
+| fitResume | 703 | yes |
+| improveResume | 715 | yes |
+| calculateAtsScore | 729 | yes |
+| classifyIntent | 744 | yes |
+| chatEnrich | 783 | yes |
+| smartMerge | 795 | yes |
+| scoreIngestionCoverage | 807 | yes |
 
 ### mailer.js
 
@@ -332,17 +332,17 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:584] — O
 | detectConflicts | 295 | no |
 | datesOverlap | 346 | no |
 | validateMerge | 359 | no |
-| mergeProfile | 389 | yes |
-| upsertTechnicalSkills | 454 | no |
-| fuzzyMatchExperience | 487 | no |
-| fuzzyMatchEducation | 491 | no |
-| unionCI | 497 | no |
-| mergeBullets | 506 | no |
-| upsertExperience | 524 | no |
-| upsertProjects | 555 | no |
-| upsertById | 576 | no |
-| applyDeletions | 602 | yes |
-| resolveConflicts | 653 | yes |
+| mergeProfile | 407 | yes |
+| upsertTechnicalSkills | 472 | no |
+| fuzzyMatchExperience | 505 | no |
+| fuzzyMatchEducation | 509 | no |
+| unionCI | 515 | no |
+| mergeBullets | 524 | no |
+| upsertExperience | 542 | no |
+| upsertProjects | 573 | no |
+| upsertById | 594 | no |
+| applyDeletions | 620 | yes |
+| resolveConflicts | 671 | yes |
 
 ### renderDocx.js
 

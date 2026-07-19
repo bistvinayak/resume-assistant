@@ -303,7 +303,28 @@ MERGE RULES (in priority order):
      c. Keep the entry with more complete metadata (dates, location, company_description)
    - For UNMATCHED entries: add them as new entries
    - Order: reverse chronological (most recent first)
-   - SUB-POINTS / NESTED PROJECTS: Bullets that begin with a project name or category prefix (e.g. "Price Monitor – ...", "Content Management Tool: ...", "Brand Protector – ...") are individual achievements. They are NOT duplicates of each other even if they share the same parent role. KEEP EVERY ONE. Never merge two differently-named sub-point bullets into one.
+   - SUB-POINTS / NESTED PROJECTS: Bullets that begin with a product or project name (e.g. "Price Monitor – ...", "Brand Protector – ...", "Growth Accelerator – ...") are INDIVIDUAL achievements. Rules:
+     • They are NOT duplicates of each other — "Price Monitor" and "Brand Protector" are different products
+     • They are NOT duplicates of a parent bullet (e.g. "Owned a four-module analytics suite") — the parent is a summary, the sub-points are the details. KEEP BOTH.
+     • A parent bullet + its sub-points must ALL appear in the output. The sub-points add detail the parent lacks.
+     • Similarly, category-prefixed bullets like "Product Strategy & Roadmap Ownership: ..." and "Quality Audit & Compliance: ..." are distinct bullets — different category prefix = different bullet, even if both are under the same role.
+     • When in doubt: if two bullets have different opening words before a colon or dash, they are DIFFERENT bullets. Keep both.
+
+EXAMPLE — merging experience bullets correctly:
+CURRENT profile has:
+  { company: "Acme Corp", title: "PM", bullets: [
+    { text: "Owned a four-module analytics suite across 200+ marketplaces", metric: "200+ marketplaces", impact: "..." }
+  ]}
+NEW extraction has:
+  { company: "Acme Corp", title: "PM", bullets: [
+    { text: "Owned a four-module analytics suite across 200+ marketplaces", metric: "200+ marketplaces", impact: "..." },
+    { text: "Price Monitor — real-time price tracking, MAP-policy violations", metric: null, impact: "Price enforcement" },
+    { text: "Brand Protector — automated unauthorized-seller removal across 200+ marketplaces", metric: "200+ marketplaces", impact: "Brand protection" },
+    { text: "Content Protector — multi-daily PDP scans against source-of-truth systems", metric: null, impact: "Content integrity" },
+    { text: "Growth Accelerator — unified 1P+3P analytics dashboard", metric: null, impact: "Analytics consolidation" }
+  ]}
+CORRECT merged output: ALL 5 bullets (the parent + 4 sub-points). The sub-points are NOT duplicates of the parent.
+WRONG: dropping sub-points because "the parent bullet already covers the suite"
 
 3. METRICS ARE SACRED:
    - Never drop a number, percentage, dollar amount, or quantifiable result
