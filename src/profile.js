@@ -5,7 +5,7 @@ const path = require('path');
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const { getProfile, saveProfile } = require('./db');
-const { extractFacts, smartMerge } = require('./llm');
+const { extractFacts, smartMerge, scoreIngestionCoverage } = require('./llm');
 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.txt', '.json']);
 
@@ -59,8 +59,24 @@ async function extractTextFromFile(filePath, originalName) {
   }
 
   if (ext === '.docx' || ext === '.doc') {
-    const result = await mammoth.extractRawText({ path: filePath });
-    return result.value;
+    const textResult = await mammoth.extractRawText({ path: filePath });
+    let text = textResult.value;
+
+    // Extract hyperlinks from DOCX
+    try {
+      const htmlResult = await mammoth.convertToHtml({ path: filePath });
+      const urls = new Set();
+      const linkRegex = /href="(https?:\/\/[^"]+)"/g;
+      let match;
+      while ((match = linkRegex.exec(htmlResult.value)) !== null) {
+        urls.add(match[1]);
+      }
+      if (urls.size) {
+        text += '\n\n--- Hyperlinks found in document ---\n' + [...urls].join('\n');
+      }
+    } catch (_) {}
+
+    return text;
   }
 
   if (ext === '.txt') {
@@ -119,6 +135,7 @@ async function ingestFiles(files, userId = 'me', ctx = {}) {
     : texts.map((t, i) => `--- Document ${i + 1} ---\n${t}`).join('\n\n');
 
   const partial = await extractFacts(combined, { userId, ...ctx });
+  const extractedSummary = summarizeExtraction(partial);
   const profile = await applyPartial(partial, userId, ctx);
 
   return {
@@ -128,7 +145,113 @@ async function ingestFiles(files, userId = 'me', ctx = {}) {
       filesSkipped: errors.length,
       errors: errors.length ? errors : undefined,
     },
+    _extracted: extractedSummary,
   };
+}
+
+function summarizeExtraction(partial) {
+  const lines = [];
+  for (const exp of (partial.experience || [])) {
+    const bullets = (exp.bullets || []).map(b => typeof b === 'string' ? b : b.text || '').filter(Boolean);
+    lines.push(`Experience: ${exp.title || '?'} at ${exp.company || '?'} (${exp.dates || 'no dates'}) — ${bullets.length} bullet(s)`);
+    for (const b of bullets.slice(0, 3)) lines.push(`  • ${b.slice(0, 100)}`);
+    if (bullets.length > 3) lines.push(`  ... +${bullets.length - 3} more`);
+  }
+  for (const p of (partial.projects || [])) {
+    lines.push(`Project: ${p.name || '?'}`);
+  }
+  for (const e of (partial.education || [])) {
+    lines.push(`Education: ${e.degree || '?'} — ${e.school || '?'}`);
+  }
+  const skills = [
+    ...(partial.skills || []).map(s => typeof s === 'object' ? s.name : s),
+    ...(partial.technical_skills || []).map(s => typeof s === 'object' ? s.name : s),
+    ...(partial.soft_skills || []),
+  ].filter(Boolean);
+  if (skills.length) lines.push(`Skills extracted: ${skills.join(', ')}`);
+  return lines.join('\n');
+}
+
+// ── COVERAGE DIFF ─────────────────────────────────────────────────────────
+
+function diffCoverage(extracted, merged) {
+  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const bulletText = (b) => norm(typeof b === 'string' ? b : b.text || '');
+  const items = [];
+  let totalExtracted = 0;
+
+  // Experience bullets
+  for (const ext of (extracted.experience || [])) {
+    const extBullets = (ext.bullets || []);
+    totalExtracted += extBullets.length;
+    const mergedExp = (merged.experience || []).find(m => norm(m.company) === norm(ext.company));
+    if (!mergedExp) {
+      for (const b of extBullets) {
+        items.push({ field: 'experience', company: ext.company, value: typeof b === 'string' ? b : b.text, reason: 'entry_not_in_profile' });
+      }
+      continue;
+    }
+    const mergedBulletTexts = new Set((mergedExp.bullets || []).map(bulletText));
+    for (const b of extBullets) {
+      const bt = bulletText(b);
+      if (bt.length < 5) continue;
+      const found = mergedBulletTexts.has(bt) ||
+        [...mergedBulletTexts].some(mb => mb.includes(bt.slice(0, 30)) || bt.includes(mb.slice(0, 30)));
+      if (!found) {
+        items.push({ field: 'experience', company: ext.company, value: typeof b === 'string' ? b : b.text, reason: 'bullet_dropped_during_merge' });
+      }
+    }
+  }
+
+  // Projects
+  for (const p of (extracted.projects || [])) {
+    totalExtracted++;
+    const found = (merged.projects || []).some(mp => norm(mp.name) === norm(p.name));
+    if (!found) {
+      items.push({ field: 'projects', value: p.name, reason: 'project_not_in_profile' });
+    }
+  }
+
+  // Education
+  for (const e of (extracted.education || [])) {
+    totalExtracted++;
+    const found = (merged.education || []).some(me =>
+      norm(me.school).includes(norm(e.school).slice(0, 8)) && norm(me.degree).includes(norm(e.degree).slice(0, 8))
+    );
+    if (!found) {
+      items.push({ field: 'education', value: `${e.degree} — ${e.school}`, reason: 'education_not_in_profile' });
+    }
+  }
+
+  // Skills
+  const mergedSkillSet = new Set([
+    ...(merged.skills || []).map(s => norm(typeof s === 'object' ? s.name : s)),
+    ...(merged.technical_skills || []).map(s => norm(typeof s === 'object' ? s.name : s)),
+    ...(merged.soft_skills || []).map(s => norm(s)),
+  ]);
+  const extractedSkills = [
+    ...(extracted.skills || []).map(s => typeof s === 'object' ? s.name : s),
+    ...(extracted.technical_skills || []).map(s => typeof s === 'object' ? s.name : s),
+    ...(extracted.soft_skills || []),
+  ].filter(Boolean);
+  totalExtracted += extractedSkills.length;
+  for (const s of extractedSkills) {
+    if (!mergedSkillSet.has(norm(s))) {
+      items.push({ field: 'skills', value: s, reason: 'skill_not_in_profile' });
+    }
+  }
+
+  // Certifications
+  for (const c of (extracted.certifications || [])) {
+    totalExtracted++;
+    const name = typeof c === 'string' ? c : c.name || '';
+    const found = (merged.certifications || []).some(mc => norm(typeof mc === 'string' ? mc : mc.name) === norm(name));
+    if (!found) {
+      items.push({ field: 'certifications', value: name, reason: 'cert_not_in_profile' });
+    }
+  }
+
+  return { items, totalExtracted: Math.max(totalExtracted, 1) };
 }
 
 // ── MERGE LOGIC ───────────────────────────────────────────────────────────
@@ -136,22 +259,101 @@ async function ingestFiles(files, userId = 'me', ctx = {}) {
 async function applyPartial(partial, userId = 'me', ctx = {}) {
   const current = await getProfile(userId);
   const source = ctx.source || 'ingestion';
+  const conflicts = [];
+  const ambiguities = partial._ambiguities || [];
+  delete partial._ambiguities;
 
   let merged;
   if (isEmptyProfile(current)) {
-    merged = mergeProfile(current, partial);
+    merged = mergeProfile(current, partial, conflicts);
   } else {
     try {
       merged = await smartMerge(current, partial, { userId, ...ctx });
       merged = validateMerge(current, partial, merged);
+      detectConflicts(current, partial, merged, conflicts);
     } catch (e) {
       console.error('Smart merge failed, falling back to programmatic:', e.message);
-      merged = mergeProfile(current, partial);
+      merged = mergeProfile(current, partial, conflicts);
     }
   }
 
+  const drops = diffCoverage(partial, merged);
+  const mergeTraceId = merged._mergeTraceId;
+  delete merged._mergeTraceId;
+
+  if (mergeTraceId && drops.items.length > 0) {
+    scoreIngestionCoverage(mergeTraceId, drops);
+  }
+
   await saveProfile(merged, userId, source);
+  merged._conflicts = conflicts.length ? conflicts : undefined;
+  merged._ambiguities = ambiguities.length ? ambiguities : undefined;
+  merged._drops = drops.items.length ? drops : undefined;
   return merged;
+}
+
+function detectConflicts(current, partial, merged, conflicts) {
+  // Experience: same company appearing with different titles
+  const expByCompany = new Map();
+  for (const e of (merged.experience || [])) {
+    const c = normCompany(e.company);
+    if (!c) continue;
+    if (!expByCompany.has(c)) expByCompany.set(c, []);
+    expByCompany.get(c).push(e);
+  }
+  for (const [, entries] of expByCompany) {
+    if (entries.length < 2) continue;
+    // Check if any pair has overlapping dates (= likely same role, not progression)
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        if (datesOverlap(entries[i].dates, entries[j].dates)) {
+          conflicts.push({
+            type: 'experience',
+            existing: entries[i],
+            incoming: entries[j],
+            reason: `Same company "${entries[i].company}" with overlapping dates — possibly the same role with different titles`,
+          });
+        }
+      }
+    }
+  }
+
+  // Education: same school with different name formats
+  const eduBySchool = new Map();
+  for (const e of (merged.education || [])) {
+    const s = normSchool(e.school);
+    if (!s) continue;
+    if (!eduBySchool.has(s)) eduBySchool.set(s, []);
+    eduBySchool.get(s).push(e);
+  }
+  for (const [, entries] of eduBySchool) {
+    if (entries.length < 2) continue;
+    for (let i = 0; i < entries.length; i++) {
+      for (let j = i + 1; j < entries.length; j++) {
+        if (normDegree(entries[i].degree) === normDegree(entries[j].degree)) {
+          conflicts.push({
+            type: 'education',
+            existing: entries[i],
+            incoming: entries[j],
+            reason: `Same school "${entries[i].school.split(',')[0]}" and degree — likely duplicate with different name format`,
+          });
+        }
+      }
+    }
+  }
+}
+
+function datesOverlap(d1, d2) {
+  if (!d1 || !d2) return false;
+  const parseYear = (s) => {
+    const m = String(s).match(/(\d{4})/g);
+    return m ? m.map(Number) : [];
+  };
+  const y1 = parseYear(d1), y2 = parseYear(d2);
+  if (!y1.length || !y2.length) return false;
+  const start1 = Math.min(...y1), end1 = d1.toLowerCase().includes('present') ? 9999 : Math.max(...y1);
+  const start2 = Math.min(...y2), end2 = d2.toLowerCase().includes('present') ? 9999 : Math.max(...y2);
+  return start1 <= end2 && start2 <= end1;
 }
 
 function validateMerge(current, partial, merged) {
@@ -184,13 +386,12 @@ function validateMerge(current, partial, merged) {
   return merged;
 }
 
-function mergeProfile(base, incoming) {
+function mergeProfile(base, incoming, conflicts = null) {
   const out = JSON.parse(JSON.stringify(base));
   if (!incoming || typeof incoming !== 'object') return out;
 
   if (incoming.contact) {
     out.contact = { ...out.contact, ...incoming.contact };
-    // Move URLs from generic links array into dedicated fields
     if (Array.isArray(out.contact.links)) {
       for (const link of out.contact.links) {
         const l = (link || '').toLowerCase();
@@ -205,9 +406,18 @@ function mergeProfile(base, incoming) {
   out.skills = unionCI(out.skills, incoming.skills);
   out.technical_skills = upsertTechnicalSkills(out.technical_skills || [], incoming.technical_skills);
   out.soft_skills = unionCI(out.soft_skills || [], incoming.soft_skills);
-  out.experience = upsertExperience(out.experience, incoming.experience);
+
+  // Cross-array skill dedup: remove from skills/soft_skills if already in technical_skills
+  const techSet = new Set((out.technical_skills || []).map(s => (s.name || '').toLowerCase()));
+  out.skills = (out.skills || []).filter(s => !techSet.has(s.toLowerCase()));
+  out.soft_skills = (out.soft_skills || []).filter(s => !techSet.has(s.toLowerCase()));
+  // Remove from skills if already in soft_skills
+  const softSet = new Set((out.soft_skills || []).map(s => s.toLowerCase()));
+  out.skills = out.skills.filter(s => !softSet.has(s.toLowerCase()));
+
+  out.experience = upsertExperience(out.experience, incoming.experience, conflicts);
   out.projects = upsertProjects(out.projects, incoming.projects);
-  out.education = upsertById(out.education, incoming.education, keyEdu);
+  out.education = upsertById(out.education, incoming.education, keyEdu, fuzzyMatchEducation, conflicts);
   out.certifications = upsertById(out.certifications || [], incoming.certifications, keyCert);
   out.languages = upsertById(out.languages || [], incoming.languages, keyLang);
   out.activities = unionCI(out.activities || [], incoming.activities);
@@ -269,6 +479,21 @@ const keyEdu = (e) => `${(e.school || '').toLowerCase()}|${(e.degree || '').toLo
 const keyCert = (c) => (typeof c === 'string' ? c : (c.name || '')).toLowerCase();
 const keyLang = (l) => (typeof l === 'string' ? l : (l.name || '')).toLowerCase();
 
+// Fuzzy matching: normalize to just the core name
+const normCompany = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+const normSchool = (s) => (s || '').toLowerCase().replace(/,.*$/, '').replace(/[^a-z0-9 ]/g, '').trim();
+const normDegree = (s) => (s || '').toLowerCase().replace(/[^a-z0-9 ]/g, '').trim();
+
+function fuzzyMatchExperience(a, b) {
+  return normCompany(a.company) === normCompany(b.company) && normCompany(a.company).length > 0;
+}
+
+function fuzzyMatchEducation(a, b) {
+  const sa = normSchool(a.school), sb = normSchool(b.school);
+  const da = normDegree(a.degree), db = normDegree(b.degree);
+  return sa.length > 0 && db.length > 0 && (sa === sb || sa.startsWith(sb) || sb.startsWith(sa)) && da === db;
+}
+
 function unionCI(a = [], b = []) {
   const seen = new Set((a || []).map((s) => String(s).toLowerCase()));
   const out = [...(a || [])];
@@ -296,7 +521,7 @@ function mergeBullets(existing, incoming) {
   return result;
 }
 
-function upsertExperience(existing = [], incoming = []) {
+function upsertExperience(existing = [], incoming = [], conflicts = null) {
   const out = [...(existing || [])];
   const index = new Map(out.map((item, i) => [keyExp(item), i]));
   for (const item of incoming || []) {
@@ -310,6 +535,16 @@ function upsertExperience(existing = [], incoming = []) {
         company_description: item.company_description || prev.company_description,
       };
     } else {
+      // Fuzzy match: same company, different title
+      const fuzzyIdx = out.findIndex(e => fuzzyMatchExperience(e, item) && keyExp(e) !== k);
+      if (fuzzyIdx !== -1 && conflicts) {
+        conflicts.push({
+          type: 'experience',
+          existing: out[fuzzyIdx],
+          incoming: item,
+          reason: `Same company "${item.company}" but different title`,
+        });
+      }
       out.push({ ...item, bullets: (item.bullets || []).map(normalizeBullet) });
       index.set(k, out.length - 1);
     }
@@ -338,13 +573,28 @@ function upsertProjects(existing = [], incoming = []) {
   return out;
 }
 
-function upsertById(existing = [], incoming = [], keyOf) {
+function upsertById(existing = [], incoming = [], keyOf, fuzzyFn = null, conflicts = null) {
   const out = [...(existing || [])];
   const index = new Map(out.map((item, i) => [keyOf(item), i]));
   for (const item of incoming || []) {
     const k = keyOf(item);
-    if (index.has(k)) out[index.get(k)] = { ...out[index.get(k)], ...item };
-    else { out.push(item); index.set(k, out.length - 1); }
+    if (index.has(k)) {
+      out[index.get(k)] = { ...out[index.get(k)], ...item };
+    } else {
+      if (fuzzyFn && conflicts) {
+        const fuzzyIdx = out.findIndex(e => fuzzyFn(e, item) && keyOf(e) !== k);
+        if (fuzzyIdx !== -1) {
+          conflicts.push({
+            type: 'education',
+            existing: out[fuzzyIdx],
+            incoming: item,
+            reason: `Same school "${(item.school || '').split(',')[0]}" with different format`,
+          });
+        }
+      }
+      out.push(item);
+      index.set(k, out.length - 1);
+    }
   }
   return out;
 }
@@ -400,4 +650,42 @@ function applyDeletions(profile, deletions) {
   return out;
 }
 
-module.exports = { ingestText, ingestPdf, ingestFiles, extractTextFromFile, mergeProfile, applyDeletions, ALLOWED_EXTENSIONS };
+function resolveConflicts(profile, resolutions) {
+  const out = JSON.parse(JSON.stringify(profile));
+
+  for (const res of resolutions) {
+    if (res.type === 'experience') {
+      // res.keep = 'existing' | 'incoming' | 'both'
+      if (res.keep === 'both') continue;
+      const remove = res.keep === 'existing' ? res.incoming : res.existing;
+      const keep = res.keep === 'existing' ? res.existing : res.incoming;
+      out.experience = out.experience.filter(e => {
+        const match = (e.company || '').toLowerCase() === (remove.company || '').toLowerCase()
+          && (e.title || '').toLowerCase() === (remove.title || '').toLowerCase();
+        return !match;
+      });
+      // Merge bullets from removed into kept entry
+      const keptIdx = out.experience.findIndex(e =>
+        (e.company || '').toLowerCase() === (keep.company || '').toLowerCase()
+        && (e.title || '').toLowerCase() === (keep.title || '').toLowerCase()
+      );
+      if (keptIdx !== -1 && remove.bullets?.length) {
+        out.experience[keptIdx].bullets = mergeBullets(out.experience[keptIdx].bullets, remove.bullets);
+      }
+    }
+
+    if (res.type === 'education') {
+      if (res.keep === 'both') continue;
+      const remove = res.keep === 'existing' ? res.incoming : res.existing;
+      out.education = out.education.filter(e => {
+        const match = (e.school || '').toLowerCase() === (remove.school || '').toLowerCase()
+          && (e.degree || '').toLowerCase() === (remove.degree || '').toLowerCase();
+        return !match;
+      });
+    }
+  }
+
+  return out;
+}
+
+module.exports = { ingestText, ingestPdf, ingestFiles, extractTextFromFile, mergeProfile, applyDeletions, resolveConflicts, ALLOWED_EXTENSIONS };

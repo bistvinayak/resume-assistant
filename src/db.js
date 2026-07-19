@@ -80,7 +80,9 @@ async function getProfile(userId = 'me') {
     'SELECT profile FROM master_profile WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1',
     [userId]
   );
-  return rows.length ? { ...EMPTY_PROFILE, ...rows[0].profile } : { ...EMPTY_PROFILE };
+  const profile = rows.length ? { ...EMPTY_PROFILE, ...rows[0].profile } : { ...EMPTY_PROFILE };
+  profile._onboarded = rows.length > 0;
+  return profile;
 }
 
 async function saveProfile(profile, userId = 'me', source = 'unknown') {
@@ -227,15 +229,15 @@ async function recoverStaleJobs(minutes = 10) {
 
 async function getJobsForUser(userId = 'me', limit = 50) {
   const { rows } = await pool.query(
-    `SELECT j.*, t.created_at, t.file_path
+    `SELECT DISTINCT ON (j.job_id) j.*, t.created_at AS resume_created_at, t.file_path
      FROM jobs j
      LEFT JOIN tailored_resume t ON t.job_id = j.job_id AND t.user_id = j.user_id AND t.delivered = true
      WHERE j.user_id = $1
-     ORDER BY j.seen_at DESC
-     LIMIT $2`,
-    [userId, limit]
+     ORDER BY j.job_id, t.created_at DESC NULLS LAST`,
+    [userId]
   );
-  return rows;
+  rows.sort((a, b) => new Date(b.seen_at) - new Date(a.seen_at));
+  return rows.slice(0, limit);
 }
 
 module.exports = {

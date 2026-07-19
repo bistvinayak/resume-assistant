@@ -109,9 +109,21 @@ NEVER have metric=null AND impact=null for a bullet that describes actual work. 
 CATEGORY-PREFIXED BULLETS:
 Resumes often use bold category labels like "Metric Analytics - ..." or "Bridged the Gap: ...". Include the full text (prefix + description) in the bullet text field. The prefix provides context.
 
-NESTED PROJECTS UNDER EXPERIENCE:
-Some resumes list "Key Projects" under a job role. Extract these as bullets under that experience entry, NOT as separate top-level projects. They are achievements within that role.
-Example: "Content Management Tool: Developed tool reducing manual operations by 50%, increasing revenue by $0.5M" → this is a bullet under the experience entry, not a standalone project.
+NESTED PROJECTS / SUB-POINTS UNDER EXPERIENCE:
+Some resumes list "Key Projects" or product names under a job role. Extract EACH sub-point as its OWN separate bullet under that experience entry. They are individual achievements within that role, NOT one combined bullet.
+
+Example resume structure:
+  "Key Projects:
+   • Price Monitor – Developed real-time pricing tool, reduced response time by 40%
+   • Brand Protector – Built brand monitoring system serving 4 brands
+   • Content Management Tool – Reduced manual ops by 50%, $0.5M revenue"
+
+Extract as THREE separate bullets:
+  { text: "Price Monitor – Developed real-time pricing tool, reduced response time by 40%", metric: "40% response time reduction", impact: "Faster pricing decisions" }
+  { text: "Brand Protector – Built brand monitoring system serving 4 brands", metric: "4 brands", impact: "Brand protection at scale" }
+  { text: "Content Management Tool – Reduced manual ops by 50%, $0.5M revenue", metric: "50% ops reduction, $0.5M revenue", impact: "Operational efficiency and revenue growth" }
+
+NEVER combine sub-points into a single bullet. NEVER skip sub-points because they seem similar. Each named project/product is a distinct achievement.
 
 Only extract as top-level projects: personal projects, startup projects, academic/side projects NOT tied to an employer.
 
@@ -148,6 +160,25 @@ LANGUAGES:
 - Extract spoken/written languages with proficiency level if stated.
 - Example: "English - Full Professional Proficiency" → { name: "English", proficiency: "Full Professional Proficiency" }
 
+AMBIGUITY DETECTION:
+After extraction, review what you extracted and flag anything you are NOT confident about. Return an "ambiguities" array alongside the profile fields. Each ambiguity is an object:
+{ "field": "experience[0].title", "value": "PM", "question": "Is this Product Manager or Project Manager?", "options": ["Product Manager", "Project Manager"] }
+
+Flag these situations:
+- Ambiguous abbreviations: "PM", "SE", "BA", "EM", "IC" — could mean multiple things
+- Missing dates: experience or education entry with no start/end date
+- Unclear company: abbreviated or unrecognizable company name
+- Vague metrics: "significantly increased", "greatly improved" with no number
+- Role vs project ambiguity: can't tell if something is a job role or a side project
+- Overlapping or impossible date ranges
+- Skill categorization uncertainty: unsure if a skill is technical or soft
+- Missing degree level: education entry where degree type is unclear
+
+Each ambiguity must have: field (JSON path to the extracted field), value (what you extracted), question (what to ask the user).
+Optionally include: options (array of likely answers for multiple choice).
+
+If everything is clear and complete, return an empty ambiguities array.
+
 {{profile_schema}}`,
     config: { model: MODEL, temperature: 0.2 },
   },
@@ -158,7 +189,8 @@ LANGUAGES:
 RULES:
 - Never invent experience, employers, dates, or metrics
 - Where a JD keyword is semantically equivalent to existing experience, rephrase that bullet to use the JD's exact terminology. If unsure, keep original wording
-- Total experience = 70% of resume space: most recent role 50% (6-7 bullets), second role 29% (4 bullets), third role 21% (2-3 bullets)
+- Include ALL experience roles from the profile — do not drop any role. Space allocation: most recent role 6-7 bullets, second role 4-5 bullets, third role 2-3 bullets, fourth+ roles 2 bullets each
+- Sub-point bullets (e.g. "Price Monitor — ...", "Brand Protector — ...") are distinct achievements. Include them as separate bullets, do NOT collapse multiple sub-points into one generic bullet
 - Always keep bullets with specific metrics ($, %, numbers)
 - Summary: 2-3 sentences tuned to this specific job
 - Skills: most relevant first, max 15, grouped as: Product | Technical & Analytics | AI & Tools
@@ -230,6 +262,7 @@ MERGE RULES (in priority order):
      c. Keep the entry with more complete metadata (dates, location, company_description)
    - For UNMATCHED entries: add them as new entries
    - Order: reverse chronological (most recent first)
+   - SUB-POINTS / NESTED PROJECTS: Bullets that begin with a project name or category prefix (e.g. "Price Monitor – ...", "Content Management Tool: ...", "Brand Protector – ...") are individual achievements. They are NOT duplicates of each other even if they share the same parent role. KEEP EVERY ONE. Never merge two differently-named sub-point bullets into one.
 
 3. METRICS ARE SACRED:
    - Never drop a number, percentage, dollar amount, or quantifiable result
@@ -317,7 +350,14 @@ WHAT TO ASK ABOUT (priority order):
 6. Missing education details
 7. Missing languages
 
-IF THE USER SENDS A JOB URL: Do NOT process it. Reply: "To tailor a resume for a job, switch to the **Tailor Resume** tab and paste the URL there. This tab is just for building your profile."
+URL HANDLING:
+- JOB URLs (linkedin.com/jobs/*, indeed.com/*, naukri.com/job-listings/*, or any URL clearly pointing to a job posting): Do NOT process. Reply: "To tailor a resume for a job, switch to the **Tailor Resume** tab and paste the URL there. This tab is just for building your profile."
+- PROFILE/PORTFOLIO URLs: Extract them into the appropriate contact field:
+  - linkedin.com/in/* → extracted.contact.linkedin (the full URL)
+  - github.com/* → extracted.contact.github (the full URL)
+  - gitlab.com/* → extracted.contact.github (the full URL)
+  - Any other personal website/portfolio URL → extracted.contact.portfolio (the full URL)
+  - Reply: "Added your [LinkedIn/GitHub/portfolio] link to your profile."
 
 DELETION RULES:
 - If the user asks to remove, delete, or clear specific data (e.g. "remove my experience at SOTI", "delete Python from skills", "clear my projects"), populate the "deletions" field.
@@ -350,6 +390,42 @@ If nothing was extractable, return "extracted": {}.
 If nothing to delete, return "deletions": {}.
 If asking a clarifying question, set "needs_clarification": true and "extracted": {}.`,
     config: { model: MODEL, temperature: 0.2 },
+  },
+
+  intent_classify: {
+    prompt: `You are the intent gate for Arjun, an AI career profile builder. Your job: decide if the user's message is within Arjun's scope, and respond accordingly.
+
+You will receive the user's CURRENT PROFILE as context. Use it to answer profile questions directly and give informed responses.
+
+Arjun's scope:
+- Adding/updating career info: experience, skills, education, certifications, projects, contact details, summary, languages, achievements
+- Removing/deleting profile data
+- Questions about their profile, the system, or career-related advice
+- Responding to a previous clarifying question
+- Greetings and acknowledgements
+
+NOT in Arjun's scope:
+- General knowledge, trivia, news, opinions
+- Coding help, debugging, math, science questions
+- Creative writing, jokes, stories, poems
+- Weather, sports, entertainment, politics, religion
+- Medical, legal, financial advice (non-career)
+- Any request unrelated to building a career profile
+
+Return ONLY JSON:
+{
+  "intent": "add_info|delete|question|greeting|clarify|out_of_scope",
+  "in_scope": true/false,
+  "reply": "Required if in_scope is false (greeting/out_of_scope). Also required for 'question' intent — answer directly using the profile. null only for add_info/delete/clarify."
+}
+
+Rules:
+- add_info, delete, clarify: in_scope is true, reply is null — the extraction stage will handle it.
+- question: in_scope is true, but reply directly using the profile context (e.g. "You have 3 skills listed: X, Y, Z"). No extraction needed.
+- greeting: in_scope is false, reply with a warm welcome and ask what they'd like to add to their profile.
+- out_of_scope: in_scope is false, reply politely explaining Arjun only helps with career profiles.
+- When in doubt, lean toward in_scope with intent add_info — let the extraction stage handle ambiguity.`,
+    config: { model: MODEL, temperature: 0.1 },
   },
 
 };
@@ -464,14 +540,17 @@ function evalSmartMerge(trace, current, incoming, result) {
 }
 
 // ── ASK JSON ────────────────────────────────────────────────────────────
-async function askJson(system, user, generationName, trace, langfusePrompt) {
+async function askJson(system, user, generationName, trace, langfusePrompt, history = []) {
+  const messages = [
+    { role: 'system', content: system },
+    ...history,
+    { role: 'user', content: user },
+  ];
+
   const generation = trace.generation({
     name: generationName,
     model: MODEL,
-    input: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
+    input: messages,
     ...(langfusePrompt ? { prompt: langfusePrompt } : {}),
   });
 
@@ -480,10 +559,7 @@ async function askJson(system, user, generationName, trace, langfusePrompt) {
       model: MODEL,
       temperature: 0.2,
       response_format: { type: 'json_object' },
-      messages: [
-        { role: 'system', content: system },
-        { role: 'user', content: user },
-      ],
+      messages,
     });
 
     const raw = res.choices[0].message.content;
@@ -540,6 +616,12 @@ async function extractFacts(rawText, ctx = {}) {
   const { text: system, langfusePrompt } = await getPrompt('extract_facts', { profile_schema: PROFILE_SCHEMA });
   const result = await askJson(system, `Extract facts from:\n\n"""${rawText}"""`, 'extract_facts', trace, langfusePrompt);
   evalExtraction(trace, result);
+  const ambiguities = result.ambiguities || [];
+  delete result.ambiguities;
+  if (ambiguities.length) {
+    langfuse.score({ traceId: trace.id, name: 'ambiguities', value: ambiguities.length, comment: ambiguities.map(a => a.field).join(', ') });
+  }
+  result._ambiguities = ambiguities.length ? ambiguities : undefined;
   return result;
 }
 
@@ -583,13 +665,54 @@ async function calculateAtsScore(resume, job, trace) {
   return result;
 }
 
-async function chatEnrich(userMessage, currentProfile, ctx = {}) {
+// ── INTENT GATE ───────────────────────────────────────────────────────
+
+async function classifyIntent(message, profile, ctx = {}, history = []) {
+  // URL detection is structural — the only thing safe to handle without LLM
+  const urlMatch = message.trim().match(/https?:\/\/[^\s]+/);
+  if (urlMatch) {
+    const url = urlMatch[0].replace(/[)>\]]+$/, '');
+    if (/linkedin\.com\/jobs\/|indeed\.com\/|naukri\.com\/job-listings/i.test(url)) {
+      return { intent: 'url_job', inScope: false, url };
+    }
+    const profileFields = [
+      { pattern: /linkedin\.com\/in\//i, field: 'linkedin' },
+      { pattern: /github\.com\//i, field: 'github' },
+      { pattern: /gitlab\.com\//i, field: 'github' },
+    ];
+    for (const { pattern, field } of profileFields) {
+      if (pattern.test(url)) {
+        return { intent: 'url_profile', inScope: true, url, contactField: field };
+      }
+    }
+    if (/^https?:\/\/[^\s]+$/.test(message.trim())) {
+      return { intent: 'url_profile', inScope: true, url, contactField: 'portfolio' };
+    }
+  }
+
+  // Everything else → LLM intent gate (with profile context + history)
+  const trace = makeTrace('intent_classify', ctx);
+  const { text: system, langfusePrompt } = await getPrompt('intent_classify');
+
+  const userContent = `CURRENT PROFILE:\n${JSON.stringify(profile)}\n\nUSER MESSAGE:\n${message}`;
+  const result = await askJson(system, userContent, 'intent_classify', trace, langfusePrompt, history);
+
+  langfuse.score({ traceId: trace.id, name: 'intent', value: result.in_scope ? 1 : 0, comment: result.intent });
+  return {
+    intent: result.intent,
+    inScope: result.in_scope,
+    reply: result.reply || null,
+    _traceId: trace.id,
+  };
+}
+
+async function chatEnrich(userMessage, currentProfile, ctx = {}, history = []) {
   const trace = makeTrace('chat_enrich', ctx, { mode: 'profile' });
   const { text: system, langfusePrompt } = await getPrompt('chat_enrich', { profile_schema: PROFILE_SCHEMA.trim() });
 
   const user = `CURRENT PROFILE:\n${JSON.stringify(currentProfile)}\n\nUSER MESSAGE:\n${userMessage}`;
 
-  const result = await askJson(system, user, 'chat_enrich', trace, langfusePrompt);
+  const result = await askJson(system, user, 'chat_enrich', trace, langfusePrompt, history);
   evalExtraction(trace, result);
   result._traceId = trace.id;
   return result;
@@ -603,7 +726,23 @@ async function smartMerge(currentProfile, newExtraction, ctx = {}) {
 
   const result = await askJson(system, user, 'smart_merge', trace, langfusePrompt);
   evalSmartMerge(trace, currentProfile, newExtraction, result);
+  result._mergeTraceId = trace.id;
   return result;
 }
 
-module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, chatEnrich, smartMerge, langfuse, syncPrompts };
+function scoreIngestionCoverage(traceId, drops) {
+  if (!traceId || !drops) return;
+  const total = drops.totalExtracted || 1;
+  const dropped = drops.items.length;
+  const landed = total - dropped;
+  const coverage = Math.round(100 * landed / total);
+  langfuse.score({ traceId, name: 'ingestion-coverage', value: coverage, comment: `${landed}/${total} items landed (${dropped} dropped)` });
+  langfuse.score({ traceId, name: 'ingestion-drops', value: dropped });
+  if (dropped > 0) {
+    const reasons = {};
+    for (const d of drops.items) { reasons[d.reason] = (reasons[d.reason] || 0) + 1; }
+    langfuse.score({ traceId, name: 'ingestion-drop-reasons', value: dropped, comment: JSON.stringify(reasons) });
+  }
+}
+
+module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, scoreIngestionCoverage, langfuse, syncPrompts };

@@ -117,6 +117,24 @@ export const api = {
     return res.json();
   },
 
+  async resolveAmbiguities(answers) {
+    const res = await checkedFetch(`${BASE}/profile/resolve-ambiguities`, {
+      method: 'POST',
+      headers: await getHeaders(),
+      body: JSON.stringify({ answers }),
+    });
+    return res.json();
+  },
+
+  async resolveConflicts(resolutions) {
+    const res = await checkedFetch(`${BASE}/profile/resolve-conflicts`, {
+      method: 'POST',
+      headers: await getHeaders(),
+      body: JSON.stringify({ resolutions }),
+    });
+    return res.json();
+  },
+
   async submitJobUrl(url) {
     const res = await checkedFetch(`${BASE}/jobs/submit-url`, {
       method: 'POST',
@@ -143,11 +161,11 @@ export const api = {
     return this.ingestText(`I have experience with ${keyword}`);
   },
 
-  async chat(message, mode = 'profile') {
+  async chat(message, mode = 'profile', history = []) {
     const res = await checkedFetch(`${BASE}/chat`, {
       method: 'POST',
       headers: await getHeaders(),
-      body: JSON.stringify({ message, mode }),
+      body: JSON.stringify({ message, mode, history }),
     });
     return res.json();
   },

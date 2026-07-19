@@ -170,6 +170,10 @@ export default function Dashboard() {
   useEffect(() => {
     Promise.all([api.getProfile(), api.getJobs()])
       .then(([p, j]) => {
+        if (!p?._onboarded) {
+          navigate('/onboarding', { replace: true });
+          return;
+        }
         setProfile(p);
         setJobs(j.jobs || []);
       })
@@ -203,6 +207,7 @@ export default function Dashboard() {
   };
 
   const loadVersions = async () => {
+    if (showVersions) { setShowVersions(false); return; }
     try {
       const v = await api.getProfileVersions();
       setVersions(v);
@@ -402,6 +407,13 @@ export default function Dashboard() {
     return parts;
   };
 
+  const buildHistory = () => {
+    return chatMessages
+      .filter(m => m.text && (m.role === 'user' || m.role === 'arjun'))
+      .slice(-10)
+      .map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text }));
+  };
+
   const handleChatSend = async () => {
     const msg = chatInput.trim();
     if (!msg || chatSending) return;
@@ -409,7 +421,8 @@ export default function Dashboard() {
     setChatMessages(prev => [...prev, { role: 'user', text: msg }]);
     setChatSending(true);
     try {
-      const res = await api.chat(msg, 'profile');
+      const history = buildHistory();
+      const res = await api.chat(msg, 'profile', history);
 
       const hasChanges = res.pendingChanges && Object.keys(res.pendingChanges).length > 0;
       const hasDeletions = res.pendingDeletions && Object.keys(res.pendingDeletions).length > 0;
@@ -493,6 +506,31 @@ export default function Dashboard() {
       setChatMessages(prev => [...prev, { role: 'arjun', text: 'Something went wrong. Try again.' }]);
     }
     setChatSending(false);
+  };
+
+  const buildIngestionSummary = (changes, fileCount, conflicts = [], ambiguities = [], extracted = '', drops = null) => {
+    const parts = [`[Ingestion complete: ${fileCount} file(s) processed.`];
+    if (extracted) {
+      parts.push(`\nWhat was extracted from the file:\n${extracted}`);
+    }
+    if (changes.length) {
+      parts.push('\nWhat was NEW (added to profile):');
+      for (const c of changes) {
+        parts.push(`- ${c.type.toUpperCase()}: ${c.section} — ${c.detail}`);
+      }
+    } else {
+      parts.push('\nNo new information found — profile already had this data.');
+    }
+    if (drops && drops.items.length) {
+      parts.push(`\nWhat was DROPPED during merge (${drops.items.length} item(s)):`);
+      for (const d of drops.items) {
+        parts.push(`- ${d.field}: "${d.value}" — ${d.reason.replace(/_/g, ' ')}${d.company ? ` (${d.company})` : ''}`);
+      }
+    }
+    if (conflicts.length) parts.push(`\n${conflicts.length} possible duplicate(s) flagged for review.`);
+    if (ambiguities.length) parts.push(`${ambiguities.length} ambiguity/ambiguities flagged for clarification.`);
+    parts.push(']');
+    return parts.join('\n');
   };
 
   const diffProfiles = (before, after) => {
@@ -637,19 +675,33 @@ export default function Dashboard() {
         setProfile(updated);
         const changes = diffProfiles(beforeProfile, updated);
         const ingestion = { filesProcessed: result.filesExtracted, filesSkipped: result.filesSkipped, errors: result.errors };
+        const conflicts = result.conflicts || [];
+        const ambiguities = result.ambiguities || [];
+        const extracted = result.extracted || '';
+        const drops = result.drops || null;
 
+        const summaryText = buildIngestionSummary(changes, files.length, conflicts, ambiguities, extracted, drops);
         setChatMessages(prev => [
           ...prev.filter(m => m.id !== progressId),
-          { role: 'arjun', type: 'ingestResult', changes, ingestion, fileCount: files.length },
+          { role: 'arjun', type: 'ingestResult', text: summaryText, changes, ingestion, fileCount: files.length, conflicts, ambiguities, drops },
         ]);
       } else {
         clearInterval(stageTimer);
+        const conflicts = uploadResult._conflicts || [];
+        const ambiguities = uploadResult._ambiguities || [];
+        const extracted = uploadResult._extracted || '';
+        const drops = uploadResult._drops || null;
+        delete uploadResult._conflicts;
+        delete uploadResult._ambiguities;
+        delete uploadResult._extracted;
+        delete uploadResult._drops;
         setProfile(uploadResult);
         const ingestion = uploadResult._ingestion || {};
         const changes = diffProfiles(beforeProfile, uploadResult);
+        const summaryText = buildIngestionSummary(changes, files.length, conflicts, ambiguities, extracted, drops);
         setChatMessages(prev => [
           ...prev.filter(m => m.id !== progressId),
-          { role: 'arjun', type: 'ingestResult', changes, ingestion, fileCount: files.length },
+          { role: 'arjun', type: 'ingestResult', text: summaryText, changes, ingestion, fileCount: files.length, conflicts, ambiguities, drops },
         ]);
       }
     } catch (e) {
@@ -660,6 +712,63 @@ export default function Dashboard() {
       ]);
     }
     setFilesUploading(false);
+  };
+
+  const handleResolveConflict = async (msgIdx, conflictIdx, choice) => {
+    setChatMessages(prev => prev.map((m, mi) => {
+      if (mi !== msgIdx) return m;
+      const resolutions = { ...(m.resolutions || {}) };
+      resolutions[conflictIdx] = choice;
+      const allResolved = (m.conflicts || []).every((_, ci) => resolutions[ci]);
+      return { ...m, resolutions, conflictsResolved: allResolved };
+    }));
+
+    // Check if all conflicts for this message are now resolved
+    const msg = chatMessages[msgIdx];
+    const resolutions = { ...(msg?.resolutions || {}), [conflictIdx]: choice };
+    const allResolved = (msg?.conflicts || []).every((_, ci) => resolutions[ci]);
+
+    if (allResolved && msg?.conflicts?.length) {
+      try {
+        const resolveData = msg.conflicts.map((c, ci) => ({
+          type: c.type,
+          keep: resolutions[ci],
+          existing: c.existing,
+          incoming: c.incoming,
+        }));
+        const resolved = await api.resolveConflicts(resolveData);
+        setProfile(resolved);
+      } catch (e) {
+        console.error('Conflict resolution failed:', e);
+      }
+    }
+  };
+
+  const handleResolveAmbiguity = async (msgIdx, ambIdx, value) => {
+    setChatMessages(prev => prev.map((m, mi) => {
+      if (mi !== msgIdx) return m;
+      const ambAnswers = { ...(m.ambAnswers || {}) };
+      ambAnswers[ambIdx] = value;
+      const allAnswered = (m.ambiguities || []).every((_, ai) => ambAnswers[ai] !== undefined);
+      return { ...m, ambAnswers, ambiguitiesResolved: allAnswered };
+    }));
+
+    const msg = chatMessages[msgIdx];
+    const ambAnswers = { ...(msg?.ambAnswers || {}), [ambIdx]: value };
+    const allAnswered = (msg?.ambiguities || []).every((_, ai) => ambAnswers[ai] !== undefined);
+
+    if (allAnswered && msg?.ambiguities?.length) {
+      try {
+        const answers = msg.ambiguities.map((a, ai) => ({
+          field: a.field,
+          value: ambAnswers[ai],
+        }));
+        const resolved = await api.resolveAmbiguities(answers);
+        setProfile(resolved);
+      } catch (e) {
+        console.error('Ambiguity resolution failed:', e);
+      }
+    }
   };
 
   const handleTailorSend = async () => {
@@ -1023,12 +1132,23 @@ export default function Dashboard() {
                     </div>
                     <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px' }}>
                       <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>CONTACT</div>
-                      {profile?.contact && Object.entries(profile.contact).filter(([, v]) => v).map(([k, v]) => (
-                        <div key={k} style={{ display: 'flex', gap: '12px', padding: '7px 0', borderBottom: '1px solid #e7e5e4' }}>
-                          <span style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", minWidth: 60, textTransform: 'capitalize' }}>{k}</span>
-                          <span style={{ fontSize: '12px', color: '#1c1917' }}>{Array.isArray(v) ? v.join(', ') : String(v)}</span>
-                        </div>
-                      ))}
+                      {profile?.contact && Object.entries(profile.contact).filter(([k, v]) => v && k !== 'links').map(([k, v]) => {
+                        const isLink = ['linkedin', 'github', 'portfolio'].includes(k) && String(v).startsWith('http');
+                        const display = isLink ? String(v).replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '') : (Array.isArray(v) ? v.join(', ') : String(v));
+                        return (
+                          <div key={k} style={{ display: 'flex', gap: '12px', padding: '7px 0', borderBottom: '1px solid #e7e5e4' }}>
+                            <span style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", minWidth: 60, textTransform: 'capitalize' }}>{k}</span>
+                            {isLink ? (
+                              <a href={String(v)} target="_blank" rel="noopener noreferrer" style={{ fontSize: '12px', color: '#f59e0b', textDecoration: 'none', wordBreak: 'break-all' }}
+                                onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                                onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                              >{display}</a>
+                            ) : (
+                              <span style={{ fontSize: '12px', color: '#1c1917' }}>{display}</span>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -1194,13 +1314,13 @@ export default function Dashboard() {
                   {/* Edit: Contact */}
                   <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>CONTACT</div>
-                    {['name', 'email', 'phone', 'location'].map(field => (
+                    {['name', 'email', 'phone', 'location', 'linkedin', 'github', 'portfolio'].map(field => (
                       <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
                         <span style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", minWidth: 70, textTransform: 'capitalize' }}>{field}</span>
                         <input
                           value={editProfile.contact?.[field] || ''}
                           onChange={e => updateContact(field, e.target.value)}
-                          placeholder={field}
+                          placeholder={['linkedin', 'github', 'portfolio'].includes(field) ? `https://...` : field}
                           style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '13px', padding: '8px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
                         />
                       </div>
@@ -1486,6 +1606,153 @@ export default function Dashboard() {
                                   <span style={{ fontFamily: "'DM Mono', monospace", color: '#ef4444' }}>{e.file}</span>: {e.error}
                                 </div>
                               ))}
+                            </div>
+                          )}
+
+                          {(msg.conflicts || []).length > 0 && (
+                            <div style={{ background: '#fffbeb', border: '1px solid #f59e0b44', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                              <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '10px' }}>
+                                POSSIBLE DUPLICATES ({msg.conflicts.length})
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#78716c', marginBottom: '10px', lineHeight: 1.5 }}>
+                                We found entries that look like duplicates. Pick which version to keep — bullets from the removed entry will be merged into the kept one.
+                              </div>
+                              {msg.conflicts.map((c, ci) => {
+                                const label = c.type === 'experience'
+                                  ? `${c.existing.company} — "${c.existing.title}" vs "${c.incoming.title}"`
+                                  : `${c.existing.school?.split(',')[0]} — "${c.existing.school}" vs "${c.incoming.school}"`;
+                                const existingDetail = c.type === 'experience'
+                                  ? `${c.existing.title} · ${c.existing.dates || 'no dates'} · ${(c.existing.bullets || []).length} bullets`
+                                  : `${c.existing.school} · ${c.existing.degree}`;
+                                const incomingDetail = c.type === 'experience'
+                                  ? `${c.incoming.title} · ${c.incoming.dates || 'no dates'} · ${(c.incoming.bullets || []).length} bullets`
+                                  : `${c.incoming.school} · ${c.incoming.degree}`;
+                                return (
+                                  <div key={ci} style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '10px', marginBottom: ci < msg.conflicts.length - 1 ? '8px' : 0 }}>
+                                    <div style={{ fontSize: '11px', color: '#57534e', fontWeight: 500, marginBottom: '8px' }}>{c.reason}</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginBottom: '8px' }}>
+                                      <div style={{ fontSize: '11px', color: '#1c1917', fontFamily: "'DM Mono', monospace" }}>
+                                        <span style={{ color: '#a8a29e' }}>A:</span> {existingDetail}
+                                      </div>
+                                      <div style={{ fontSize: '11px', color: '#1c1917', fontFamily: "'DM Mono', monospace" }}>
+                                        <span style={{ color: '#a8a29e' }}>B:</span> {incomingDetail}
+                                      </div>
+                                    </div>
+                                    {!msg.conflictsResolved && (
+                                      <div style={{ display: 'flex', gap: '6px' }}>
+                                        <button onClick={() => handleResolveConflict(i, ci, 'existing')} style={{ flex: 1, background: '#f0fdf4', border: '1px solid #22c55e44', color: '#22c55e', padding: '6px', borderRadius: '5px', fontSize: '10px', fontWeight: 600, fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                                          Keep A
+                                        </button>
+                                        <button onClick={() => handleResolveConflict(i, ci, 'incoming')} style={{ flex: 1, background: '#eff6ff', border: '1px solid #3b82f644', color: '#3b82f6', padding: '6px', borderRadius: '5px', fontSize: '10px', fontWeight: 600, fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                                          Keep B
+                                        </button>
+                                        <button onClick={() => handleResolveConflict(i, ci, 'both')} style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', color: '#78716c', padding: '6px', borderRadius: '5px', fontSize: '10px', fontWeight: 600, fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                                          Keep Both
+                                        </button>
+                                      </div>
+                                    )}
+                                    {msg.conflictsResolved && msg.resolutions?.[ci] && (
+                                      <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", marginTop: '4px' }}>
+                                        Resolved: kept {msg.resolutions[ci] === 'both' ? 'both' : msg.resolutions[ci] === 'existing' ? 'A' : 'B'}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {(msg.ambiguities || []).length > 0 && (
+                            <div style={{ background: '#f0f9ff', border: '1px solid #3b82f644', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                              <div style={{ fontSize: '10px', color: '#3b82f6', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '10px' }}>
+                                NEEDS CLARIFICATION ({msg.ambiguities.filter((_, ai) => !msg.ambAnswers?.[ai]).length} remaining)
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#78716c', marginBottom: '10px', lineHeight: 1.5 }}>
+                                A few things weren't clear from your resume. Help Arjun get them right.
+                              </div>
+                              {msg.ambiguities.map((amb, ai) => (
+                                <div key={ai} style={{ background: '#fff', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '10px', marginBottom: ai < msg.ambiguities.length - 1 ? '8px' : 0 }}>
+                                  <div style={{ fontSize: '11px', color: '#1c1917', marginBottom: '6px', lineHeight: 1.5 }}>
+                                    {amb.question}
+                                  </div>
+                                  <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginBottom: '8px' }}>
+                                    Current value: <span style={{ color: '#57534e' }}>{amb.value || 'empty'}</span>
+                                  </div>
+                                  {msg.ambAnswers?.[ai] !== undefined ? (
+                                    <div style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace'" }}>
+                                      Answered: {msg.ambAnswers[ai]}
+                                    </div>
+                                  ) : amb.options?.length ? (
+                                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                                      {amb.options.map((opt, oi) => (
+                                        <button key={oi} onClick={() => handleResolveAmbiguity(i, ai, opt)} style={{
+                                          background: '#fafaf9', border: '1px solid #d6d3d1', color: '#1c1917',
+                                          padding: '5px 12px', borderRadius: '5px', fontSize: '11px', cursor: 'pointer',
+                                          fontFamily: "'DM Sans', sans-serif",
+                                        }}>
+                                          {opt}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                      <input
+                                        type="text"
+                                        placeholder="Type your answer..."
+                                        onKeyDown={e => { if (e.key === 'Enter' && e.target.value.trim()) { handleResolveAmbiguity(i, ai, e.target.value.trim()); e.target.value = ''; } }}
+                                        style={{
+                                          flex: 1, padding: '5px 10px', borderRadius: '5px', border: '1px solid #d6d3d1',
+                                          fontSize: '11px', fontFamily: "'DM Sans', sans-serif", outline: 'none',
+                                        }}
+                                      />
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {(msg.drops?.items || []).length > 0 && (
+                            <div style={{ background: '#fdf2f8', border: '1px solid #ec489944', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                              <div style={{ fontSize: '10px', color: '#ec4899', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '10px' }}>
+                                INGESTION FEEDBACK ({msg.drops.items.length} item{msg.drops.items.length !== 1 ? 's' : ''} not added)
+                              </div>
+                              <div style={{ fontSize: '11px', color: '#78716c', marginBottom: '10px', lineHeight: 1.5 }}>
+                                These items were extracted from your file but didn't make it into your profile. This usually means they already existed or were merged into existing entries.
+                              </div>
+                              {msg.drops.items.map((d, di) => {
+                                const reasonLabels = {
+                                  bullet_dropped_during_merge: 'Dropped during merge — may already exist in a different form',
+                                  entry_not_in_profile: 'Company/entry not found in merged profile',
+                                  project_not_in_profile: 'Project not found in merged profile',
+                                  education_not_in_profile: 'Education entry not found',
+                                  skill_not_in_profile: 'Skill not found in merged profile',
+                                  cert_not_in_profile: 'Certification not found',
+                                };
+                                return (
+                                  <div key={di} style={{ background: '#fff', border: '1px solid #e7e5e4', borderRadius: '6px', padding: '8px 10px', marginBottom: di < msg.drops.items.length - 1 ? '6px' : 0 }}>
+                                    <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+                                      <span style={{
+                                        fontSize: '9px', fontFamily: "'DM Mono', monospace", fontWeight: 700,
+                                        color: '#ec4899', background: '#ec489915', border: '1px solid #ec489933',
+                                        borderRadius: '3px', padding: '1px 5px', flexShrink: 0, marginTop: '2px',
+                                      }}>
+                                        {d.field.toUpperCase()}
+                                      </span>
+                                      <div>
+                                        <div style={{ fontSize: '12px', color: '#1c1917', lineHeight: 1.4, marginBottom: '2px' }}>
+                                          {(d.value || '').length > 100 ? d.value.slice(0, 100) + '...' : d.value}
+                                        </div>
+                                        {d.company && <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{d.company}</div>}
+                                        <div style={{ fontSize: '10px', color: '#78716c', marginTop: '2px' }}>{reasonLabels[d.reason] || d.reason.replace(/_/g, ' ')}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '8px' }}>
+                                Coverage: {Math.round(100 * (msg.drops.totalExtracted - msg.drops.items.length) / msg.drops.totalExtracted)}% of extracted items landed in profile
+                              </div>
                             </div>
                           )}
 

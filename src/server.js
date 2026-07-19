@@ -15,8 +15,8 @@ const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { renderResumeDocx } = require('./renderDocx');
-const { chatEnrich, langfuse, syncPrompts } = require('./llm');
-const { mergeProfile, applyDeletions } = require('./profile');
+const { classifyIntent, chatEnrich, langfuse, syncPrompts } = require('./llm');
+const { mergeProfile, applyDeletions, resolveConflicts } = require('./profile');
 
 // Normalize LinkedIn URLs to direct job view format
 function normalizeJobUrl(rawUrl) {
@@ -117,6 +117,43 @@ app.post(['/profile/restore', '/api/profile/restore'], async (req, res, next) =>
   } catch (e) { next(e); }
 });
 
+app.post(['/profile/resolve-conflicts', '/api/profile/resolve-conflicts'], async (req, res, next) => {
+  try {
+    const { resolutions } = req.body || {};
+    if (!resolutions?.length) return res.status(400).json({ error: 'resolutions required' });
+    const current = await getProfile(req.userId);
+    const resolved = resolveConflicts(current, resolutions);
+    await saveProfile(resolved, req.userId, 'conflict_resolution');
+    res.json(resolved);
+  } catch (e) { next(e); }
+});
+
+app.post(['/profile/resolve-ambiguities', '/api/profile/resolve-ambiguities'], async (req, res, next) => {
+  try {
+    const { answers } = req.body || {};
+    if (!answers?.length) return res.status(400).json({ error: 'answers required' });
+    const current = await getProfile(req.userId);
+    for (const { field, value } of answers) {
+      if (!field || value === undefined) continue;
+      const parts = field.match(/^(\w+)(?:\[(\d+)\])?\.?(.*)$/);
+      if (!parts) continue;
+      const [, key, idx, subkey] = parts;
+      if (idx !== undefined && Array.isArray(current[key])) {
+        const i = parseInt(idx);
+        if (current[key][i] && subkey) {
+          current[key][i][subkey] = value;
+        }
+      } else if (subkey && current[key]) {
+        current[key][subkey] = value;
+      } else {
+        current[key] = value;
+      }
+    }
+    await saveProfile(current, req.userId, 'ambiguity_resolution');
+    res.json(current);
+  } catch (e) { next(e); }
+});
+
 app.post(['/ingest/text', '/api/ingest/text'], async (req, res, next) => {
   try {
     if (!req.body?.text) return res.status(400).json({ error: 'text required' });
@@ -187,8 +224,16 @@ app.post(['/ingest/files', '/api/ingest/files'], (req, res, next) => {
       try {
         console.log(`→ ingest/files background: extracting facts for ${userId} (${texts.length} docs, ~${texts.reduce((a, t) => a + t.length, 0)} chars)`);
         const result = await ingestFiles(req.files, userId, ctx);
-        ingestionStatus.set(userId, { stage: 'done', profile: result, filesExtracted: texts.length, filesSkipped: errors.length, errors });
-        console.log(`✓ ingest/files background: done for ${userId}`);
+        const conflicts = result._conflicts || [];
+        const ambiguities = result._ambiguities || [];
+        const extracted = result._extracted || '';
+        const drops = result._drops || null;
+        delete result._conflicts;
+        delete result._ambiguities;
+        delete result._extracted;
+        delete result._drops;
+        ingestionStatus.set(userId, { stage: 'done', profile: result, conflicts, ambiguities, extracted, drops, filesExtracted: texts.length, filesSkipped: errors.length, errors });
+        console.log(`✓ ingest/files background: done for ${userId}, ${conflicts.length} conflict(s), ${drops?.items?.length || 0} drop(s)`);
       } catch (e) {
         console.error(`✗ ingest/files background error: ${e.message}`);
         ingestionStatus.set(userId, { stage: 'failed', error: e.message, filesExtracted: texts.length, filesSkipped: errors.length, errors });
@@ -211,20 +256,23 @@ app.get(['/ingest/status', '/api/ingest/status'], async (req, res) => {
   res.json(status);
 });
 
-// ── CHAT ENRICH ──────────────────────────────────────────────────────────
+// ── CHAT (INTENT-FIRST) ─────────────────────────────────────────────────
 app.post(['/chat', '/api/chat'], async (req, res, next) => {
   try {
-    const { message, mode } = req.body || {};
+    const { message, mode, history: rawHistory } = req.body || {};
     if (!message) return res.status(400).json({ error: 'message required' });
 
-    const currentProfile = await getProfile(req.userId);
+    const history = (Array.isArray(rawHistory) ? rawHistory : [])
+      .filter(m => m && m.role && m.content)
+      .slice(-10);
 
-    // Detect any job URL — but only process if mode is 'tailor' (not 'profile')
+    const ctx = langfuseCtx(req);
+
+    // ── TAILOR MODE: job URL processing (unchanged, always needs profile) ──
     const urlMatch = message.match(/https?:\/\/[^\s]+/);
     if (urlMatch && mode !== 'profile') {
+      const currentProfile = await getProfile(req.userId);
       let url = urlMatch[0].replace(/[)>\]]+$/, '');
-
-      // Normalize LinkedIn URLs — extract the actual job view URL
       url = normalizeJobUrl(url);
 
       const linkedInMatch = url.match(/\/jobs\/view\/(\d+)/);
@@ -232,16 +280,10 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
         ? `linkedin_${linkedInMatch[1]}`
         : `url_${require('crypto').createHash('sha256').update(url).digest('hex').slice(0, 16)}`;
 
-      // Check if this job is currently being processed
       const existing = await getJobByJobId(jobId, req.userId);
       if (existing && existing.status === 'processing') {
-        return res.json({
-          reply: `This job is already being processed — hang tight! You'll see the result in the Job Activity tab once it's ready.`,
-          profile: currentProfile,
-          duplicate: true,
-        });
+        return res.json({ reply: `This job is already being processed — hang tight! You'll see the result in the Job Activity tab once it's ready.`, profile: currentProfile, duplicate: true });
       }
-      // delivered or failed — allow re-tailoring (profile may have changed)
 
       const p = currentProfile;
       const skills = (p.skills || []).slice(0, 10).join(', ') || 'none listed';
@@ -254,18 +296,15 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       if (!projCount) gaps.push('projects');
       if (!(p.skills || []).length) gaps.push('skills');
 
-      const profileSummary = `Scraping that job listing now — I'll tailor your resume and calculate an ATS score. This takes about 30-60 seconds.\n\n` +
+      const profileSummaryText = `Scraping that job listing now — I'll tailor your resume and calculate an ATS score. This takes about 30-60 seconds.\n\n` +
         `While we wait, here's your profile snapshot:\n` +
         `• **Skills:** ${skills}\n` +
         `• **Experience:** ${expCount} role${expCount !== 1 ? 's' : ''}\n` +
         `• **Projects:** ${projCount}\n` +
         (gaps.length ? `\n⚠️ Your profile is missing: **${gaps.join(', ')}**. Adding these before applying will improve your ATS match.` : `\n✅ Your profile looks solid!`);
 
-      // Insert job as 'processing' immediately so it's visible
       await insertJobProcessing({ job_id: jobId, url }, req.userId);
-
-      const ctx = langfuseCtx(req);
-      res.json({ reply: profileSummary, profile: currentProfile, scraping: true });
+      res.json({ reply: profileSummaryText, profile: currentProfile, scraping: true });
 
       (async () => {
         try {
@@ -276,13 +315,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
             await markJobFailed(jobId, 'Could not scrape job page — page may require login or URL is invalid');
             return;
           }
-          await processJob({
-            job_id: jobId,
-            title: scraped.title || 'Unknown Role',
-            company: scraped.company || 'Unknown Company',
-            jd_text: scraped.jd_text,
-            url,
-          }, req.userId, { source: 'app', ...ctx });
+          await processJob({ job_id: jobId, title: scraped.title || 'Unknown Role', company: scraped.company || 'Unknown Company', jd_text: scraped.jd_text, url }, req.userId, { source: 'app', ...ctx });
         } catch (e) {
           console.error('Chat job processing error:', e.message);
           await markJobFailed(jobId, e.message).catch(() => {});
@@ -291,7 +324,38 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       return;
     }
 
-    const result = await chatEnrich(message, currentProfile, langfuseCtx(req));
+    // ── STEP 1: INTENT GATE (with profile + history) ──────────────────
+    const currentProfile = await getProfile(req.userId);
+    const intent = await classifyIntent(message, currentProfile, ctx, history);
+    console.log(`→ Chat intent: ${intent.intent} | in_scope: ${intent.inScope} | user: ${req.userId}`);
+
+    // URL: profile link — save directly, no LLM needed
+    if (intent.intent === 'url_profile') {
+      const field = intent.contactField;
+      const url = intent.url;
+      const fieldLabel = { linkedin: 'LinkedIn', github: 'GitHub', portfolio: 'portfolio' }[field] || field;
+      currentProfile.contact = { ...currentProfile.contact, [field]: url };
+      await saveProfile(currentProfile, req.userId, 'chat_confirm');
+      return res.json({ reply: `Added your ${fieldLabel} link to your profile: ${url}`, profile: currentProfile, traceId: intent._traceId });
+    }
+
+    // URL: job link in profile mode — redirect
+    if (intent.intent === 'url_job') {
+      return res.json({ reply: 'To tailor a resume for a job, switch to the **Tailor Resume** tab and paste the URL there. This tab is just for building your profile.', traceId: intent._traceId });
+    }
+
+    // NOT IN SCOPE (greeting, out_of_scope) — intent gate already has the reply
+    if (!intent.inScope) {
+      return res.json({ reply: intent.reply, traceId: intent._traceId });
+    }
+
+    // QUESTION — intent gate answered directly using profile context
+    if (intent.intent === 'question' && intent.reply) {
+      return res.json({ reply: intent.reply, profile: currentProfile, traceId: intent._traceId });
+    }
+
+    // ── STEP 2: IN SCOPE → chatEnrich (with full profile + history) ─
+    const result = await chatEnrich(message, currentProfile, ctx, history);
 
     const hasExtracted = result.extracted && Object.keys(result.extracted).length > 0;
     const hasDeletions = result.deletions && Object.keys(result.deletions).length > 0;
