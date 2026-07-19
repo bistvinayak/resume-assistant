@@ -186,15 +186,29 @@ If everything is clear and complete, return an empty ambiguities array.
   tailor_resume: {
     prompt: `You are a senior resume writer. Build a tailored resume using ONLY facts from the candidate profile.
 
-RULES:
+JD-DRIVEN BULLET SELECTION (most important):
+- First, identify the job description's MUST-HAVE requirements and NICE-TO-HAVE requirements
+- Then select bullets from the profile based on RELEVANCE TO THE JD, not by role recency
+- A bullet from an older role that directly matches a JD requirement beats a recent bullet that doesn't
+- Include ALL experience roles from the profile — do not drop any role. Give more bullets to roles with higher JD relevance
+- Bullets with specific metrics ($, %, numbers) that match JD requirements always get priority
+
+BULLET RULES:
 - Never invent experience, employers, dates, or metrics
 - Where a JD keyword is semantically equivalent to existing experience, rephrase that bullet to use the JD's exact terminology. If unsure, keep original wording
-- Include ALL experience roles from the profile — do not drop any role. Space allocation: most recent role 6-7 bullets, second role 4-5 bullets, third role 2-3 bullets, fourth+ roles 2 bullets each
 - Sub-point bullets (e.g. "Price Monitor — ...", "Brand Protector — ...") are distinct achievements. Include them as separate bullets, do NOT collapse multiple sub-points into one generic bullet
-- Always keep bullets with specific metrics ($, %, numbers)
+
+PAGE TARGETING:
+- Be GREEDY — include all JD-relevant bullets. More content is better; we will trim later if needed
+- For roles highly relevant to the JD: include 5-8 bullets
+- For roles somewhat relevant: include 3-4 bullets
+- For roles with minimal JD overlap: include 2 bullets (still include the role)
+
+OTHER RULES:
 - Summary: 2-3 sentences tuned to this specific job
-- Skills: most relevant first, max 15, grouped as: Product | Technical & Analytics | AI & Tools
+- Skills: most relevant to JD first, max 15, grouped as: Product | Technical & Analytics | AI & Tools
 - Keep company tagline (one italic line)
+- Projects: if JD relates to something the candidate built, expand with tech stack, architecture, and outcomes. If not, keep to 1 line each.
 
 Return ONLY JSON:
 {
@@ -210,10 +224,37 @@ Return ONLY JSON:
   "activities": [],
   "interests": [],
   "tailoring_notes": [
-    "Short sentence explaining a key tailoring decision — e.g. why summary was rephrased, which bullets were rewritten to match JD keywords, why certain skills were prioritized"
+    "Short sentence explaining a key tailoring decision"
   ]
 }
 tailoring_notes: 4-6 brief sentences explaining your most important decisions. Focus on WHAT you changed and WHY (which JD requirement it targets). Be specific — reference actual keywords and roles.`,
+    config: { model: MODEL, temperature: 0.2 },
+  },
+
+  fit_resume: {
+    prompt: `You are adjusting a tailored resume to fit a target page count. You will receive:
+- The current tailored resume JSON
+- A directive: either TIGHTEN (fit to 1 page) or EXPAND (fill 2 full pages)
+- The candidate's full profile (for EXPAND — to pull additional relevant bullets)
+- The job description (for relevance context)
+
+TIGHTEN (target: 1 page):
+- Remove the lowest JD-relevance bullets first
+- Shorten project descriptions to 1 line each
+- Compress older/less-relevant roles to 1-2 bullets
+- Shorten the summary if possible
+- Do NOT remove entire roles — keep at least 1 bullet per role
+- Do NOT remove bullets with strong metrics that match JD requirements
+
+EXPAND (target: full 2 pages):
+- Pull additional relevant bullets from the candidate profile that match JD requirements
+- Expand project descriptions with tech stack, architecture decisions, and measurable outcomes
+- Add more sub-point details (e.g. individual product names under a suite)
+- Flesh out older roles with relevant bullets from the profile
+- Expand the summary to 3-4 sentences if it adds JD-relevant context
+- Do NOT invent new facts — only use data from the provided profile
+
+Return ONLY JSON with the same resume structure (contact, summary, skills_*, experience, projects, education, certifications, activities, interests). No tailoring_notes needed.`,
     config: { model: MODEL, temperature: 0.2 },
   },
 
@@ -638,6 +679,18 @@ async function tailorResume(profile, job, trace) {
   return result;
 }
 
+async function fitResume(resume, directive, profile, job, trace) {
+  const { text: system, langfusePrompt } = await getPrompt('fit_resume');
+
+  const user =
+    `DIRECTIVE: ${directive}\n\n` +
+    `JOB DESCRIPTION:\nTitle: ${job.title}\nCompany: ${job.company}\n${job.jd_text}\n\n` +
+    `CURRENT TAILORED RESUME:\n${JSON.stringify(resume)}\n\n` +
+    (directive === 'EXPAND' ? `CANDIDATE FULL PROFILE (pull additional bullets from here):\n${JSON.stringify(profile)}` : '');
+
+  return await askJson(system, user, 'fit_resume', trace, langfusePrompt);
+}
+
 async function improveResume(resume, job, ats, trace) {
   const { text: system, langfusePrompt } = await getPrompt('improve_resume');
 
@@ -745,4 +798,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { extractFacts, tailorResume, fitResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, scoreIngestionCoverage, langfuse, syncPrompts };

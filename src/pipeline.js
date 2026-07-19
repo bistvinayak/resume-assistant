@@ -3,8 +3,9 @@
 const path = require('path');
 const os = require('os');
 const { getProfile, seenJobBefore, saveTailored, markDelivered, markJobFailed } = require('./db');
-const { tailorResume, calculateAtsScore, improveResume, createJobTrace } = require('./llm');
+const { tailorResume, fitResume, calculateAtsScore, improveResume, createJobTrace } = require('./llm');
 const { renderResumeDocx } = require('./renderDocx');
+const { measureResumePdf } = require('./renderPdf');
 const { sendResumeEmail } = require('./mailer');
 
 const ATS_IMPROVEMENT_THRESHOLD = 95;
@@ -49,6 +50,32 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   } catch (e) {
     await markJobFailed(job.job_id, `Tailoring failed after retries: ${e.message}`);
     throw e;
+  }
+
+  // Step 1.5: Page-fit loop — measure rendered PDF, adjust if needed
+  try {
+    const measurement = await measureResumePdf(resume);
+    console.log(`📐 Page measurement for ${job.company}: ${measurement.pages} page(s), last page ${measurement.lastPageFill}% filled`);
+
+    if (measurement.directive) {
+      console.log(`↕ Page fit: ${measurement.directive} (${measurement.pages} pages, ${measurement.lastPageFill}% fill)`);
+      const fitted = await withRetry(
+        () => fitResume(resume, measurement.directive, profile, job, trace),
+        `fit:${job.company}`,
+        1
+      );
+      const verify = await measureResumePdf(fitted);
+      console.log(`📐 After fit: ${verify.pages} page(s), last page ${verify.lastPageFill}% filled`);
+
+      if (!verify.needsAdjustment || verify.pages === 1) {
+        resume = fitted;
+      } else {
+        console.log(`⚠ Fit adjustment didn't fully resolve — using best result`);
+        resume = fitted;
+      }
+    }
+  } catch (e) {
+    console.error(`⚠ Page-fit check failed (using original tailoring): ${e.message}`);
   }
 
   // Step 2: ATS score (retryable, degrades gracefully)
