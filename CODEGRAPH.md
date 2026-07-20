@@ -315,7 +315,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:618] — O
 | expandResume | 35 | no |
 | withRetry | 78 | no |
 | processJob | 91 | yes |
-| buildEmailBody | 275 | no |
+| buildEmailBody | 291 | no |
 
 ### profile.js
 
@@ -357,10 +357,12 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:618] — O
 | Function | Line | Exported |
 |----------|------|----------|
 | scaledFonts | 28 | no |
-| renderContent | 36 | no |
-| renderResumePdf | 151 | yes |
-| measureResumePdf | 170 | yes |
-| sectionHeading | 200 | no |
+| parseBoldSegments | 39 | no |
+| renderBullet | 68 | no |
+| renderContent | 88 | no |
+| renderResumePdf | 207 | yes |
+| measureResumePdf | 226 | yes |
+| sectionHeading | 256 | no |
 
 ### scraper.js
 

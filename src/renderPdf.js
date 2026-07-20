@@ -33,6 +33,58 @@ function scaledFonts(fontScale) {
   return s;
 }
 
+const METRIC_RE = /(\$[\d,.]+[KMB]?\+?|[+~]?\d[\d,.]*[–-]\d[\d,.]*%|[+~]?\d[\d,.]*%\+?|\d[\d,.]*[KMB]\+|\d[\d,.]*\+)/g;
+const SUBPOINT_RE = /^([A-Z][A-Za-z0-9-]*(?:\s&\s[A-Z][A-Za-z0-9-]*|\s[A-Z][A-Za-z0-9-]*)+)\s[—–]\s/;
+
+function parseBoldSegments(text) {
+  const segments = [];
+  const subMatch = text.match(SUBPOINT_RE);
+  let startIdx = 0;
+
+  if (subMatch) {
+    segments.push({ text: subMatch[1], bold: true });
+    segments.push({ text: ' — ', bold: false });
+    startIdx = subMatch[0].length;
+  }
+
+  const rest = text.slice(startIdx);
+  let lastIdx = 0;
+
+  for (const m of rest.matchAll(METRIC_RE)) {
+    if (m.index > lastIdx) {
+      segments.push({ text: rest.slice(lastIdx, m.index), bold: false });
+    }
+    segments.push({ text: m[0], bold: true });
+    lastIdx = m.index + m[0].length;
+  }
+
+  if (lastIdx < rest.length) {
+    segments.push({ text: rest.slice(lastIdx), bold: false });
+  }
+
+  return segments.length ? segments : [{ text, bold: false }];
+}
+
+function renderBullet(doc, text, fontSize, indent, lineGap) {
+  const segs = parseBoldSegments(text);
+  if (segs.length === 1 && !segs[0].bold) {
+    doc.fontSize(fontSize).font('Helvetica').text(`•  ${text}`, { indent, lineGap });
+    return;
+  }
+
+  for (let i = 0; i < segs.length; i++) {
+    const seg = segs[i];
+    const prefix = i === 0 ? '•  ' : '';
+    const isLast = i === segs.length - 1;
+    doc.fontSize(fontSize).font(seg.bold ? 'Helvetica-Bold' : 'Helvetica');
+    if (isLast) {
+      doc.text(`${prefix}${seg.text}`, { indent: i === 0 ? indent : 0, lineGap });
+    } else {
+      doc.text(`${prefix}${seg.text}`, { indent: i === 0 ? indent : 0, continued: true });
+    }
+  }
+}
+
 function renderContent(doc, resume, opts = {}) {
   const fontScale = opts.fontScale || 1.0;
   const f = scaledFonts(fontScale);
@@ -94,8 +146,7 @@ function renderContent(doc, resume, opts = {}) {
       }
       for (const b of job.bullets || []) {
         const text = typeof b === 'string' ? b : (b.text || '');
-        doc.fontSize(f.bullet).font('Helvetica')
-          .text(`•  ${text}`, { indent: 12, lineGap: 1.5 });
+        renderBullet(doc, text, f.bullet, 12, 1.5);
       }
     }
   }
@@ -104,7 +155,12 @@ function renderContent(doc, resume, opts = {}) {
     sectionHeading(doc, 'PROJECTS', pageWidth, f);
     for (const p of resume.projects) {
       doc.moveDown(0.2);
-      doc.fontSize(f.projectName).font('Helvetica-Bold').text(p.name || '');
+      doc.fontSize(f.projectName).font('Helvetica-Bold').text(p.name || '', { continued: !!(p.tags && p.tags.length) });
+      if (Array.isArray(p.tags) && p.tags.length) {
+        doc.font('Helvetica').fontSize(f.tagline).fillColor('#666666')
+          .text(`  (${p.tags.join(', ')})`);
+        doc.fillColor('#000000');
+      }
       if (p.description) {
         doc.fontSize(f.projectDesc).font('Helvetica').text(p.description, { lineGap: 1.5 });
       }

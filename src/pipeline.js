@@ -145,6 +145,22 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     console.log(`ℹ Thin roles (≤1 bullet): ${integrityIssues.thinRoles.join(', ')}`);
   }
 
+  // Step 1.55: Enrich projects — always merge outcomes from profile (regardless of page fill)
+  for (const resumeProj of (resume.projects || [])) {
+    const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+    const profileProj = (profile.projects || []).find(p => norm(p.name) === norm(resumeProj.name));
+    if (profileProj) {
+      const parts = [profileProj.description, profileProj.outcome].filter(Boolean);
+      const fullDesc = parts.join('. ');
+      if (fullDesc.length > (resumeProj.description || '').length) {
+        resumeProj.description = fullDesc;
+      }
+      if (profileProj.tags && profileProj.tags.length && !resumeProj.tags) {
+        resumeProj.tags = profileProj.tags;
+      }
+    }
+  }
+
   // Step 1.6: Deterministic page-fill — measure, expand if content spills past a page boundary
   let fontScale = 1.0;
   try {
