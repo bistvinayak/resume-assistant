@@ -510,13 +510,13 @@ export default function Dashboard() {
                 ...prev.filter(m => m.id !== progressId),
                 { role: 'arjun', text: `Scraping failed for this job — the page may require login or the URL couldn't be read. Try a different URL or paste the job description directly.` },
               ]);
-            } else if (pollCount >= 30) {
+            } else if (pollCount >= 48) {
               clearInterval(pollJobs);
               clearInterval(elapsedTimer);
               setJobs(allJobs);
               setChatMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: 'Still processing after 5 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
+                { role: 'arjun', text: 'Still processing after 8 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
               ]);
             }
           } catch {}
@@ -854,13 +854,13 @@ export default function Dashboard() {
                 ...prev.filter(m => m.id !== progressId),
                 { role: 'arjun', text: `Scraping failed for this job — the page may require login or the URL couldn't be read. Try a different URL or paste the job description directly.` },
               ]);
-            } else if (pollCount >= 30) {
+            } else if (pollCount >= 48) {
               clearInterval(pollJobs);
               clearInterval(elapsedTimer);
               setJobs(allJobs);
               setTailorMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: 'Still processing after 5 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
+                { role: 'arjun', text: 'Still processing after 8 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
               ]);
             }
           } catch {}
@@ -1993,7 +1993,7 @@ export default function Dashboard() {
                           <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#ef4444', background: '#ef444411', border: '1px solid #ef444433', borderRadius: '4px', padding: '2px 8px' }}>failed</span>
                         ) : null}
                         {job.improved && <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#f59e0b', background: '#f59e0b11', border: '1px solid #f59e0b33', borderRadius: '4px', padding: '2px 8px' }}>2nd run</span>}
-                        <span style={{ fontSize: '11px', color: '#c4c0bc', fontFamily: "'DM Mono', monospace" }}>{new Date(job.created_at || job.seen_at).toLocaleDateString()}</span>
+                        <span style={{ fontSize: '11px', color: '#c4c0bc', fontFamily: "'DM Mono', monospace" }}>{new Date(job.created_at || job.seen_at).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                         {job.status === 'delivered' ? (
                           <div style={{ display: 'flex', gap: '4px' }}>
                             <button onClick={(e) => handleDownload(e, job.job_id, 'docx')} disabled={downloading === `${job.job_id}_docx`} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: downloading === `${job.job_id}_docx` ? '#f59e0b' : '#888', padding: '5px 10px', borderRadius: '4px', fontSize: '10px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
