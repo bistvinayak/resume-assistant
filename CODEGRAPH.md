@@ -21,24 +21,24 @@ Quick-lookup graph of the codebase. Check here FIRST before reading files — go
 | POST | /ingest/files | server.js:183 | extractTextFromFile, ingestFiles |
 | GET | /ingest/status | server.js:247 | — |
 | POST | /chat | server.js:260 | getProfile, getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, processJob, classifyIntent, saveProfile, chatEnrich |
-| POST | /chat/confirm | server.js:378 | getProfile, mergeProfile, applyDeletions, saveProfile |
-| POST | /feedback | server.js:397 | — |
-| GET | /jobs | server.js:416 | getJobsForUser |
-| POST | /jobs/process | server.js:424 | processJob |
-| POST | /jobs/submit-url | server.js:433 | getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, processJob |
-| POST | /jobs/run-batch | server.js:487 | runBatch |
-| POST | /gmail/connect | server.js:494 | connectGmail |
-| GET | /projects/arjun | server.js:497 | — |
-| GET | /admin/stats | server.js:523 | adminOnly, getStats, authMiddleware |
-| GET | /admin/users | server.js:524 | adminOnly, getUsers, authMiddleware |
-| PATCH | /admin/users/:userId | server.js:525 | adminOnly, updateUser, authMiddleware |
-| DELETE | /admin/users/:userId | server.js:526 | adminOnly, deleteUser, authMiddleware |
-| GET | /admin/jobs | server.js:527 | adminOnly, authMiddleware |
-| POST | /admin/cron/run | server.js:528 | adminOnly, triggerCron, authMiddleware |
-| GET | /admin/settings | server.js:529 | adminOnly, getSettings, authMiddleware |
-| PATCH | /admin/settings | server.js:530 | adminOnly, updateSettings, authMiddleware |
-| GET | /jobs/:jobId/download | server.js:536 | renderResumePdf, renderResumeDocx |
-| POST | /gmail/verify | server.js:578 | — |
+| POST | /chat/confirm | server.js:381 | getProfile, mergeProfile, applyDeletions, saveProfile |
+| POST | /feedback | server.js:400 | — |
+| GET | /jobs | server.js:419 | getJobsForUser |
+| POST | /jobs/process | server.js:427 | processJob |
+| POST | /jobs/submit-url | server.js:436 | getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, processJob |
+| POST | /jobs/run-batch | server.js:490 | runBatch |
+| POST | /gmail/connect | server.js:497 | connectGmail |
+| GET | /projects/arjun | server.js:500 | — |
+| GET | /admin/stats | server.js:526 | adminOnly, getStats, authMiddleware |
+| GET | /admin/users | server.js:527 | adminOnly, getUsers, authMiddleware |
+| PATCH | /admin/users/:userId | server.js:528 | adminOnly, updateUser, authMiddleware |
+| DELETE | /admin/users/:userId | server.js:529 | adminOnly, deleteUser, authMiddleware |
+| GET | /admin/jobs | server.js:530 | adminOnly, authMiddleware |
+| POST | /admin/cron/run | server.js:531 | adminOnly, triggerCron, authMiddleware |
+| GET | /admin/settings | server.js:532 | adminOnly, getSettings, authMiddleware |
+| PATCH | /admin/settings | server.js:533 | adminOnly, updateSettings, authMiddleware |
+| GET | /jobs/:jobId/download | server.js:539 | renderResumePdf, renderResumeDocx |
+| POST | /gmail/verify | server.js:581 | — |
 
 ## Chat Flow (server.js:260)
 
@@ -89,10 +89,10 @@ applyPartial(partial, userId) [profile.js:259]
   → returns merged (with _conflicts if any)
 ```
 
-## Job Processing Pipeline (pipeline.js:91)
+## Job Processing Pipeline (pipeline.js:156)
 
 ```
-processJob(job, userId) [pipeline.js:91]
+processJob(job, userId) [pipeline.js:156]
   → seenJobBefore(job) [db.js:142]
   → getProfile(userId) [db.js:79]
   → tailorResume(profile, job, trace) [llm.js:703]  — LLM
@@ -114,7 +114,7 @@ startCron() [cron.js:74]  — runs every 2 hours
   → runBatch(userId) [cron.js:9]
        → fetchLinkedInJobs() [gmail.js:7]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
-       → per job: processJob(job, userId) [pipeline.js:91]
+       → per job: processJob(job, userId) [pipeline.js:156]
 ```
 
 ## Merge Logic (profile.js:407)
@@ -197,14 +197,14 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:618] — O
 | api.restoreProfileVersion() | /api/profile/restore | server.js:93 |
 | api.resolveAmbiguities() | /api/profile/resolve-ambiguities | server.js:93 |
 | api.resolveConflicts() | /api/profile/resolve-conflicts | server.js:93 |
-| api.submitJobUrl() | /api/jobs/submit-url | server.js:416 |
-| api.getJobs() | /api/jobs | server.js:416 |
-| api.runBatch() | /api/jobs/run-batch | server.js:416 |
+| api.submitJobUrl() | /api/jobs/submit-url | server.js:419 |
+| api.getJobs() | /api/jobs | server.js:419 |
+| api.runBatch() | /api/jobs/run-batch | server.js:419 |
 | api.chat() | /api/chat | server.js:260 |
 | api.connectGmail() | /api/gmail/connect | — |
 | api.verifyGmailFilter() | /api/gmail/verify | — |
 | api.confirmChanges() | /api/chat/confirm | server.js:260 |
-| api.downloadResume() | /api/jobs/:id/download | server.js:416 |
+| api.downloadResume() | /api/jobs/:id/download | server.js:419 |
 | api.adminGetStats() | /api/admin/stats | — |
 | api.adminGetUsers() | /api/admin/users | — |
 | api.adminUpdateUser() | /api/admin/users/:id | — |
@@ -213,7 +213,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:618] — O
 | api.adminTriggerCron() | /api/admin/cron/run | — |
 | api.adminGetSettings() | /api/admin/settings | — |
 | api.adminUpdateSettings() | /api/admin/settings | — |
-| api.sendFeedback() | /api/feedback | server.js:397 |
+| api.sendFeedback() | /api/feedback | server.js:400 |
 
 ## Backend Functions (all files)
 
@@ -312,10 +312,12 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:618] — O
 | Function | Line | Exported |
 |----------|------|----------|
 | validateResumeContent | 13 | no |
-| expandResume | 35 | no |
-| withRetry | 78 | no |
-| processJob | 91 | yes |
-| buildEmailBody | 291 | no |
+| expandResume | 37 | no |
+| tightenResume | 90 | no |
+| pickLayoutOpts | 130 | no |
+| withRetry | 143 | no |
+| processJob | 156 | yes |
+| buildEmailBody | 378 | no |
 
 ### profile.js
 
@@ -360,9 +362,9 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:618] — O
 | parseBoldSegments | 39 | no |
 | renderBullet | 68 | no |
 | renderContent | 88 | no |
-| renderResumePdf | 207 | yes |
-| measureResumePdf | 226 | yes |
-| sectionHeading | 256 | no |
+| renderResumePdf | 214 | yes |
+| measureResumePdf | 233 | yes |
+| sectionHeading | 263 | no |
 
 ### scraper.js
 

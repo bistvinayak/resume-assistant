@@ -87,6 +87,9 @@ function renderBullet(doc, text, fontSize, indent, lineGap) {
 
 function renderContent(doc, resume, opts = {}) {
   const fontScale = opts.fontScale || 1.0;
+  const lineGap = opts.lineGap || 1.5;
+  const sectionGap = opts.sectionGap || 0.6;
+  const roleGap = opts.roleGap || 0.3;
   const f = scaledFonts(fontScale);
   const c = resume.contact || {};
   const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
@@ -107,8 +110,8 @@ function renderContent(doc, resume, opts = {}) {
   doc.fillColor('#000000');
 
   if (resume.summary) {
-    sectionHeading(doc, 'SUMMARY', pageWidth, f);
-    doc.fontSize(f.summary).font('Helvetica').text(resume.summary, { lineGap: 2 });
+    sectionHeading(doc, 'SUMMARY', pageWidth, f, sectionGap);
+    doc.fontSize(f.summary).font('Helvetica').text(resume.summary, { lineGap: lineGap + 0.5 });
   }
 
   const skillGroups = [
@@ -118,20 +121,20 @@ function renderContent(doc, resume, opts = {}) {
   ].filter(g => Array.isArray(g.items) && g.items.length);
 
   if (skillGroups.length) {
-    sectionHeading(doc, 'SKILLS', pageWidth, f);
+    sectionHeading(doc, 'SKILLS', pageWidth, f, sectionGap);
     for (const g of skillGroups) {
       doc.fontSize(f.skillLabel).font('Helvetica-Bold').text(`${g.label}: `, { continued: true });
       doc.font('Helvetica').fontSize(f.skillValue).text(g.items.join('  •  '));
     }
   } else if (Array.isArray(resume.skills_ranked) && resume.skills_ranked.length) {
-    sectionHeading(doc, 'SKILLS', pageWidth, f);
+    sectionHeading(doc, 'SKILLS', pageWidth, f, sectionGap);
     doc.fontSize(f.skillValue).font('Helvetica').text(resume.skills_ranked.join('  •  '));
   }
 
   if (Array.isArray(resume.experience) && resume.experience.length) {
-    sectionHeading(doc, 'EXPERIENCE', pageWidth, f);
+    sectionHeading(doc, 'EXPERIENCE', pageWidth, f, sectionGap);
     for (const job of resume.experience) {
-      doc.moveDown(0.3);
+      doc.moveDown(roleGap);
       const titleLine = `${job.title || ''}${job.company ? ', ' + job.company : ''}`;
       doc.fontSize(f.roleTitle).font('Helvetica-Bold').text(titleLine, { continued: !!job.dates });
       if (job.dates) {
@@ -146,31 +149,35 @@ function renderContent(doc, resume, opts = {}) {
       }
       for (const b of job.bullets || []) {
         const text = typeof b === 'string' ? b : (b.text || '');
-        renderBullet(doc, text, f.bullet, 12, 1.5);
+        renderBullet(doc, text, f.bullet, 12, lineGap);
       }
     }
   }
 
   if (Array.isArray(resume.projects) && resume.projects.length) {
-    sectionHeading(doc, 'PROJECTS', pageWidth, f);
+    sectionHeading(doc, 'PROJECTS', pageWidth, f, sectionGap);
     for (const p of resume.projects) {
-      doc.moveDown(0.2);
+      doc.moveDown(roleGap * 0.7);
       doc.fontSize(f.projectName).font('Helvetica-Bold').text(p.name || '', { continued: !!(p.tags && p.tags.length) });
       if (Array.isArray(p.tags) && p.tags.length) {
         doc.font('Helvetica').fontSize(f.tagline).fillColor('#666666')
           .text(`  (${p.tags.join(', ')})`);
         doc.fillColor('#000000');
       }
+      if (p.url) {
+        doc.fontSize(f.tagline).font('Helvetica').fillColor('#1a6ed8').text(p.url);
+        doc.fillColor('#000000');
+      }
       if (p.description) {
-        doc.fontSize(f.projectDesc).font('Helvetica').text(p.description, { lineGap: 1.5 });
+        doc.fontSize(f.projectDesc).font('Helvetica').text(p.description, { lineGap });
       }
     }
   }
 
   if (Array.isArray(resume.education) && resume.education.length) {
-    sectionHeading(doc, 'EDUCATION', pageWidth, f);
+    sectionHeading(doc, 'EDUCATION', pageWidth, f, sectionGap);
     for (const e of resume.education) {
-      doc.moveDown(0.2);
+      doc.moveDown(roleGap * 0.7);
       doc.fontSize(f.eduDegree).font('Helvetica-Bold').text(e.degree || '', { continued: !!e.dates });
       if (e.dates) {
         doc.font('Helvetica').fontSize(f.eduDates).fillColor('#666666')
@@ -184,22 +191,22 @@ function renderContent(doc, resume, opts = {}) {
   }
 
   if (Array.isArray(resume.certifications) && resume.certifications.length) {
-    sectionHeading(doc, 'CERTIFICATIONS', pageWidth, f);
+    sectionHeading(doc, 'CERTIFICATIONS', pageWidth, f, sectionGap);
     for (const cert of resume.certifications) {
       const label = cert.issuer ? `${cert.name} — ${cert.issuer}` : cert.name;
-      doc.fontSize(f.cert).font('Helvetica').text(`•  ${label}`, { indent: 12, lineGap: 1.5 });
+      doc.fontSize(f.cert).font('Helvetica').text(`•  ${label}`, { indent: 12, lineGap });
     }
   }
 
   if (Array.isArray(resume.activities) && resume.activities.length) {
-    sectionHeading(doc, 'ACTIVITIES', pageWidth, f);
+    sectionHeading(doc, 'ACTIVITIES', pageWidth, f, sectionGap);
     for (const a of resume.activities) {
-      doc.fontSize(f.activity).font('Helvetica').text(`•  ${a}`, { indent: 12, lineGap: 1.5 });
+      doc.fontSize(f.activity).font('Helvetica').text(`•  ${a}`, { indent: 12, lineGap });
     }
   }
 
   if (Array.isArray(resume.interests) && resume.interests.length) {
-    sectionHeading(doc, 'INTERESTS', pageWidth, f);
+    sectionHeading(doc, 'INTERESTS', pageWidth, f, sectionGap);
     doc.fontSize(f.interest).font('Helvetica').text(resume.interests.join('  •  '));
   }
 }
@@ -253,8 +260,8 @@ async function measureResumePdf(resume, opts = {}) {
   })]);
 }
 
-function sectionHeading(doc, text, pageWidth, f) {
-  doc.moveDown(0.6);
+function sectionHeading(doc, text, pageWidth, f, sectionGap = 0.6) {
+  doc.moveDown(sectionGap);
   doc.fontSize(f ? f.sectionHeading : 11).font('Helvetica-Bold').text(text);
   doc.moveTo(doc.x, doc.y).lineTo(doc.x + pageWidth, doc.y)
     .strokeColor('#cccccc').lineWidth(0.5).stroke();

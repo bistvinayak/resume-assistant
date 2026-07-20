@@ -311,15 +311,18 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
       res.json({ reply: profileSummaryText, profile: currentProfile, scraping: true });
 
       (async () => {
+        const t0 = Date.now();
         try {
           console.log(`→ Chat: scraping ${url} for user ${req.userId}`);
           const scraped = await scrapeLinkedInJob(url);
+          console.log(`⏱ Scrape took ${((Date.now() - t0) / 1000).toFixed(1)}s`);
           if (!scraped || !scraped.jd_text) {
             console.error(`✗ Could not scrape ${url}`);
             await markJobFailed(jobId, 'Could not scrape job page — page may require login or URL is invalid');
             return;
           }
           await processJob({ job_id: jobId, title: scraped.title || 'Unknown Role', company: scraped.company || 'Unknown Company', jd_text: scraped.jd_text, url }, req.userId, { source: 'app', force: isRerun, ...ctx });
+          console.log(`⏱ Total job processing: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
         } catch (e) {
           console.error('Chat job processing error:', e.message);
           await markJobFailed(jobId, e.message).catch(() => {});
@@ -555,8 +558,8 @@ app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, 
       const { renderResumePdf } = require('./renderPdf');
       const fileName = `arjun_${safe(company)}_${safe(title)}.pdf`;
       const filePath = require('path').join(require('os').tmpdir(), fileName);
-      const fontScale = resume_json._fontScale || 1.0;
-      await renderResumePdf(resume_json, filePath, { fontScale });
+      const layoutOpts = resume_json._layoutOpts || { fontScale: resume_json._fontScale || 1.0 };
+      await renderResumePdf(resume_json, filePath, layoutOpts);
       res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
       res.setHeader('Content-Type', 'application/pdf');
       res.sendFile(filePath);
