@@ -60,6 +60,7 @@ async function initSchema() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS missing_keywords JSONB DEFAULT '[]';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS substitutions JSONB DEFAULT '[]';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tailoring_notes JSONB DEFAULT '[]';
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS jd_requirements JSONB DEFAULT '[]';
       ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'me';
     EXCEPTION WHEN others THEN NULL; END $$;
 
@@ -172,7 +173,8 @@ async function markDelivered(tailoredId, jobId, atsData) {
       missing_keywords = $4,
       improved = $5,
       substitutions = $6,
-      tailoring_notes = $7
+      tailoring_notes = $7,
+      jd_requirements = $8
      WHERE job_id = $1`,
     [
       jobId,
@@ -182,6 +184,7 @@ async function markDelivered(tailoredId, jobId, atsData) {
       atsData?.improved || false,
       JSON.stringify(atsData?.substitutions || []),
       JSON.stringify(atsData?.tailoring_notes || []),
+      JSON.stringify(atsData?.jd_requirements || []),
     ]
   );
 }

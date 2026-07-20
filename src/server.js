@@ -555,7 +555,8 @@ app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, 
       const { renderResumePdf } = require('./renderPdf');
       const fileName = `arjun_${safe(company)}_${safe(title)}.pdf`;
       const filePath = require('path').join(require('os').tmpdir(), fileName);
-      await renderResumePdf(resume_json, filePath);
+      const fontScale = resume_json._fontScale || 1.0;
+      await renderResumePdf(resume_json, filePath, { fontScale });
       res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
       res.setHeader('Content-Type', 'application/pdf');
       res.sendFile(filePath);

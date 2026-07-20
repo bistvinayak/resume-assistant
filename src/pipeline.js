@@ -3,7 +3,7 @@
 const path = require('path');
 const os = require('os');
 const { getProfile, seenJobBefore, saveTailored, markDelivered, markJobFailed } = require('./db');
-const { tailorResume, fitResume, calculateAtsScore, improveResume, createJobTrace } = require('./llm');
+const { tailorResume, calculateAtsScore, improveResume, createJobTrace } = require('./llm');
 const { renderResumeDocx } = require('./renderDocx');
 const { measureResumePdf } = require('./renderPdf');
 const { sendResumeEmail } = require('./mailer');
@@ -31,6 +31,47 @@ function validateResumeContent(resume, profile) {
 
   return { missingRoles, thinRoles };
 }
+
+function expandResume(resume, profile) {
+  let changed = false;
+  const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+
+  for (const resumeExp of (resume.experience || [])) {
+    const profileExp = (profile.experience || []).find(p =>
+      norm(p.company) === norm(resumeExp.company) && norm(p.title) === norm(resumeExp.title)
+    ) || (profile.experience || []).find(p => norm(p.company) === norm(resumeExp.company));
+
+    if (!profileExp) continue;
+
+    const profileBullets = (profileExp.bullets || []).map(b => typeof b === 'string' ? b : b.text || '');
+    const resumeBulletTexts = new Set((resumeExp.bullets || []).map(b =>
+      norm(typeof b === 'string' ? b : b.text || '')
+    ));
+
+    const missing = profileBullets.filter(bt => !resumeBulletTexts.has(norm(bt)));
+    if (missing.length > 0 && (resumeExp.bullets || []).length <= 5) {
+      const toAdd = missing.slice(0, 3);
+      resumeExp.bullets = [...(resumeExp.bullets || []), ...toAdd.map(t => ({ text: t, serves: 'additional role detail' }))];
+      changed = true;
+    }
+  }
+
+  for (const resumeProj of (resume.projects || [])) {
+    const profileProj = (profile.projects || []).find(p =>
+      norm(p.name) === norm(resumeProj.name)
+    );
+    if (profileProj) {
+      const profileDesc = [profileProj.description, profileProj.outcome].filter(Boolean).join('. ');
+      if (profileDesc.length > (resumeProj.description || '').length) {
+        resumeProj.description = profileDesc;
+        changed = true;
+      }
+    }
+  }
+
+  return changed;
+}
+
 const MAX_RETRIES = 2;
 const BASE_DELAY_MS = 2000;
 
@@ -61,29 +102,34 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   const trace = createJobTrace(job, { userId, sessionId, userEmail, userName });
   const profile = await getProfile(userId);
 
-  // Step 1: Tailor resume (retryable — LLM call)
-  let resume, tailoringNotes;
+  // Step 1: Tailor resume — LLM selects + reframes all relevant bullets
+  let resume, tailoringNotes, jdRequirements;
   try {
     const tailorResult = await withRetry(
       () => tailorResume(profile, job, trace),
       `tailor:${job.company}`
     );
     tailoringNotes = tailorResult.tailoring_notes || [];
+    jdRequirements = tailorResult.jd_requirements || [];
     delete tailorResult.tailoring_notes;
+    delete tailorResult.jd_requirements;
     resume = tailorResult;
   } catch (e) {
     await markJobFailed(job.job_id, `Tailoring failed after retries: ${e.message}`);
     throw e;
   }
 
-  // Step 1.5: Content integrity check — verify resume content traces back to profile
+  // Step 1.5: Content integrity — patch any dropped roles
   const integrityIssues = validateResumeContent(resume, profile);
   if (integrityIssues.missingRoles.length) {
     console.warn(`⚠ Tailoring dropped ${integrityIssues.missingRoles.length} role(s): ${integrityIssues.missingRoles.join(', ')} — patching`);
     for (const role of integrityIssues.missingRoles) {
       const profileRole = profile.experience.find(e => (e.company || '').toLowerCase() === role.toLowerCase());
       if (profileRole) {
-        const bullets = (profileRole.bullets || []).slice(0, 2).map(b => typeof b === 'string' ? b : b.text || '');
+        const bullets = (profileRole.bullets || []).slice(0, 2).map(b => {
+          const text = typeof b === 'string' ? b : b.text || '';
+          return { text, serves: 'role coverage (patched)' };
+        });
         resume.experience.push({
           company: profileRole.company,
           tagline: profileRole.company_description || '',
@@ -99,33 +145,38 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     console.log(`ℹ Thin roles (≤1 bullet): ${integrityIssues.thinRoles.join(', ')}`);
   }
 
-  // Step 1.6: Page-fit loop — measure rendered PDF, adjust if needed
+  // Step 1.6: Deterministic page-fill — measure, expand if content spills past a page boundary
+  let fontScale = 1.0;
   try {
-    const measurement = await measureResumePdf(resume);
+    let measurement = await measureResumePdf(resume, { fontScale });
     console.log(`📐 Page measurement for ${job.company}: ${measurement.pages} page(s), last page ${measurement.lastPageFill}% filled`);
 
-    if (measurement.directive) {
-      console.log(`↕ Page fit: ${measurement.directive} (${measurement.pages} pages, ${measurement.lastPageFill}% fill)`);
-      const fitted = await withRetry(
-        () => fitResume(resume, measurement.directive, profile, job, trace),
-        `fit:${job.company}`,
-        1
-      );
-      const verify = await measureResumePdf(fitted);
-      console.log(`📐 After fit: ${verify.pages} page(s), last page ${verify.lastPageFill}% filled`);
+    if (measurement.pages > 1 && measurement.lastPageFill < 60) {
+      console.log(`↕ Spills to page ${measurement.pages} at ${measurement.lastPageFill}% — expanding to fill`);
 
-      if (!verify.needsAdjustment || verify.pages === 1) {
-        resume = fitted;
-      } else {
-        console.log(`⚠ Fit adjustment didn't fully resolve — using best result`);
-        resume = fitted;
+      const expanded = expandResume(resume, profile);
+      if (expanded) {
+        measurement = await measureResumePdf(resume, { fontScale });
+        console.log(`📐 After content expand: ${measurement.pages} page(s), ${measurement.lastPageFill}% filled`);
+      }
+
+      if (measurement.pages > 1 && measurement.lastPageFill < 55) {
+        fontScale = 1.05;
+        measurement = await measureResumePdf(resume, { fontScale });
+        console.log(`📐 Font scale 1.05: ${measurement.pages} page(s), ${measurement.lastPageFill}% filled`);
+      }
+
+      if (measurement.pages > 1 && measurement.lastPageFill < 50) {
+        fontScale = 1.08;
+        measurement = await measureResumePdf(resume, { fontScale });
+        console.log(`📐 Font scale 1.08: ${measurement.pages} page(s), ${measurement.lastPageFill}% filled`);
       }
     }
   } catch (e) {
-    console.error(`⚠ Page-fit check failed (using original tailoring): ${e.message}`);
+    console.error(`⚠ Page measurement failed (using original): ${e.message}`);
   }
 
-  // Step 2: ATS score (retryable, degrades gracefully)
+  // Step 2: ATS score
   let ats;
   try {
     ats = await withRetry(
@@ -139,7 +190,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
 
   console.log(`✓ ATS Score for ${job.company}: ${ats.score}/100`);
 
-  // Step 3: Improvement pass (optional, already fault-tolerant)
+  // Step 3: Improvement pass (if ATS below threshold)
   let improved = false;
   let substitutions = [];
   if (ats.score > 0 && ats.score < ATS_IMPROVEMENT_THRESHOLD) {
@@ -175,7 +226,10 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     }
   }
 
-  // Step 4: Render (retryable — file system)
+  // Store render options on resume JSON for download route
+  if (fontScale !== 1.0) resume._fontScale = fontScale;
+
+  // Step 4: Render .docx
   const safe = (s) => String(s || 'x').replace(/[^a-z0-9]+/gi, '_');
   const fileName = `resume_${safe(job.company)}_${safe(job.title)}.docx`;
   const filePath = path.join(os.tmpdir(), fileName);
@@ -191,8 +245,9 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   }
 
   // Step 5: Save & deliver
+  const metadata = { ...ats, improved, substitutions, tailoring_notes: tailoringNotes, jd_requirements: jdRequirements, fontScale };
   const tailoredId = await saveTailored(job.job_id, resume, filePath, userId);
-  await markDelivered(tailoredId, job.job_id, { ...ats, improved, substitutions, tailoring_notes: tailoringNotes });
+  await markDelivered(tailoredId, job.job_id, metadata);
 
   if (source === 'cron') {
     const userEmail = profile.contact?.email || null;
@@ -212,9 +267,9 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     console.log(`· Skipping email — job submitted in-app, user can download from Job Activity`);
   }
 
-  trace.update({ output: { ats_score: ats.score, improved, substitutions_count: substitutions.length, resume_file: fileName } });
+  trace.update({ output: { ats_score: ats.score, improved, substitutions_count: substitutions.length, resume_file: fileName, fontScale, jd_requirements_count: jdRequirements.length } });
 
-  return { skipped: false, filePath, tailoredId, atsScore: ats.score, improved, substitutions, tailoringNotes };
+  return { skipped: false, filePath, tailoredId, atsScore: ats.score, improved, substitutions, tailoringNotes, jdRequirements, fontScale };
 }
 
 function buildEmailBody({ job, ats, improved, substitutions }) {

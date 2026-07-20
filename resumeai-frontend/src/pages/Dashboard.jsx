@@ -34,18 +34,38 @@ const ProgressBar = ({ value, label, sublabel }) => {
 const ThinkingSection = ({ job }) => {
   const notes = job.tailoring_notes || [];
   const subs = job.substitutions || [];
-  if (!notes.length && !subs.length) return null;
+  const jdReqs = job.jd_requirements || [];
+  if (!notes.length && !subs.length && !jdReqs.length) return null;
   return (
     <div style={{ marginBottom: '14px', background: '#fafaf9', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '12px' }}>
-      <div style={{ fontSize: '10px', color: '#8b5cf6', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '8px' }}>
-        WHAT ARJUN DID
-      </div>
-      {notes.map((note, ni) => (
-        <div key={ni} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '11px', color: '#57534e', lineHeight: 1.5 }}>
-          <span style={{ color: '#8b5cf6', flexShrink: 0 }}>→</span>
-          <span>{note}</span>
+      {jdReqs.length > 0 && (
+        <div style={{ marginBottom: notes.length || subs.length ? '10px' : 0 }}>
+          <div style={{ fontSize: '10px', color: '#0ea5e9', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '6px' }}>
+            JD REQUIREMENTS MATCHED ({jdReqs.length})
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {jdReqs.map((req, ri) => (
+              <span key={ri} style={{
+                fontSize: '10px', background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd',
+                borderRadius: '4px', padding: '2px 6px', fontFamily: "'DM Sans', sans-serif",
+              }}>{req}</span>
+            ))}
+          </div>
         </div>
-      ))}
+      )}
+      {notes.length > 0 && (
+        <div style={{ marginBottom: subs.length ? '8px' : 0 }}>
+          <div style={{ fontSize: '10px', color: '#8b5cf6', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '8px' }}>
+            WHAT ARJUN DID
+          </div>
+          {notes.map((note, ni) => (
+            <div key={ni} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '11px', color: '#57534e', lineHeight: 1.5 }}>
+              <span style={{ color: '#8b5cf6', flexShrink: 0 }}>→</span>
+              <span>{note}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {subs.length > 0 && (
         <div style={{ marginTop: notes.length ? '8px' : 0, borderTop: notes.length ? '1px solid #e7e5e4' : 'none', paddingTop: notes.length ? '8px' : 0 }}>
           <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>

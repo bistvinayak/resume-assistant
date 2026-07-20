@@ -38,7 +38,7 @@ Quick-lookup graph of the codebase. Check here FIRST before reading files — go
 | GET | /admin/settings | server.js:529 | adminOnly, getSettings, authMiddleware |
 | PATCH | /admin/settings | server.js:530 | adminOnly, updateSettings, authMiddleware |
 | GET | /jobs/:jobId/download | server.js:536 | renderResumePdf, renderResumeDocx |
-| POST | /gmail/verify | server.js:577 | — |
+| POST | /gmail/verify | server.js:578 | — |
 
 ## Chat Flow (server.js:260)
 
@@ -47,7 +47,7 @@ POST /api/chat { message, mode, history }
   │
   ├─ mode=tailor + URL → scrapeLinkedInJob → processJob (background)
   │
-  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:751]
+  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:745]
   │    ├─ URL structural detection (no LLM)
   │    │    ├─ url_job → "switch to Tailor tab" response
   │    │    └─ url_profile → save to contact field → done
@@ -57,7 +57,7 @@ POST /api/chat { message, mode, history }
   │         ├─ question → reply from intent gate using profile, done
   │         └─ add_info/delete/clarify → in_scope=true, continue ↓
   │
-  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:790]
+  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:784]
        └─ Returns { reply, extracted, deletions }
             → frontend shows pendingChanges for confirm/reject
 ```
@@ -66,7 +66,7 @@ POST /api/chat { message, mode, history }
 
 ```
 ingestText(text, userId) [profile.js:100]
-  → extractFacts(text) [llm.js:683]  — LLM extracts structured profile
+  → extractFacts(text) [llm.js:689]  — LLM extracts structured profile
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestPdf(filePath, userId) [profile.js:105]
@@ -74,7 +74,7 @@ ingestPdf(filePath, userId) [profile.js:105]
        ├─ .pdf → pdf-parse + pdfjs hyperlink extraction
        ├─ .docx/.doc → mammoth (text + HTML hyperlink extraction)
        └─ .txt → fs.readFile
-  → extractFacts(text) [llm.js:683]
+  → extractFacts(text) [llm.js:689]
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestFiles(files[], userId) [profile.js:111]
@@ -83,26 +83,26 @@ ingestFiles(files[], userId) [profile.js:111]
 applyPartial(partial, userId) [profile.js:259]
   → getProfile(userId)
   → if empty profile: mergeProfile (programmatic)
-  → if existing profile: smartMerge (LLM) [llm.js:802]
+  → if existing profile: smartMerge (LLM) [llm.js:796]
        └─ fallback: mergeProfile + detectConflicts
   → saveProfile(merged, userId)
   → returns merged (with _conflicts if any)
 ```
 
-## Job Processing Pipeline (pipeline.js:50)
+## Job Processing Pipeline (pipeline.js:91)
 
 ```
-processJob(job, userId) [pipeline.js:50]
-  → seenJobBefore(job) [db.js:141]
-  → getProfile(userId) [db.js:78]
-  → tailorResume(profile, job, trace) [llm.js:697]  — LLM
-  → calculateAtsScore(resume, job, trace) [llm.js:736]  — LLM
+processJob(job, userId) [pipeline.js:91]
+  → seenJobBefore(job) [db.js:142]
+  → getProfile(userId) [db.js:79]
+  → tailorResume(profile, job, trace) [llm.js:703]  — LLM
+  → calculateAtsScore(resume, job, trace) [llm.js:730]  — LLM
   → if ats < 95:
-       → improveResume(resume, job, ats, trace) [llm.js:722]  — LLM
+       → improveResume(resume, job, ats, trace) [llm.js:716]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:9]
-  → saveTailored(jobId, resume, filePath) [db.js:157]
-  → markDelivered(tailoredId, jobId, atsData) [db.js:165]
+  → saveTailored(jobId, resume, filePath) [db.js:158]
+  → markDelivered(tailoredId, jobId, atsData) [db.js:166]
   → sendResumeEmail (if source=cron) [mailer.js:57]
 ```
 
@@ -110,11 +110,11 @@ processJob(job, userId) [pipeline.js:50]
 
 ```
 startCron() [cron.js:74]  — runs every 2 hours
-  → recoverStaleJobs(10) [db.js:220]
+  → recoverStaleJobs(10) [db.js:223]
   → runBatch(userId) [cron.js:9]
        → fetchLinkedInJobs() [gmail.js:7]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
-       → per job: processJob(job, userId) [pipeline.js:50]
+       → per job: processJob(job, userId) [pipeline.js:91]
 ```
 
 ## Merge Logic (profile.js:407)
@@ -137,15 +137,15 @@ mergeProfile(base, incoming, conflicts) [profile.js:407]
 
 | Function | Line | Purpose |
 |----------|------|---------|
-| extractFacts | 683 | Parse raw text → structured profile JSON |
-| tailorResume | 697 | Rewrite profile into job-tailored resume |
-| improveResume | 722 | Rewrite bullets with missing JD keywords |
-| calculateAtsScore | 736 | Score resume vs JD |
-| classifyIntent | 751 | Intent gate: scope check + direct reply for questions |
-| chatEnrich | 790 | Extract profile data from conversation |
-| smartMerge | 802 | LLM-powered merge of existing + new profile |
+| extractFacts | 689 | Parse raw text → structured profile JSON |
+| tailorResume | 703 | Rewrite profile into job-tailored resume |
+| improveResume | 716 | Rewrite bullets with missing JD keywords |
+| calculateAtsScore | 730 | Score resume vs JD |
+| classifyIntent | 745 | Intent gate: scope check + direct reply for questions |
+| chatEnrich | 784 | Extract profile data from conversation |
+| smartMerge | 796 | LLM-powered merge of existing + new profile |
 
-All use `askJson(system, user, name, trace, prompt, history)` [llm.js:612] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
+All use `askJson(system, user, name, trace, prompt, history)` [llm.js:618] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
 
 ## Database (db.js)
 
@@ -162,18 +162,18 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:612] — O
 | Function | Line | Purpose |
 |----------|------|---------|
 | initSchema | 18 | Create tables on startup |
-| getProfile | 78 | Get latest profile (adds _onboarded flag) |
-| saveProfile | 88 | Upsert profile, increments version |
-| getProfileVersions | 116 | List profile version history |
-| restoreProfileVersion | 131 | Restore a previous version |
-| seenJobBefore | 141 | Dedup check by job_id |
-| saveTailored | 157 | Save rendered resume |
-| markDelivered | 165 | Mark resume delivered + store ATS metadata |
-| getJobByJobId | 189 | Get single job |
-| insertJobProcessing | 201 | Insert job with status=processing |
-| markJobFailed | 213 | Mark job as failed with reason |
-| recoverStaleJobs | 220 | Find jobs stuck in processing > N minutes |
-| getJobsForUser | 230 | List jobs for user |
+| getProfile | 79 | Get latest profile (adds _onboarded flag) |
+| saveProfile | 89 | Upsert profile, increments version |
+| getProfileVersions | 117 | List profile version history |
+| restoreProfileVersion | 132 | Restore a previous version |
+| seenJobBefore | 142 | Dedup check by job_id |
+| saveTailored | 158 | Save rendered resume |
+| markDelivered | 166 | Mark resume delivered + store ATS metadata |
+| getJobByJobId | 192 | Get single job |
+| insertJobProcessing | 204 | Insert job with status=processing |
+| markJobFailed | 216 | Mark job as failed with reason |
+| recoverStaleJobs | 223 | Find jobs stuck in processing > N minutes |
+| getJobsForUser | 233 | List jobs for user |
 
 ## Frontend Pages
 
@@ -249,18 +249,18 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:612] — O
 | Function | Line | Exported |
 |----------|------|----------|
 | initSchema | 18 | yes |
-| getProfile | 78 | yes |
-| saveProfile | 88 | yes |
-| getProfileVersions | 116 | yes |
-| restoreProfileVersion | 131 | yes |
-| seenJobBefore | 141 | yes |
-| saveTailored | 157 | yes |
-| markDelivered | 165 | yes |
-| getJobByJobId | 189 | yes |
-| insertJobProcessing | 201 | yes |
-| markJobFailed | 213 | yes |
-| recoverStaleJobs | 220 | yes |
-| getJobsForUser | 230 | yes |
+| getProfile | 79 | yes |
+| saveProfile | 89 | yes |
+| getProfileVersions | 117 | yes |
+| restoreProfileVersion | 132 | yes |
+| seenJobBefore | 142 | yes |
+| saveTailored | 158 | yes |
+| markDelivered | 166 | yes |
+| getJobByJobId | 192 | yes |
+| insertJobProcessing | 204 | yes |
+| markJobFailed | 216 | yes |
+| recoverStaleJobs | 223 | yes |
+| getJobsForUser | 233 | yes |
 
 ### gmail-connect.js
 
@@ -285,21 +285,20 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:612] — O
 | evalExtraction | 539 | no |
 | evalAtsScore | 567 | no |
 | evalTailoring | 573 | no |
-| evalImprovement | 584 | no |
-| countProfileBullets | 590 | no |
-| evalSmartMerge | 594 | no |
-| askJson | 612 | no |
-| makeTrace | 660 | no |
-| createJobTrace | 673 | yes |
-| extractFacts | 683 | yes |
-| tailorResume | 697 | yes |
-| fitResume | 710 | yes |
-| improveResume | 722 | yes |
-| calculateAtsScore | 736 | yes |
-| classifyIntent | 751 | yes |
-| chatEnrich | 790 | yes |
-| smartMerge | 802 | yes |
-| scoreIngestionCoverage | 814 | yes |
+| evalImprovement | 590 | no |
+| countProfileBullets | 596 | no |
+| evalSmartMerge | 600 | no |
+| askJson | 618 | no |
+| makeTrace | 666 | no |
+| createJobTrace | 679 | yes |
+| extractFacts | 689 | yes |
+| tailorResume | 703 | yes |
+| improveResume | 716 | yes |
+| calculateAtsScore | 730 | yes |
+| classifyIntent | 745 | yes |
+| chatEnrich | 784 | yes |
+| smartMerge | 796 | yes |
+| scoreIngestionCoverage | 808 | yes |
 
 ### mailer.js
 
@@ -313,9 +312,10 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:612] — O
 | Function | Line | Exported |
 |----------|------|----------|
 | validateResumeContent | 13 | no |
-| withRetry | 37 | no |
-| processJob | 50 | yes |
-| buildEmailBody | 220 | no |
+| expandResume | 35 | no |
+| withRetry | 78 | no |
+| processJob | 91 | yes |
+| buildEmailBody | 275 | no |
 
 ### profile.js
 
@@ -356,9 +356,11 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:612] — O
 
 | Function | Line | Exported |
 |----------|------|----------|
-| renderResumePdf | 7 | yes |
-| measureResumePdf | 147 | yes |
-| sectionHeading | 275 | no |
+| scaledFonts | 28 | no |
+| renderContent | 36 | no |
+| renderResumePdf | 151 | yes |
+| measureResumePdf | 170 | yes |
+| sectionHeading | 200 | no |
 
 ### scraper.js
 
@@ -407,12 +409,12 @@ gmail-connect.js
 
 pipeline.js
   ├── db.js (getProfile, seenJobBefore, saveTailored, markDelivered, markJobFailed)
-  ├── llm.js (tailorResume, fitResume, calculateAtsScore, improveResume, createJobTrace)
+  ├── llm.js (tailorResume, calculateAtsScore, improveResume, createJobTrace)
   ├── renderDocx.js (renderResumeDocx)
   ├── renderPdf.js (measureResumePdf)
   ├── mailer.js (sendResumeEmail)
   ├── db.js (getProfile, seenJobBefore, saveTailored, markDelivered, markJobFailed)
-  ├── llm.js (tailorResume, fitResume, calculateAtsScore, improveResume, createJobTrace)
+  ├── llm.js (tailorResume, calculateAtsScore, improveResume, createJobTrace)
   ├── renderDocx.js (renderResumeDocx)
   ├── renderPdf.js (measureResumePdf)
   └── mailer.js (sendResumeEmail)

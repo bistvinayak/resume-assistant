@@ -184,14 +184,14 @@ If everything is clear and complete, return an empty ambiguities array.
   },
 
   tailor_resume: {
-    prompt: `You are selecting and reframing profile content for a targeted resume. You are NOT writing a resume from scratch.
+    prompt: `You are a resume relevance engine. Your job is to SELECT the most relevant content from a candidate's profile for a specific job, REFRAME it to align with JD keywords, and EXPLAIN why each bullet was chosen.
 
-YOUR JOB IS SELECT + REFRAME, NOT REWRITE:
-1. SELECT which bullets from the profile are most relevant to this JD
-2. REFRAME the wording to use JD keywords where the candidate has equivalent experience
-3. The core fact, metric, and impact of each bullet MUST be preserved
-4. NEVER invent new bullets, combine two bullets into one, or summarize multiple achievements into a single line
-5. NEVER drop a metric ($, %, number) from a bullet — metrics are sacred
+PROCESS:
+1. EXTRACT JD REQUIREMENTS — Identify 8-15 key requirements from the job description (skills, responsibilities, outcomes, domain knowledge).
+2. SCORE EVERY PROFILE BULLET — For each bullet, ask: "Does this demonstrate experience relevant to any JD requirement?"
+3. SELECT ALL RELEVANT BULLETS — Include every bullet that matches at least one requirement. Be GREEDY — more relevant content is always better. Page fit is handled separately by the system, not by you.
+4. REFRAME — Adjust wording to use JD keywords where the candidate has equivalent experience. Preserve the core fact, metric, and impact.
+5. ANNOTATE — For each selected bullet, add a "serves" field naming which JD requirement it addresses.
 
 CONTENT INTEGRITY RULES:
 - Every bullet in the output MUST trace back to a specific bullet in the profile
@@ -199,13 +199,15 @@ CONTENT INTEGRITY RULES:
 - You may NOT rephrase "Built 4 separate analytics products" → "Owned analytics suite" (lost the detail)
 - Sub-point bullets (e.g. "Price Monitor — ...", "Brand Protector — ...") are distinct achievements. Each one is its own bullet. NEVER collapse them.
 - If the profile says "$0.5M revenue" the resume must say "$0.5M revenue", not "significant revenue"
+- NEVER invent new bullets, combine two bullets into one, or summarize multiple achievements
+- NEVER drop a metric ($, %, number) — metrics are sacred
 
 WHAT TO INCLUDE:
 - ALL experience roles from the profile — never drop a role entirely
-- Be GREEDY with bullets — include all JD-relevant bullets. We trim for page fit separately.
-- For highly relevant roles: include ALL bullets (up to 8)
-- For somewhat relevant roles: include 3-5 bullets, prioritize ones with metrics
-- For roles with minimal JD overlap: include 2 bullets minimum
+- Be GREEDY — include ALL JD-relevant bullets. Do NOT limit yourself to a page count.
+- For highly relevant roles: include ALL bullets (up to 10)
+- For somewhat relevant roles: include 3-6 bullets, prioritize ones with metrics
+- For roles with minimal JD overlap: include 2-3 bullets minimum
 - Bullets with specific metrics that match JD requirements always get priority
 - Contact: use exactly what the profile has (name, email, phone, location, links)
 
@@ -213,18 +215,43 @@ SUMMARY: 2-3 sentences. Reuse profile facts. Tune to JD but do not fabricate.
 
 SKILLS: Select from profile skills, reorder with JD-relevant first. Max 15. Group as: Product | Technical & Analytics | AI & Tools
 
-PROJECTS: Copy name and description from profile. If JD relates to the project's domain, expand description with tech stack and outcomes FROM the profile. Do not invent project details.
+PROJECTS: Include ALL projects from the profile. Copy name and description. If JD relates to the project's domain, expand description with tech stack and outcomes FROM the profile. Do not invent project details.
 
 COMPANY TAGLINE: Copy verbatim from the profile's company_description field.
 
+═══ FEW-SHOT EXAMPLE ═══
+
+JD requirement: "Experience building and scaling data analytics products"
+
+Profile bullet: { "text": "Owned a four-module analytics suite (Price Monitor, Brand Protector, Content Protector, Growth Accelerator) across 200+ marketplaces", "metric": "200+ marketplaces", "impact": "E-commerce analytics at scale" }
+
+✓ CORRECT output bullet:
+{ "text": "Owned a four-module analytics suite (Price Monitor, Brand Protector, Content Protector, Growth Accelerator) across 200+ marketplaces", "serves": "building and scaling data analytics products" }
+→ Kept nearly verbatim — it directly matches the requirement. Metric "200+" preserved.
+
+JD requirement: "Drive product roadmap and prioritization"
+
+Profile bullet: { "text": "Spearheaded product roadmap for e-commerce analytics platform, defining quarterly OKRs and feature prioritization across 4 product lines", "metric": "4 product lines", "impact": "Strategic product direction" }
+
+✓ CORRECT output bullet:
+{ "text": "Drove product roadmap and prioritization for e-commerce analytics platform, defining quarterly OKRs across 4 product lines", "serves": "product roadmap and prioritization" }
+→ "Spearheaded" → "Drove" to match JD keyword. Core fact and metric preserved.
+
+✗ WRONG output bullet:
+{ "text": "Led strategic product planning and roadmap execution" }
+→ Lost the metric "4 product lines", lost "quarterly OKRs", generic rewrite.
+
+═══ END EXAMPLE ═══
+
 Return ONLY JSON:
 {
+  "jd_requirements": ["requirement1", "requirement2"],
   "contact": { "name":"", "email":"", "phone":"", "location":"", "links":[] },
   "summary": "",
   "skills_product": [],
   "skills_technical": [],
   "skills_ai_tools": [],
-  "experience": [ { "company":"", "tagline":"", "title":"", "location":"", "dates":"", "bullets":[] } ],
+  "experience": [ { "company":"", "tagline":"", "title":"", "location":"", "dates":"", "bullets":[ { "text":"bullet text", "serves":"which JD requirement" } ] } ],
   "projects": [ { "name":"", "description":"" } ],
   "education": [ { "school":"", "degree":"", "dates":"" } ],
   "certifications": [ { "name":"", "issuer":"" } ],
@@ -236,33 +263,6 @@ Return ONLY JSON:
 }
 tailoring_notes: 4-6 sentences. For each note: which profile bullet you reframed, what JD keyword you targeted, and what you changed. Be specific.`,
     config: { model: MODEL, temperature: 0.1 },
-  },
-
-  fit_resume: {
-    prompt: `You are adjusting a tailored resume to fit a target page count. You will receive:
-- The current tailored resume JSON
-- A directive: either TIGHTEN (fit to 1 page) or EXPAND (fill 2 full pages)
-- The candidate's full profile (for EXPAND — to pull additional relevant bullets)
-- The job description (for relevance context)
-
-TIGHTEN (target: 1 page):
-- Remove the lowest JD-relevance bullets first
-- Shorten project descriptions to 1 line each
-- Compress older/less-relevant roles to 1-2 bullets
-- Shorten the summary if possible
-- Do NOT remove entire roles — keep at least 1 bullet per role
-- Do NOT remove bullets with strong metrics that match JD requirements
-
-EXPAND (target: full 2 pages):
-- Pull additional relevant bullets from the candidate profile that match JD requirements
-- Expand project descriptions with tech stack, architecture decisions, and measurable outcomes
-- Add more sub-point details (e.g. individual product names under a suite)
-- Flesh out older roles with relevant bullets from the profile
-- Expand the summary to 3-4 sentences if it adds JD-relevant context
-- Do NOT invent new facts — only use data from the provided profile
-
-Return ONLY JSON with the same resume structure (contact, summary, skills_*, experience, projects, education, certifications, activities, interests). No tailoring_notes needed.`,
-    config: { model: MODEL, temperature: 0.2 },
   },
 
   improve_resume: {
@@ -571,8 +571,14 @@ function evalAtsScore(trace, result) {
 }
 
 function evalTailoring(trace, result) {
-  const bulletCount = (result.experience || []).reduce((sum, e) => sum + (e.bullets || []).length, 0);
-  langfuse.score({ traceId: trace.id, name: 'total-bullets', value: bulletCount });
+  const allBullets = (result.experience || []).flatMap(e => e.bullets || []);
+  langfuse.score({ traceId: trace.id, name: 'total-bullets', value: allBullets.length });
+
+  const annotated = allBullets.filter(b => typeof b === 'object' && b.serves);
+  langfuse.score({ traceId: trace.id, name: 'bullets-annotated', value: annotated.length, comment: `${annotated.length}/${allBullets.length} bullets have serves annotation` });
+
+  const jdReqs = (result.jd_requirements || []).length;
+  langfuse.score({ traceId: trace.id, name: 'jd-requirements-extracted', value: jdReqs });
 
   const noteCount = (result.tailoring_notes || []).length;
   langfuse.score({ traceId: trace.id, name: 'tailoring-notes', value: noteCount });
@@ -707,18 +713,6 @@ async function tailorResume(profile, job, trace) {
   return result;
 }
 
-async function fitResume(resume, directive, profile, job, trace) {
-  const { text: system, langfusePrompt } = await getPrompt('fit_resume');
-
-  const user =
-    `DIRECTIVE: ${directive}\n\n` +
-    `JOB DESCRIPTION:\nTitle: ${job.title}\nCompany: ${job.company}\n${job.jd_text}\n\n` +
-    `CURRENT TAILORED RESUME:\n${JSON.stringify(resume)}\n\n` +
-    (directive === 'EXPAND' ? `CANDIDATE FULL PROFILE (pull additional bullets from here):\n${JSON.stringify(profile)}` : '');
-
-  return await askJson(system, user, 'fit_resume', trace, langfusePrompt);
-}
-
 async function improveResume(resume, job, ats, trace) {
   const { text: system, langfusePrompt } = await getPrompt('improve_resume');
 
@@ -826,4 +820,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { extractFacts, tailorResume, fitResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, scoreIngestionCoverage, langfuse, syncPrompts };
