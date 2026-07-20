@@ -7,6 +7,8 @@ const { Langfuse } = require('langfuse');
 const client = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
   baseURL: 'https://openrouter.ai/api/v1',
+  timeout: 60_000,
+  maxRetries: 0,
 });
 const MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
 
