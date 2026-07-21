@@ -516,7 +516,7 @@ export default function Dashboard() {
               setJobs(allJobs);
               setChatMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: 'Still processing after 8 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
+                { role: 'arjun', text: 'Still processing after 8 minutes — the scraper may be slow or the page may need login. Check the **My Applications** tab for the final status.' },
               ]);
             }
           } catch {}
@@ -679,7 +679,7 @@ export default function Dashboard() {
                 reject(new Error(status.error || 'Processing failed'));
               } else if (attempts > 90) {
                 clearInterval(iv);
-                reject(new Error('Processing timed out. Check the Jobs tab or try again.'));
+                reject(new Error('Processing timed out. Check the My Applications tab or try again.'));
               }
             } catch (e) {
               clearInterval(iv);
@@ -860,7 +860,7 @@ export default function Dashboard() {
               setJobs(allJobs);
               setTailorMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: 'Still processing after 8 minutes — the scraper may be slow or the page may need login. Check the **Job Activity** tab for the final status.' },
+                { role: 'arjun', text: 'Still processing after 8 minutes — the scraper may be slow or the page may need login. Check the **My Applications** tab for the final status.' },
               ]);
             }
           } catch {}
@@ -1006,10 +1006,10 @@ export default function Dashboard() {
 
           {/* Nav tabs */}
           {[
-            { id: 'profile', label: 'Profile Index', desc: 'Your indexed career data' },
-            { id: 'chat', label: 'Build Profile', desc: 'Chat or upload files to add info' },
-            { id: 'submit', label: 'Tailor Resume', desc: 'Paste a job URL to get a resume' },
-            { id: 'jobs', label: 'Job Activity', desc: 'All requests & results' },
+            { id: 'profile', label: 'My Profile', desc: 'Your career snapshot' },
+            { id: 'chat', label: 'Chat with Arjun', desc: 'Add info via chat or file upload' },
+            { id: 'submit', label: 'Apply to Job', desc: 'Paste a job URL → get a tailored resume' },
+            { id: 'jobs', label: 'My Applications', desc: 'Track all your tailored resumes' },
             { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords' },
           ].map(({ id, label, desc }) => (
             <button key={id} onClick={() => setTab(id)} style={{
@@ -1075,7 +1075,7 @@ export default function Dashboard() {
           {tab === 'profile' && (
             <div style={{ animation: 'fadeIn 0.3s ease' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px' }}>Profile Index</h2>
+                <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px' }}>My Profile</h2>
                 {!editing ? (
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button onClick={loadVersions} style={{ background: 'transparent', border: '1px solid #d6d3d1', color: '#78716c', padding: '7px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
@@ -1272,6 +1272,30 @@ export default function Dashboard() {
                     </div>
                   )}
 
+                  {profile?.projects && profile.projects.length > 0 && (
+                    <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                      <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>PROJECTS — {profile.projects.length}</div>
+                      {profile.projects.map((proj, i) => (
+                        <div key={proj.name || i} style={{ paddingBottom: '12px', borderBottom: i < profile.projects.length - 1 ? '1px solid #e7e5e4' : 'none', marginBottom: i < profile.projects.length - 1 ? '12px' : 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                            <span style={{ fontSize: '13px', fontWeight: 500 }}>{proj.name}</span>
+                            {Array.isArray(proj.tags) && proj.tags.map(tag => (
+                              <span key={tag} style={{ background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: '4px', padding: '1px 6px', fontSize: '9px', color: '#0369a1', fontFamily: "'DM Mono', monospace" }}>{tag}</span>
+                            ))}
+                          </div>
+                          {proj.url && (
+                            <a href={proj.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#f59e0b', textDecoration: 'none', fontFamily: "'DM Mono', monospace" }}
+                              onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
+                              onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
+                            >{proj.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>
+                          )}
+                          {proj.description && <div style={{ fontSize: '12px', color: '#57534e', marginTop: '4px', lineHeight: 1.5 }}>{proj.description}</div>}
+                          {proj.outcome && <div style={{ fontSize: '11px', color: '#78716c', marginTop: '2px', fontStyle: 'italic' }}>{proj.outcome}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
                   {profile?.certifications && profile.certifications.length > 0 && (
                     <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                       <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>CERTIFICATIONS — {profile.certifications.length}</div>
@@ -1454,7 +1478,7 @@ export default function Dashboard() {
           {/* ── ADD INFO (CHAT) ── */}
           {tab === 'chat' && (
             <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '700px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)' }}>
-              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Build Profile</h2>
+              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Chat with Arjun</h2>
               <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '20px', lineHeight: 1.6 }}>
                 Tell Arjun about your career — type anything or upload documents (PDF, DOCX, TXT, JSON). It gets indexed into your profile for resume tailoring.
               </p>
@@ -1953,8 +1977,8 @@ export default function Dashboard() {
           {/* ── JOB ACTIVITY ── */}
           {tab === 'jobs' && (
             <div style={{ animation: 'fadeIn 0.3s ease' }}>
-              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Job Activity</h2>
-              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '28px' }}>All job requests — delivered, processing, and failed.</p>
+              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>My Applications</h2>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '28px' }}>All your tailored resumes — delivered, processing, and failed.</p>
 
               {jobs.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px', color: '#a8a29e' }}>
@@ -2089,7 +2113,7 @@ export default function Dashboard() {
           {/* ── TAILOR RESUME (CHAT) ── */}
           {tab === 'submit' && (
             <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '700px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 140px)' }}>
-              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Tailor Resume</h2>
+              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Apply to Job</h2>
               <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '20px', lineHeight: 1.6 }}>
                 Paste a job URL and Arjun will scrape the JD, tailor your resume, calculate ATS score, and deliver it in .docx and .pdf.
               </p>
