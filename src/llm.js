@@ -217,7 +217,12 @@ SUMMARY: 2-3 sentences. Reuse profile facts. Tune to JD but do not fabricate.
 
 SKILLS: Select from profile skills, reorder with JD-relevant first. Max 15. Group as: Product | Technical & Analytics | AI & Tools
 
-PROJECTS: Include ALL projects from the profile. Copy name and description. If JD relates to the project's domain, expand description with tech stack and outcomes FROM the profile. Do not invent project details.
+PROJECTS: Include ALL projects from the profile. For each project:
+- Copy name exactly from the profile
+- Write a 2-3 sentence description that highlights aspects relevant to the JD. Use tech stack, architecture decisions, and outcomes FROM the profile data only.
+- If the project has tags or url in the profile, include them
+- Do NOT invent project details — only use what the profile provides
+- Projects demonstrate initiative and technical depth. Give them substance, not just a one-liner.
 
 COMPANY TAGLINE: Copy verbatim from the profile's company_description field.
 
@@ -254,7 +259,7 @@ Return ONLY JSON:
   "skills_technical": [],
   "skills_ai_tools": [],
   "experience": [ { "company":"", "tagline":"", "title":"", "location":"", "dates":"", "bullets":[ { "text":"bullet text", "serves":"which JD requirement" } ] } ],
-  "projects": [ { "name":"", "description":"" } ],
+  "projects": [ { "name":"", "description":"", "tags":[], "url":"" } ],
   "education": [ { "school":"", "degree":"", "dates":"" } ],
   "certifications": [ { "name":"", "issuer":"" } ],
   "activities": [],

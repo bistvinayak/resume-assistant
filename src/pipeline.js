@@ -34,6 +34,43 @@ function validateResumeContent(resume, profile) {
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
 
+function dedupBullets(resume) {
+  let removed = 0;
+  for (const exp of (resume.experience || [])) {
+    const bullets = exp.bullets || [];
+    if (bullets.length <= 1) continue;
+
+    const words = (text) => new Set(text.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2));
+    const overlap = (a, b) => {
+      const setA = words(a), setB = words(b);
+      const intersection = [...setA].filter(w => setB.has(w)).length;
+      const smaller = Math.min(setA.size, setB.size);
+      return smaller > 0 ? intersection / smaller : 0;
+    };
+
+    const keep = new Set(bullets.map((_, i) => i));
+    for (let i = 0; i < bullets.length; i++) {
+      if (!keep.has(i)) continue;
+      const textA = typeof bullets[i] === 'string' ? bullets[i] : (bullets[i].text || '');
+      for (let j = i + 1; j < bullets.length; j++) {
+        if (!keep.has(j)) continue;
+        const textB = typeof bullets[j] === 'string' ? bullets[j] : (bullets[j].text || '');
+        if (overlap(textA, textB) > 0.7) {
+          const dropIdx = textA.length >= textB.length ? j : i;
+          keep.delete(dropIdx);
+          removed++;
+          if (dropIdx === i) break;
+        }
+      }
+    }
+
+    if (keep.size < bullets.length) {
+      exp.bullets = bullets.filter((_, i) => keep.has(i));
+    }
+  }
+  return removed;
+}
+
 function expandResume(resume, profile, aggression) {
   let changed = false;
   const maxAdd = aggression === 'heavy' ? 6 : aggression === 'medium' ? 4 : 3;
@@ -67,8 +104,10 @@ function expandResume(resume, profile, aggression) {
       norm(p.name) === norm(resumeProj.name)
     );
     if (profileProj) {
-      const parts = [profileProj.description, profileProj.outcome].filter(Boolean);
-      const fullDesc = parts.join('. ');
+      const desc = (profileProj.description || '').replace(/[.\s]+$/, '');
+      const outcome = (profileProj.outcome || '').replace(/[.\s]+$/, '');
+      const parts = [desc, outcome].filter(Boolean);
+      const fullDesc = parts.join('. ') + '.';
       if (fullDesc.length > (resumeProj.description || '').length) {
         resumeProj.description = fullDesc;
         changed = true;
@@ -215,12 +254,20 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     console.log(`ℹ Thin roles (≤1 bullet): ${integrityIssues.thinRoles.join(', ')}`);
   }
 
+  // Step 1.52: Dedup — remove near-duplicate bullets within the same role
+  const dedupCount = dedupBullets(resume);
+  if (dedupCount > 0) {
+    console.log(`✂ Deduped ${dedupCount} near-duplicate bullet(s)`);
+  }
+
   // Step 1.55: Enrich projects — always merge outcomes from profile
   for (const resumeProj of (resume.projects || [])) {
     const profileProj = (profile.projects || []).find(p => norm(p.name) === norm(resumeProj.name));
     if (profileProj) {
-      const parts = [profileProj.description, profileProj.outcome].filter(Boolean);
-      const fullDesc = parts.join('. ');
+      const desc = (profileProj.description || '').replace(/[.\s]+$/, '');
+      const outcome = (profileProj.outcome || '').replace(/[.\s]+$/, '');
+      const parts = [desc, outcome].filter(Boolean);
+      const fullDesc = parts.join('. ') + '.';
       if (fullDesc.length > (resumeProj.description || '').length) {
         resumeProj.description = fullDesc;
       }
