@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
-const { getProfile, saveProfile, getAllProfiles } = require('./db');
+const { getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched } = require('./db');
 const { extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts } = require('./llm');
 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.txt', '.json']);
@@ -262,6 +262,13 @@ async function applyPartial(partial, userId = 'me', ctx = {}) {
   const conflicts = [];
   const ambiguities = partial._ambiguities || [];
   delete partial._ambiguities;
+
+  // Durable record of this round's uncategorized facts — independent of the
+  // profile JSON, so it survives edits/version pruning and stays available
+  // for schema backfill even after custom_facts is consumed elsewhere.
+  await recordUncategorizedFacts(userId, partial.custom_facts, source).catch(e =>
+    console.error('⚠ Failed to record uncategorized facts:', e.message)
+  );
 
   let merged;
   if (isEmptyProfile(current)) {
@@ -745,28 +752,35 @@ function resolveConflicts(profile, resolutions) {
 }
 
 // ── SCHEMA BACKFILL ───────────────────────────────────────────────────────
-// Called after an admin approves a new custom category: re-scan every user's
-// unindexed custom_facts (the catch-all where such data landed before the
-// category existed) and promote matches into the newly structured section.
+// Called after an admin approves a new custom category: re-scan the durable
+// uncategorized_facts store (not the mutable profile JSON — that can be
+// edited or pruned) and promote matches into the newly structured section
+// on each user's live profile.
 async function backfillApprovedCategory(category) {
-  const profiles = await getAllProfiles();
+  const groups = await getUnmatchedFactsByUser();
   let profilesUpdated = 0;
   let factsReclassified = 0;
 
-  for (const { userId, profile } of profiles) {
-    const facts = profile.custom_facts || [];
-    if (!facts.length) continue;
+  for (const { userId, ids, texts } of groups) {
+    if (!texts.length) continue;
 
     try {
-      const matches = await classifyCustomFacts(facts, category, { userId });
+      const matches = await classifyCustomFacts(texts, category, { userId });
       if (!matches.length) continue;
 
-      const matchedIndices = new Set(matches.map(m => m.index));
+      const matchedIds = matches.map(m => ids[m.index]);
+      const matchedTexts = new Set(matches.map(m => texts[m.index]));
       const newItems = matches.map(m => normalizeBullet(m.item));
 
+      await markFactsMatched(matchedIds, category.category);
+
+      const profile = await getProfile(userId);
       const updated = JSON.parse(JSON.stringify(profile));
       updated.custom_sections = mergeCustomSections(updated.custom_sections || [], [{ category: category.category, items: newItems }]);
-      updated.custom_facts = facts.filter((_, i) => !matchedIndices.has(i));
+      updated.custom_facts = (updated.custom_facts || []).filter(f => {
+        const text = typeof f === 'string' ? f : (f && f.text);
+        return !matchedTexts.has(text);
+      });
 
       await saveProfile(updated, userId, 'schema_backfill');
       profilesUpdated++;
@@ -776,7 +790,7 @@ async function backfillApprovedCategory(category) {
     }
   }
 
-  return { profilesScanned: profiles.length, profilesUpdated, factsReclassified };
+  return { profilesScanned: groups.length, profilesUpdated, factsReclassified };
 }
 
 module.exports = { ingestText, ingestPdf, ingestFiles, extractTextFromFile, mergeProfile, applyDeletions, resolveConflicts, backfillApprovedCategory, ALLOWED_EXTENSIONS };

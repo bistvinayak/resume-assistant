@@ -90,6 +90,21 @@ async function initSchema() {
       backfill_status TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_schema_proposals_status ON schema_proposals(status);
+
+    -- Durable store for facts extraction couldn't fit into the schema. Append-only —
+    -- survives profile edits and version pruning, so schema backfill always has
+    -- something reliable to scan, independent of what's currently in master_profile.
+    CREATE TABLE IF NOT EXISTS uncategorized_facts (
+      id                SERIAL PRIMARY KEY,
+      user_id           TEXT NOT NULL,
+      text              TEXT NOT NULL,
+      source            TEXT DEFAULT 'ingestion',
+      matched_category  TEXT,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      matched_at        TIMESTAMPTZ
+    );
+    CREATE INDEX IF NOT EXISTS idx_uncategorized_facts_user ON uncategorized_facts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_uncategorized_facts_unmatched ON uncategorized_facts(matched_category) WHERE matched_category IS NULL;
   `);
 }
 
@@ -317,11 +332,40 @@ async function setBackfillStatus(id, status) {
   await pool.query('UPDATE schema_proposals SET backfill_status = $2 WHERE id = $1', [id, status]);
 }
 
-async function getAllProfiles() {
+// ── UNCATEGORIZED FACTS (durable store, independent of profile edits) ──
+
+async function recordUncategorizedFacts(userId, facts, source = 'ingestion') {
+  if (!facts?.length) return;
+  for (const f of facts) {
+    const text = typeof f === 'string' ? f : (f && f.text);
+    if (!text) continue;
+    // Dedup: skip if this exact text is already on record for this user (matched or not)
+    const { rows } = await pool.query(
+      'SELECT id FROM uncategorized_facts WHERE user_id = $1 AND text = $2 LIMIT 1',
+      [userId, text]
+    );
+    if (rows.length) continue;
+    await pool.query(
+      'INSERT INTO uncategorized_facts (user_id, text, source) VALUES ($1, $2, $3)',
+      [userId, text, source]
+    );
+  }
+}
+
+async function getUnmatchedFactsByUser() {
   const { rows } = await pool.query(
-    `SELECT DISTINCT ON (user_id) user_id, profile FROM master_profile ORDER BY user_id, version DESC`
+    `SELECT user_id, array_agg(id ORDER BY id) AS ids, array_agg(text ORDER BY id) AS texts
+     FROM uncategorized_facts WHERE matched_category IS NULL GROUP BY user_id`
   );
-  return rows.map(r => ({ userId: r.user_id, profile: { ...EMPTY_PROFILE, ...r.profile } }));
+  return rows.map(r => ({ userId: r.user_id, ids: r.ids, texts: r.texts }));
+}
+
+async function markFactsMatched(ids, category) {
+  if (!ids?.length) return;
+  await pool.query(
+    'UPDATE uncategorized_facts SET matched_category = $2, matched_at = now() WHERE id = ANY($1::int[])',
+    [ids, category]
+  );
 }
 
 module.exports = {
@@ -329,7 +373,8 @@ module.exports = {
   getProfileVersions, restoreProfileVersion,
   seenJobBefore, saveTailored, markDelivered,
   getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs,
-  upsertSchemaProposal, getSchemaProposals, getApprovedCategories, updateSchemaProposalStatus, setBackfillStatus, getAllProfiles,
+  upsertSchemaProposal, getSchemaProposals, getApprovedCategories, updateSchemaProposalStatus, setBackfillStatus,
+  recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched,
   EMPTY_PROFILE,
 };
 

@@ -97,16 +97,16 @@ applyPartial(partial, userId) [profile.js:259]
 
 ```
 processJob(job, userId) [pipeline.js:250]
-  → seenJobBefore(job) [db.js:159]
-  → getProfile(userId) [db.js:96]
+  → seenJobBefore(job) [db.js:174]
+  → getProfile(userId) [db.js:111]
   → tailorResume(profile, job, trace) [llm.js:813]  — LLM
   → calculateAtsScore(resume, job, trace) [llm.js:840]  — LLM
   → if ats < 95:
        → improveResume(resume, job, ats, trace) [llm.js:826]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:9]
-  → saveTailored(jobId, resume, filePath) [db.js:175]
-  → markDelivered(tailoredId, jobId, atsData) [db.js:183]
+  → saveTailored(jobId, resume, filePath) [db.js:190]
+  → markDelivered(tailoredId, jobId, atsData) [db.js:198]
   → sendResumeEmail (if source=cron) [mailer.js:57]
 ```
 
@@ -114,26 +114,26 @@ processJob(job, userId) [pipeline.js:250]
 
 ```
 startCron() [cron.js:74]  — runs every 2 hours
-  → recoverStaleJobs(10) [db.js:240]
+  → recoverStaleJobs(10) [db.js:255]
   → runBatch(userId) [cron.js:9]
        → fetchLinkedInJobs() [gmail.js:7]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
        → per job: processJob(job, userId) [pipeline.js:250]
 ```
 
-## Merge Logic (profile.js:407)
+## Merge Logic (profile.js:414)
 
 ```
-mergeProfile(base, incoming, conflicts) [profile.js:407]
+mergeProfile(base, incoming, conflicts) [profile.js:414]
   ├─ contact: shallow merge
-  ├─ experience: upsertExperience [profile.js:544]
-  │    └─ fuzzyMatchExperience (normCompany) [profile.js:507]
-  ├─ education: upsertById with fuzzyMatchEducation [profile.js:632]
-  │    └─ fuzzyMatchEducation (normSchool + normDegree) [profile.js:511]
-  ├─ projects: upsertProjects [profile.js:607]
-  ├─ certifications: upsertById [profile.js:632]
-  ├─ technical_skills: upsertTechnicalSkills [profile.js:474]
-  ├─ skills/soft_skills: unionCI [profile.js:517]
+  ├─ experience: upsertExperience [profile.js:551]
+  │    └─ fuzzyMatchExperience (normCompany) [profile.js:514]
+  ├─ education: upsertById with fuzzyMatchEducation [profile.js:639]
+  │    └─ fuzzyMatchEducation (normSchool + normDegree) [profile.js:518]
+  ├─ projects: upsertProjects [profile.js:614]
+  ├─ certifications: upsertById [profile.js:639]
+  ├─ technical_skills: upsertTechnicalSkills [profile.js:481]
+  ├─ skills/soft_skills: unionCI [profile.js:524]
   └─ cross-array skill dedup (tech > soft > flat)
 ```
 
@@ -161,30 +161,33 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:705] — O
 | jobs | job_id (TEXT), user_id (TEXT), title (TEXT), company (TEXT), jd_text (TEXT), url (TEXT), ats_score (INTEGER), improved (BOOLEAN), matched_keywords (JSONB), missing_keywords (JSONB), status (TEXT), seen_at (TIMESTAMPTZ) |
 | tailored_resume | id (SERIAL), job_id (TEXT), user_id (TEXT), resume_json (JSONB), file_path (TEXT), delivered (BOOLEAN), created_at (TIMESTAMPTZ) |
 | schema_proposals | id (SERIAL), category (TEXT), display_name (TEXT), description (TEXT), example_fields (JSONB), sample_data (JSONB), status (TEXT), proposed_count (INTEGER), created_at (TIMESTAMPTZ), reviewed_at (TIMESTAMPTZ), reviewed_by (TEXT), backfill_status (TEXT) |
+| uncategorized_facts | id (SERIAL), user_id (TEXT), text (TEXT), source (TEXT), matched_category (TEXT), created_at (TIMESTAMPTZ), matched_at (TIMESTAMPTZ) |
 
 ### DB Functions
 
 | Function | Line | Purpose |
 |----------|------|---------|
 | initSchema | 18 | Create tables on startup |
-| getProfile | 96 | Get latest profile (adds _onboarded flag) |
-| saveProfile | 106 | Upsert profile, increments version |
-| getProfileVersions | 134 | List profile version history |
-| restoreProfileVersion | 149 | Restore a previous version |
-| seenJobBefore | 159 | Dedup check by job_id |
-| saveTailored | 175 | Save rendered resume |
-| markDelivered | 183 | Mark resume delivered + store ATS metadata |
-| getJobByJobId | 209 | Get single job |
-| insertJobProcessing | 221 | Insert job with status=processing |
-| markJobFailed | 233 | Mark job as failed with reason |
-| recoverStaleJobs | 240 | Find jobs stuck in processing > N minutes |
-| getJobsForUser | 250 | List jobs for user |
-| upsertSchemaProposal | 269 |  |
-| getSchemaProposals | 294 |  |
-| getApprovedCategories | 301 |  |
-| updateSchemaProposalStatus | 308 |  |
-| setBackfillStatus | 316 |  |
-| getAllProfiles | 320 |  |
+| getProfile | 111 | Get latest profile (adds _onboarded flag) |
+| saveProfile | 121 | Upsert profile, increments version |
+| getProfileVersions | 149 | List profile version history |
+| restoreProfileVersion | 164 | Restore a previous version |
+| seenJobBefore | 174 | Dedup check by job_id |
+| saveTailored | 190 | Save rendered resume |
+| markDelivered | 198 | Mark resume delivered + store ATS metadata |
+| getJobByJobId | 224 | Get single job |
+| insertJobProcessing | 236 | Insert job with status=processing |
+| markJobFailed | 248 | Mark job as failed with reason |
+| recoverStaleJobs | 255 | Find jobs stuck in processing > N minutes |
+| getJobsForUser | 265 | List jobs for user |
+| upsertSchemaProposal | 284 |  |
+| getSchemaProposals | 309 |  |
+| getApprovedCategories | 316 |  |
+| updateSchemaProposalStatus | 323 |  |
+| setBackfillStatus | 331 |  |
+| recordUncategorizedFacts | 337 |  |
+| getUnmatchedFactsByUser | 355 |  |
+| markFactsMatched | 363 |  |
 
 ## Frontend Pages
 
@@ -266,25 +269,27 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:705] — O
 | Function | Line | Exported |
 |----------|------|----------|
 | initSchema | 18 | yes |
-| getProfile | 96 | yes |
-| saveProfile | 106 | yes |
-| getProfileVersions | 134 | yes |
-| restoreProfileVersion | 149 | yes |
-| seenJobBefore | 159 | yes |
-| saveTailored | 175 | yes |
-| markDelivered | 183 | yes |
-| getJobByJobId | 209 | yes |
-| insertJobProcessing | 221 | yes |
-| markJobFailed | 233 | yes |
-| recoverStaleJobs | 240 | yes |
-| getJobsForUser | 250 | yes |
-| normalizeCategory | 265 | no |
-| upsertSchemaProposal | 269 | yes |
-| getSchemaProposals | 294 | yes |
-| getApprovedCategories | 301 | yes |
-| updateSchemaProposalStatus | 308 | yes |
-| setBackfillStatus | 316 | yes |
-| getAllProfiles | 320 | yes |
+| getProfile | 111 | yes |
+| saveProfile | 121 | yes |
+| getProfileVersions | 149 | yes |
+| restoreProfileVersion | 164 | yes |
+| seenJobBefore | 174 | yes |
+| saveTailored | 190 | yes |
+| markDelivered | 198 | yes |
+| getJobByJobId | 224 | yes |
+| insertJobProcessing | 236 | yes |
+| markJobFailed | 248 | yes |
+| recoverStaleJobs | 255 | yes |
+| getJobsForUser | 265 | yes |
+| normalizeCategory | 280 | no |
+| upsertSchemaProposal | 284 | yes |
+| getSchemaProposals | 309 | yes |
+| getApprovedCategories | 316 | yes |
+| updateSchemaProposalStatus | 323 | yes |
+| setBackfillStatus | 331 | yes |
+| recordUncategorizedFacts | 337 | yes |
+| getUnmatchedFactsByUser | 355 | yes |
+| markFactsMatched | 363 | yes |
 
 ### gmail-connect.js
 
@@ -363,23 +368,23 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:705] — O
 | summarizeExtraction | 152 | no |
 | diffCoverage | 177 | no |
 | applyPartial | 259 | no |
-| detectConflicts | 295 | no |
-| datesOverlap | 346 | no |
-| validateMerge | 359 | no |
-| mergeProfile | 407 | yes |
-| upsertTechnicalSkills | 474 | no |
-| fuzzyMatchExperience | 507 | no |
-| fuzzyMatchEducation | 511 | no |
-| unionCI | 517 | no |
-| mergeBullets | 526 | no |
-| upsertExperience | 544 | no |
-| mergeBulletArrays | 575 | no |
-| mergeCustomSections | 589 | no |
-| upsertProjects | 607 | no |
-| upsertById | 632 | no |
-| applyDeletions | 658 | yes |
-| resolveConflicts | 709 | yes |
-| backfillApprovedCategory | 751 | yes |
+| detectConflicts | 302 | no |
+| datesOverlap | 353 | no |
+| validateMerge | 366 | no |
+| mergeProfile | 414 | yes |
+| upsertTechnicalSkills | 481 | no |
+| fuzzyMatchExperience | 514 | no |
+| fuzzyMatchEducation | 518 | no |
+| unionCI | 524 | no |
+| mergeBullets | 533 | no |
+| upsertExperience | 551 | no |
+| mergeBulletArrays | 582 | no |
+| mergeCustomSections | 596 | no |
+| upsertProjects | 614 | no |
+| upsertById | 639 | no |
+| applyDeletions | 665 | yes |
+| resolveConflicts | 716 | yes |
+| backfillApprovedCategory | 759 | yes |
 
 ### renderDocx.js
 
@@ -464,9 +469,9 @@ pipeline.js
   └── mailer.js (sendResumeEmail)
 
 profile.js
-  ├── db.js (getProfile, saveProfile, getAllProfiles)
+  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched)
   ├── llm.js (extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts)
-  ├── db.js (getProfile, saveProfile, getAllProfiles)
+  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched)
   └── llm.js (extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts)
 
 server.js
