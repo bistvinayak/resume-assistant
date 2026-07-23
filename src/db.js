@@ -119,6 +119,12 @@ async function getProfile(userId = 'me') {
 }
 
 async function saveProfile(profile, userId = 'me', source = 'unknown') {
+  // Hard guardrail — not a prompt request. No matter what produced this profile
+  // object (extraction, chat, smart_merge, or a future code path), any
+  // custom_sections category that isn't actually approved gets demoted to
+  // custom_facts and queued for review, right here, before anything persists.
+  await enforceApprovedCustomSections(profile);
+
   // Get current version number
   const { rows: verRows } = await pool.query(
     'SELECT COALESCE(MAX(version), 0) AS max_ver FROM master_profile WHERE user_id = $1',
@@ -326,6 +332,47 @@ async function updateSchemaProposalStatus(id, status, reviewedBy) {
     [id, status, reviewedBy || null]
   );
   return rows[0] || null;
+}
+
+// Code-level guardrail (not prompt-level): strip any custom_sections category
+// that isn't actually approved in the DB, right before a profile is persisted.
+// Mutates `profile` in place. Prompt instructions alone proved insufficient —
+// the model filed an unapproved category directly into custom_sections twice
+// despite explicit instructions not to, so this is enforced deterministically.
+async function enforceApprovedCustomSections(profile) {
+  const sections = profile.custom_sections || [];
+  if (!sections.length) return;
+
+  const { rows: approved } = await pool.query(`SELECT category FROM schema_proposals WHERE status = 'approved'`);
+  const approvedKeys = new Set(approved.map(r => r.category));
+
+  const kept = [];
+  const demoted = [];
+  for (const section of sections) {
+    if (approvedKeys.has(normalizeCategory(section.category))) kept.push(section);
+    else demoted.push(section);
+  }
+  if (!demoted.length) return;
+
+  const now = new Date().toISOString();
+  profile.custom_facts = profile.custom_facts || [];
+  for (const section of demoted) {
+    for (const item of (section.items || [])) {
+      const text = typeof item === 'string' ? item : (item && item.text);
+      if (text && !profile.custom_facts.some(f => (typeof f === 'string' ? f : f.text) === text)) {
+        profile.custom_facts.push({ text, added_at: now });
+      }
+    }
+    const sample = section.items?.[0];
+    await upsertSchemaProposal({
+      category: section.category,
+      description: 'Guardrail: extraction filed this directly into custom_sections without an approved category. Demoted to custom_facts and queued here for review.',
+      exampleFields: [],
+      sampleData: sample ? (typeof sample === 'string' ? sample : sample.text) : null,
+    }).catch(e => console.error('⚠ Guardrail failed to queue demoted category:', e.message));
+  }
+  profile.custom_sections = kept;
+  console.warn(`⚠ custom_sections guardrail: demoted ${demoted.length} unapproved categor${demoted.length === 1 ? 'y' : 'ies'} (${demoted.map(s => s.category).join(', ')})`);
 }
 
 async function setBackfillStatus(id, status) {
