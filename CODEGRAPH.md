@@ -121,19 +121,19 @@ startCron() [cron.js:74]  — runs every 2 hours
        → per job: processJob(job, userId) [pipeline.js:250]
 ```
 
-## Merge Logic (profile.js:414)
+## Merge Logic (profile.js:426)
 
 ```
-mergeProfile(base, incoming, conflicts) [profile.js:414]
+mergeProfile(base, incoming, conflicts) [profile.js:426]
   ├─ contact: shallow merge
-  ├─ experience: upsertExperience [profile.js:551]
-  │    └─ fuzzyMatchExperience (normCompany) [profile.js:514]
-  ├─ education: upsertById with fuzzyMatchEducation [profile.js:639]
-  │    └─ fuzzyMatchEducation (normSchool + normDegree) [profile.js:518]
-  ├─ projects: upsertProjects [profile.js:614]
-  ├─ certifications: upsertById [profile.js:639]
-  ├─ technical_skills: upsertTechnicalSkills [profile.js:481]
-  ├─ skills/soft_skills: unionCI [profile.js:524]
+  ├─ experience: upsertExperience [profile.js:563]
+  │    └─ fuzzyMatchExperience (normCompany) [profile.js:526]
+  ├─ education: upsertById with fuzzyMatchEducation [profile.js:651]
+  │    └─ fuzzyMatchEducation (normSchool + normDegree) [profile.js:530]
+  ├─ projects: upsertProjects [profile.js:626]
+  ├─ certifications: upsertById [profile.js:651]
+  ├─ technical_skills: upsertTechnicalSkills [profile.js:493]
+  ├─ skills/soft_skills: unionCI [profile.js:536]
   └─ cross-array skill dedup (tech > soft > flat)
 ```
 
@@ -181,13 +181,13 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | recoverStaleJobs | 261 | Find jobs stuck in processing > N minutes |
 | getJobsForUser | 271 | List jobs for user |
 | upsertSchemaProposal | 290 |  |
-| getSchemaProposals | 315 |  |
-| getApprovedCategories | 322 |  |
-| updateSchemaProposalStatus | 329 |  |
-| setBackfillStatus | 378 |  |
-| recordUncategorizedFacts | 384 |  |
-| getUnmatchedFactsByUser | 402 |  |
-| markFactsMatched | 410 |  |
+| getSchemaProposals | 323 |  |
+| getApprovedCategories | 330 |  |
+| updateSchemaProposalStatus | 337 |  |
+| setBackfillStatus | 386 |  |
+| recordUncategorizedFacts | 392 |  |
+| getUnmatchedFactsByUser | 410 |  |
+| markFactsMatched | 418 |  |
 
 ## Frontend Pages
 
@@ -283,14 +283,14 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | getJobsForUser | 271 | yes |
 | normalizeCategory | 286 | no |
 | upsertSchemaProposal | 290 | yes |
-| getSchemaProposals | 315 | yes |
-| getApprovedCategories | 322 | yes |
-| updateSchemaProposalStatus | 329 | yes |
-| enforceApprovedCustomSections | 342 | no |
-| setBackfillStatus | 378 | yes |
-| recordUncategorizedFacts | 384 | yes |
-| getUnmatchedFactsByUser | 402 | yes |
-| markFactsMatched | 410 | yes |
+| getSchemaProposals | 323 | yes |
+| getApprovedCategories | 330 | yes |
+| updateSchemaProposalStatus | 337 | yes |
+| enforceApprovedCustomSections | 350 | no |
+| setBackfillStatus | 386 | yes |
+| recordUncategorizedFacts | 392 | yes |
+| getUnmatchedFactsByUser | 410 | yes |
+| markFactsMatched | 418 | yes |
 
 ### gmail-connect.js
 
@@ -369,23 +369,23 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | summarizeExtraction | 152 | no |
 | diffCoverage | 177 | no |
 | applyPartial | 259 | no |
-| detectConflicts | 302 | no |
-| datesOverlap | 353 | no |
-| validateMerge | 366 | no |
-| mergeProfile | 414 | yes |
-| upsertTechnicalSkills | 481 | no |
-| fuzzyMatchExperience | 514 | no |
-| fuzzyMatchEducation | 518 | no |
-| unionCI | 524 | no |
-| mergeBullets | 533 | no |
-| upsertExperience | 551 | no |
-| mergeBulletArrays | 582 | no |
-| mergeCustomSections | 596 | no |
-| upsertProjects | 614 | no |
-| upsertById | 639 | no |
-| applyDeletions | 665 | yes |
-| resolveConflicts | 716 | yes |
-| backfillApprovedCategory | 759 | yes |
+| detectConflicts | 314 | no |
+| datesOverlap | 365 | no |
+| validateMerge | 378 | no |
+| mergeProfile | 426 | yes |
+| upsertTechnicalSkills | 493 | no |
+| fuzzyMatchExperience | 526 | no |
+| fuzzyMatchEducation | 530 | no |
+| unionCI | 536 | no |
+| mergeBullets | 545 | no |
+| upsertExperience | 563 | no |
+| mergeBulletArrays | 594 | no |
+| mergeCustomSections | 608 | no |
+| upsertProjects | 626 | no |
+| upsertById | 651 | no |
+| applyDeletions | 677 | yes |
+| resolveConflicts | 728 | yes |
+| backfillApprovedCategory | 771 | yes |
 
 ### renderDocx.js
 
@@ -470,9 +470,9 @@ pipeline.js
   └── mailer.js (sendResumeEmail)
 
 profile.js
-  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched)
+  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched, upsertSchemaProposal)
   ├── llm.js (extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts)
-  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched)
+  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched, upsertSchemaProposal)
   └── llm.js (extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts)
 
 server.js

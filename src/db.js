@@ -287,9 +287,11 @@ function normalizeCategory(category) {
   return String(category || '').trim().toLowerCase().replace(/\s+/g, '_');
 }
 
-async function upsertSchemaProposal({ category, description, exampleFields, sampleData }) {
+async function upsertSchemaProposal({ category, displayName, description, exampleFields, sampleData }) {
   const key = normalizeCategory(category);
   if (!key) return;
+
+  const label = displayName || category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
   const { rows } = await pool.query('SELECT id, status, sample_data FROM schema_proposals WHERE category = $1', [key]);
 
@@ -297,18 +299,24 @@ async function upsertSchemaProposal({ category, description, exampleFields, samp
     await pool.query(
       `INSERT INTO schema_proposals (category, display_name, description, example_fields, sample_data)
        VALUES ($1, $2, $3, $4, $5)`,
-      [key, category, description || null, JSON.stringify(exampleFields || []), JSON.stringify(sampleData ? [sampleData] : [])]
+      [key, label, description || null, JSON.stringify(exampleFields || []), JSON.stringify(sampleData ? [sampleData] : [])]
     );
     return;
   }
 
-  // Only accumulate evidence while still pending — approved/rejected are terminal
   if (rows[0].status === 'pending') {
     const samples = [...(rows[0].sample_data || []), ...(sampleData ? [sampleData] : [])].slice(-5);
     await pool.query(
       `UPDATE schema_proposals SET proposed_count = proposed_count + 1, sample_data = $2 WHERE id = $1`,
       [rows[0].id, JSON.stringify(samples)]
     );
+  } else if (rows[0].status === 'rejected') {
+    const samples = [...(rows[0].sample_data || []), ...(sampleData ? [sampleData] : [])].slice(-5);
+    await pool.query(
+      `UPDATE schema_proposals SET status = 'pending', proposed_count = proposed_count + 1, sample_data = $2, reviewed_at = NULL, reviewed_by = NULL WHERE id = $1`,
+      [rows[0].id, JSON.stringify(samples)]
+    );
+    console.log(`↻ Re-opened rejected schema proposal "${key}" — new evidence from another user`);
   }
 }
 
