@@ -1,7 +1,7 @@
 'use strict';
 
 const cron = require('node-cron');
-const { processJob } = require('./pipeline');
+const { queueJob } = require('./pipeline');
 const { fetchLinkedInJobs } = require('./gmail');
 const { scrapeLinkedInJob } = require('./scraper');
 const { recoverStaleJobs, insertJobProcessing } = require('./db');
@@ -60,7 +60,7 @@ async function runBatch(userId = 'me') {
         }
       }
 
-      const result = await processJob(job, userId, { source: 'cron' });
+      const result = await queueJob(job, userId, { source: 'cron' });
       console.log(result.skipped
         ? `· skipped ${job.job_id}`
         : `✓ ${job.company} — ${job.title} [ATS: ${result.atsScore}/100${result.improved ? ' improved' : ''}]`
@@ -85,7 +85,7 @@ function startCron() {
       try {
         console.log(`  ↻ retrying ${job.company} - ${job.title}`);
         await insertJobProcessing({ job_id: job.job_id, url: job.url }, job.user_id);
-        await processJob(job, job.user_id, { source: 'recovery' });
+        await queueJob(job, job.user_id, { source: 'recovery' });
         console.log(`  ✓ ${job.company} recovered successfully`);
       } catch (e) {
         console.error(`  ✗ ${job.company} retry failed: ${e.message}`);

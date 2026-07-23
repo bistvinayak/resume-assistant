@@ -1276,7 +1276,7 @@ export default function Dashboard() {
                     <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                       <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>PROJECTS — {profile.projects.length}</div>
                       {profile.projects.map((proj, i) => (
-                        <div key={proj.name || i} style={{ paddingBottom: '12px', borderBottom: i < profile.projects.length - 1 ? '1px solid #e7e5e4' : 'none', marginBottom: i < profile.projects.length - 1 ? '12px' : 0 }}>
+                        <div key={proj.name || i} style={{ paddingBottom: '14px', borderBottom: i < profile.projects.length - 1 ? '1px solid #e7e5e4' : 'none', marginBottom: i < profile.projects.length - 1 ? '14px' : 0 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                             <span style={{ fontSize: '13px', fontWeight: 500 }}>{proj.name}</span>
                             {Array.isArray(proj.tags) && proj.tags.map(tag => (
@@ -1284,13 +1284,34 @@ export default function Dashboard() {
                             ))}
                           </div>
                           {proj.url && (
-                            <a href={proj.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#f59e0b', textDecoration: 'none', fontFamily: "'DM Mono', monospace" }}
+                            <a href={proj.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: '11px', color: '#f59e0b', textDecoration: 'none', fontFamily: "'DM Mono', monospace", display: 'block', marginBottom: '4px' }}
                               onMouseEnter={e => e.currentTarget.style.textDecoration = 'underline'}
                               onMouseLeave={e => e.currentTarget.style.textDecoration = 'none'}
                             >{proj.url.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '')}</a>
                           )}
+                          {Array.isArray(proj.tech_stack) && proj.tech_stack.length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '6px', marginBottom: '6px' }}>
+                              {proj.tech_stack.map(t => (
+                                <span key={t} style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: '4px', padding: '1px 7px', fontSize: '9px', color: '#92400e', fontFamily: "'DM Mono', monospace" }}>{t}</span>
+                              ))}
+                            </div>
+                          )}
                           {proj.description && <div style={{ fontSize: '12px', color: '#57534e', marginTop: '4px', lineHeight: 1.5 }}>{proj.description}</div>}
-                          {proj.outcome && <div style={{ fontSize: '11px', color: '#78716c', marginTop: '2px', fontStyle: 'italic' }}>{proj.outcome}</div>}
+                          {Array.isArray(proj.bullets) && proj.bullets.length > 0 && (
+                            <div style={{ marginTop: '6px', paddingLeft: '12px' }}>
+                              {proj.bullets.map((b, bi) => {
+                                const text = typeof b === 'string' ? b : (b.text || '');
+                                const metric = typeof b === 'object' ? b.metric : null;
+                                return (
+                                  <div key={bi} style={{ display: 'flex', gap: '8px', padding: '2px 0', fontSize: '11px', color: '#78716c', lineHeight: 1.5 }}>
+                                    <span style={{ color: '#d6d3d1', flexShrink: 0 }}>·</span>
+                                    <span>{text}{metric && <span style={{ color: '#f59e0b', fontSize: '10px', fontFamily: "'DM Mono', monospace", marginLeft: '6px' }}>{metric}</span>}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {proj.outcome && <div style={{ fontSize: '11px', color: '#78716c', marginTop: '4px', fontStyle: 'italic' }}>{proj.outcome}</div>}
                         </div>
                       ))}
                     </div>
@@ -1326,6 +1347,26 @@ export default function Dashboard() {
                       </div>
                     </div>
                   )}
+
+                  {profile?.custom_sections && profile.custom_sections.map((section, si) => (
+                    section.items?.length > 0 && (
+                      <div key={section.category || si} style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                        <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px', textTransform: 'uppercase' }}>
+                          {(section.category || '').replace(/_/g, ' ')} — {section.items.length}
+                        </div>
+                        {section.items.map((item, ii) => {
+                          const text = typeof item === 'string' ? item : (item.text || '');
+                          const metric = typeof item === 'object' ? item.metric : null;
+                          return (
+                            <div key={ii} style={{ display: 'flex', gap: '8px', padding: '3px 0', fontSize: '12px', color: '#57534e', lineHeight: 1.5 }}>
+                              <span style={{ color: '#c4c0bc', flexShrink: 0 }}>·</span>
+                              <span>{text}{metric && <span style={{ color: '#f59e0b', fontSize: '10px', fontFamily: "'DM Mono', monospace", marginLeft: '6px' }}>{metric}</span>}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )
+                  ))}
 
                   {(() => {
                     const missingItems = [];

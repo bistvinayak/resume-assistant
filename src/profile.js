@@ -4,8 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
-const { getProfile, saveProfile } = require('./db');
-const { extractFacts, smartMerge, scoreIngestionCoverage } = require('./llm');
+const { getProfile, saveProfile, getAllProfiles } = require('./db');
+const { extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts } = require('./llm');
 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.txt', '.json']);
 
@@ -461,6 +461,8 @@ function mergeProfile(base, incoming, conflicts = null) {
     }
   }
 
+  out.custom_sections = mergeCustomSections(out.custom_sections || [], incoming.custom_sections);
+
   if (!out.contact?.location && out.experience?.length) {
     const loc = out.experience.find(e => e.location)?.location;
     if (loc) out.contact = { ...out.contact, location: loc };
@@ -570,6 +572,38 @@ function upsertExperience(existing = [], incoming = [], conflicts = null) {
   return out;
 }
 
+function mergeBulletArrays(a = [], b = []) {
+  const out = [...(a || []).map(normalizeBullet)];
+  const texts = new Set(out.map(x => (x.text || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40)));
+  for (const raw of (b || [])) {
+    const bullet = normalizeBullet(raw);
+    const key = (bullet.text || '').toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+    if (!texts.has(key)) {
+      out.push(bullet);
+      texts.add(key);
+    }
+  }
+  return out;
+}
+
+function mergeCustomSections(existing = [], incoming = []) {
+  if (!Array.isArray(incoming) || !incoming.length) return existing;
+  const out = [...existing];
+  const index = new Map(out.map((s, i) => [(s.category || '').toLowerCase(), i]));
+  for (const section of incoming) {
+    if (!section || !section.category) continue;
+    const k = section.category.toLowerCase();
+    if (index.has(k)) {
+      const prev = out[index.get(k)];
+      out[index.get(k)] = { ...prev, items: mergeBulletArrays(prev.items, section.items) };
+    } else {
+      out.push({ category: section.category, items: (section.items || []).map(normalizeBullet) });
+      index.set(k, out.length - 1);
+    }
+  }
+  return out;
+}
+
 function upsertProjects(existing = [], incoming = []) {
   const out = [...(existing || [])];
   const index = new Map(out.map((item, i) => [keyProj(item), i]));
@@ -577,11 +611,15 @@ function upsertProjects(existing = [], incoming = []) {
     const k = keyProj(item);
     if (index.has(k)) {
       const prev = out[index.get(k)];
+      const mergedTechStack = [...new Set([...(prev.tech_stack || []), ...(item.tech_stack || [])])];
+      const mergedBullets = mergeBulletArrays(prev.bullets, item.bullets);
       out[index.get(k)] = {
         ...prev,
         ...item,
         outcome: item.outcome || prev.outcome,
         description: (item.description && item.description.length > (prev.description || '').length) ? item.description : prev.description,
+        tech_stack: mergedTechStack.length ? mergedTechStack : (prev.tech_stack || item.tech_stack || []),
+        bullets: mergedBullets.length ? mergedBullets : (prev.bullets || item.bullets || []),
       };
     } else {
       out.push(item);
@@ -706,4 +744,39 @@ function resolveConflicts(profile, resolutions) {
   return out;
 }
 
-module.exports = { ingestText, ingestPdf, ingestFiles, extractTextFromFile, mergeProfile, applyDeletions, resolveConflicts, ALLOWED_EXTENSIONS };
+// ── SCHEMA BACKFILL ───────────────────────────────────────────────────────
+// Called after an admin approves a new custom category: re-scan every user's
+// unindexed custom_facts (the catch-all where such data landed before the
+// category existed) and promote matches into the newly structured section.
+async function backfillApprovedCategory(category) {
+  const profiles = await getAllProfiles();
+  let profilesUpdated = 0;
+  let factsReclassified = 0;
+
+  for (const { userId, profile } of profiles) {
+    const facts = profile.custom_facts || [];
+    if (!facts.length) continue;
+
+    try {
+      const matches = await classifyCustomFacts(facts, category, { userId });
+      if (!matches.length) continue;
+
+      const matchedIndices = new Set(matches.map(m => m.index));
+      const newItems = matches.map(m => normalizeBullet(m.item));
+
+      const updated = JSON.parse(JSON.stringify(profile));
+      updated.custom_sections = mergeCustomSections(updated.custom_sections || [], [{ category: category.category, items: newItems }]);
+      updated.custom_facts = facts.filter((_, i) => !matchedIndices.has(i));
+
+      await saveProfile(updated, userId, 'schema_backfill');
+      profilesUpdated++;
+      factsReclassified += matches.length;
+    } catch (e) {
+      console.error(`⚠ Backfill failed for user ${userId} (category ${category.category}):`, e.message);
+    }
+  }
+
+  return { profilesScanned: profiles.length, profilesUpdated, factsReclassified };
+}
+
+module.exports = { ingestText, ingestPdf, ingestFiles, extractTextFromFile, mergeProfile, applyDeletions, resolveConflicts, backfillApprovedCategory, ALLOWED_EXTENSIONS };

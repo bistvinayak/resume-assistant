@@ -9,7 +9,7 @@ const cors = require('cors');
 
 const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile } = require('./profile');
-const { processJob } = require('./pipeline');
+const { queueJob, getQueueStats } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
 const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
@@ -88,6 +88,7 @@ app.use((req, res, next) => {
 
 // ── HEALTH ────────────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => res.json({ ok: true }));
+app.get('/api/queue/stats', authMiddleware, (_req, res) => res.json(getQueueStats()));
 
 // ── PROFILE ───────────────────────────────────────────────────────────────
 app.get(['/profile', '/api/profile'], async (req, res, next) => {
@@ -321,7 +322,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
             await markJobFailed(jobId, 'Could not scrape job page — page may require login or URL is invalid');
             return;
           }
-          await processJob({ job_id: jobId, title: scraped.title || 'Unknown Role', company: scraped.company || 'Unknown Company', jd_text: scraped.jd_text, url }, req.userId, { source: 'app', force: isRerun, ...ctx });
+          await queueJob({ job_id: jobId, title: scraped.title || 'Unknown Role', company: scraped.company || 'Unknown Company', jd_text: scraped.jd_text, url }, req.userId, { source: 'app', force: isRerun, ...ctx });
           console.log(`⏱ Total job processing: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
         } catch (e) {
           console.error('Chat job processing error:', e.message);
@@ -428,7 +429,7 @@ app.post(['/jobs/process', '/api/jobs/process'], async (req, res, next) => {
   try {
     const { job_id, title, company, jd_text, url } = req.body || {};
     if (!job_id) return res.status(400).json({ error: 'job_id required' });
-    res.json(await processJob({ job_id, title, company, jd_text, url }, req.userId));
+    res.json(await queueJob({ job_id, title, company, jd_text, url }, req.userId));
   } catch (e) { next(e); }
 });
 
@@ -471,7 +472,7 @@ app.post(['/jobs/submit-url', '/api/jobs/submit-url'], async (req, res, next) =>
           await markJobFailed(job_id, 'Could not scrape LinkedIn job page');
           return;
         }
-        await processJob({
+        await queueJob({
           job_id,
           title: scraped.title,
           company: scraped.company,
@@ -521,7 +522,10 @@ initSchema()
 module.exports = app;
 // ADD THESE ROUTES TO server.js after the existing routes
 // ── ADMIN ROUTES ──────────────────────────────────────────────────────────
-const { adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs: adminGetJobs, triggerCron, getSettings, updateSettings } = require('./admin');
+const {
+  adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs: adminGetJobs, triggerCron, getSettings, updateSettings,
+  getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
+} = require('./admin');
 
 app.get(['/admin/stats', '/api/admin/stats'], authMiddleware, adminOnly, getStats);
 app.get(['/admin/users', '/api/admin/users'], authMiddleware, adminOnly, getUsers);
@@ -531,6 +535,9 @@ app.get(['/admin/jobs', '/api/admin/jobs'], authMiddleware, adminOnly, adminGetJ
 app.post(['/admin/cron/run', '/api/admin/cron/run'], authMiddleware, adminOnly, triggerCron);
 app.get(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, getSettings);
 app.patch(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, updateSettings);
+app.get(['/admin/schema-proposals', '/api/admin/schema-proposals'], authMiddleware, adminOnly, getSchemaProposalsHandler);
+app.post(['/admin/schema-proposals/:id/approve', '/api/admin/schema-proposals/:id/approve'], authMiddleware, adminOnly, approveSchemaProposal);
+app.post(['/admin/schema-proposals/:id/reject', '/api/admin/schema-proposals/:id/reject'], authMiddleware, adminOnly, rejectSchemaProposal);
 
 // ── RESUME DOWNLOAD ────────────────────────────────────────────────────────
 

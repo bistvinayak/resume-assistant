@@ -18,6 +18,19 @@ const langfuse = new Langfuse({
   baseUrl: process.env.LANGFUSE_BASE_URL || 'https://us.cloud.langfuse.com',
 });
 
+const { getApprovedCategories, upsertSchemaProposal } = require('./db');
+
+async function formatApprovedCategories() {
+  const categories = await getApprovedCategories().catch(() => []);
+  if (!categories.length) {
+    return 'KNOWN CUSTOM CATEGORIES: none yet — propose new categories per the RULES below.';
+  }
+  const lines = categories.map(c =>
+    `- ${c.category}: ${c.description || c.display_name}${(c.example_fields || []).length ? ` Fields: ${c.example_fields.join(', ')}` : ''}`
+  );
+  return `KNOWN CUSTOM CATEGORIES (file matching data here instead of proposing new ones):\n${lines.join('\n')}`;
+}
+
 const PROFILE_SCHEMA = `
 Return ONLY JSON matching this shape (omit fields you found nothing for):
 {
@@ -54,8 +67,16 @@ Return ONLY JSON matching this shape (omit fields you found nothing for):
       "id": "slug",
       "name": "",
       "url": "Project URL if available. null otherwise.",
-      "description": "",
-      "tags": [],
+      "description": "One-line summary of WHAT the project is (not HOW it works)",
+      "tech_stack": ["Language/tool/framework used — e.g. React, Python, PostgreSQL, OpenAI API, AWS"],
+      "tags": ["Domain tags — e.g. AI, E-commerce, Analytics"],
+      "bullets": [
+        {
+          "text": "Specific achievement, design decision, or technical detail",
+          "metric": "Number if any — null otherwise",
+          "impact": "What changed — null otherwise"
+        }
+      ],
       "outcome": "Measurable result or impact of this project"
     }
   ],
@@ -74,6 +95,14 @@ Return ONLY JSON matching this shape (omit fields you found nothing for):
   },
   "activities": [],
   "interests": [],
+  "custom_sections": [
+    {
+      "category": "machine-readable snake_case key matching one of the KNOWN CUSTOM CATEGORIES below",
+      "items": [
+        { "text": "the fact/achievement", "metric": "number if any, else null", "impact": "meaning if any, else null" }
+      ]
+    }
+  ],
   "custom_facts": []
 }
 
@@ -129,6 +158,14 @@ NEVER combine sub-points into a single bullet. NEVER skip sub-points because the
 
 Only extract as top-level projects: personal projects, startup projects, academic/side projects NOT tied to an employer.
 
+PROJECT EXTRACTION RULES:
+- "description" = one sentence of WHAT the project is (the elevator pitch). NOT the full technical detail.
+- "tech_stack" = every language, framework, tool, API, cloud service mentioned or inferable from the project description. e.g. ["React", "Node.js", "Express", "PostgreSQL", "OpenAI API", "AWS EC2", "S3", "CloudFront", "Puppeteer"]
+- "tags" = 2-4 domain-level tags. e.g. ["AI", "Career Tech", "Automation"]
+- "bullets" = specific achievements, design decisions, or technical details as structured bullet objects (same format as experience bullets: text, metric, impact)
+- "outcome" = measurable result. If no number, describe the qualitative outcome.
+- Keep description SHORT. Put the details in bullets. Tools in tech_stack. Domain in tags.
+
 COMPANY CONTEXT:
 - For each company, add company_description from taglines in the resume or general knowledge.
 - Resume may say "Tata Group has set up Tata Digital to build digital businesses" or "Shiprocket is a 3PL fulfillment solutions provider" — capture these verbatim or close to it.
@@ -162,6 +199,20 @@ LANGUAGES:
 - Extract spoken/written languages with proficiency level if stated.
 - Example: "English - Full Professional Proficiency" → { name: "English", proficiency: "Full Professional Proficiency" }
 
+DYNAMIC CUSTOM SECTIONS (data that doesn't fit the fixed schema):
+Resumes sometimes contain whole sections that don't map to any field above — Publications, Patents, Awards, Speaking Engagements, References, Volunteer Work, Test Scores, etc.
+
+{{approved_categories}}
+
+RULES:
+1. If the data matches one of the KNOWN CUSTOM CATEGORIES above, file it under "custom_sections" using that EXACT category key, with items as { text, metric, impact } (same convention as bullets).
+2. If the data is genuinely novel and matches NO known category and NO hardcoded field above, do TWO things:
+   a. Still capture the raw text in "custom_facts" (as before, so nothing is lost)
+   b. Propose it as a new category by adding an entry to "schema_suggestions":
+      { "category": "short snake_case name, e.g. 'patents'", "display_name": "Human label, e.g. 'Patents'", "description": "one sentence describing what this section captures", "example_fields": ["field names you'd want captured, e.g. patent_number, status, date"], "sample_data": "the actual text you found, verbatim" }
+3. Only propose a new category for a genuine SECTION of the resume (multiple related facts), not a single one-off fact — those belong in custom_facts alone.
+4. Never propose a category that duplicates a hardcoded field (skills, education, certifications, languages, etc.) or an already-known custom category.
+
 AMBIGUITY DETECTION:
 After extraction, review what you extracted and flag anything you are NOT confident about. Return an "ambiguities" array alongside the profile fields. Each ambiguity is an object:
 { "field": "experience[0].title", "value": "PM", "question": "Is this Product Manager or Project Manager?", "options": ["Product Manager", "Project Manager"] }
@@ -180,6 +231,8 @@ Each ambiguity must have: field (JSON path to the extracted field), value (what 
 Optionally include: options (array of likely answers for multiple choice).
 
 If everything is clear and complete, return an empty ambiguities array.
+
+Return "ambiguities" and "schema_suggestions" as top-level arrays alongside the profile fields (both empty arrays if none). If everything fits the known schema and known custom categories, return an empty schema_suggestions array.
 
 {{profile_schema}}`,
     config: { model: MODEL, temperature: 0.2 },
@@ -219,10 +272,12 @@ SKILLS: Select from profile skills, reorder with JD-relevant first. Max 15. Grou
 
 PROJECTS: Include ALL projects from the profile. For each project:
 - Copy name exactly from the profile
-- Write a 2-3 sentence description that highlights aspects relevant to the JD. Use tech stack, architecture decisions, and outcomes FROM the profile data only.
-- If the project has tags or url in the profile, include them
+- "description": 1-2 sentences — what the project does + the most JD-relevant technical detail. Use tech_stack and bullets from the profile to compose this.
+- "tech_stack": copy from the profile's tech_stack array. Reorder with JD-relevant tools first.
+- "tags": copy from the profile's tags array
+- "url": copy from the profile if present
 - Do NOT invent project details — only use what the profile provides
-- Projects demonstrate initiative and technical depth. Give them substance, not just a one-liner.
+- Projects demonstrate initiative and technical depth. A flat one-liner wastes space.
 
 COMPANY TAGLINE: Copy verbatim from the profile's company_description field.
 
@@ -259,7 +314,7 @@ Return ONLY JSON:
   "skills_technical": [],
   "skills_ai_tools": [],
   "experience": [ { "company":"", "tagline":"", "title":"", "location":"", "dates":"", "bullets":[ { "text":"bullet text", "serves":"which JD requirement" } ] } ],
-  "projects": [ { "name":"", "description":"", "tags":[], "url":"" } ],
+  "projects": [ { "name":"", "description":"", "tech_stack":[], "tags":[], "url":"" } ],
   "education": [ { "school":"", "degree":"", "dates":"" } ],
   "certifications": [ { "name":"", "issuer":"" } ],
   "activities": [],
@@ -364,7 +419,7 @@ WRONG: dropping sub-points because "the parent bullet already covers the suite"
 
 8. SUMMARY: Both exist → combine best elements. One exists → keep it.
 
-9. PROJECTS: Match by name (fuzzy). Merge descriptions, keep richer outcome. Preserve project URLs.
+9. PROJECTS: Match by name (fuzzy). Merge descriptions (keep shorter, punchier one-liner), keep richer outcome. Preserve project URLs. MERGE tech_stack arrays (union, dedup). MERGE bullets arrays (dedup by text, keep richer version with metrics/impact).
 
 10. EDUCATION: Match by school+degree. Include secondary education (12th, 10th) if present. Keep entry with GPA/honors.
 
@@ -373,6 +428,8 @@ WRONG: dropping sub-points because "the parent bullet already covers the suite"
 12. CERTIFICATIONS: Union by name, deduplicate. Keep issuer, date, validity from whichever source has them.
 
 13. CAREER: Merge per field, prefer NEW data. Keep notice_period, preferred_locations, work_permit, total_experience, etc.
+
+14. CUSTOM_SECTIONS: Match by category key (exact string match). For matched categories, union items by text (dedup, keep richer metric/impact). For categories only in one source, include as-is. NEVER drop a custom_sections category or item — this is where non-standard resume sections live (Publications, Patents, Awards, etc.) and losing them is as bad as losing an experience bullet.
 
 {{profile_schema}}`,
     config: { model: MODEL, temperature: 0.1 },
@@ -501,6 +558,29 @@ Rules:
 - greeting: in_scope is false, reply with a warm welcome and ask what they'd like to add to their profile.
 - out_of_scope: in_scope is false, reply politely explaining Arjun only helps with career profiles.
 - When in doubt, lean toward in_scope with intent add_info — let the extraction stage handle ambiguity.`,
+    config: { model: MODEL, temperature: 0.1 },
+  },
+
+  classify_custom_facts: {
+    prompt: `A new custom profile category was just approved: {{category_display_name}} ({{category_key}}).
+Description: {{category_description}}
+Expected fields: {{category_fields}}
+
+Below is a list of raw, uncategorized facts previously extracted from this user's resume (they were dumped here because no matching category existed yet). Find any that belong to this category and structure them.
+
+RULES:
+- Only select facts that clearly belong to this category. When unsure, leave it out — do not force a fit.
+- For each match, produce a structured item: { text, metric, impact } — same convention as experience bullets. metric = the number if any, impact = the meaning. Both null is fine if the fact has neither.
+- Return the ORIGINAL INDEX (0-based, matching the input list order) of each fact you matched, so the caller can remove matched facts from the uncategorized list.
+
+Return ONLY JSON:
+{
+  "matches": [
+    { "index": 0, "item": { "text": "", "metric": null, "impact": null } }
+  ]
+}
+
+If nothing matches, return { "matches": [] }.`,
     config: { model: MODEL, temperature: 0.1 },
   },
 
@@ -692,10 +772,28 @@ function createJobTrace(job, ctx = {}) {
   });
 }
 
+async function recordSchemaSuggestions(trace, suggestions) {
+  if (!suggestions?.length) return;
+  langfuse.score({ traceId: trace.id, name: 'schema-suggestions', value: suggestions.length, comment: suggestions.map(s => s.category).join(', ') });
+  for (const s of suggestions) {
+    try {
+      await upsertSchemaProposal({
+        category: s.category,
+        description: s.description,
+        exampleFields: s.example_fields,
+        sampleData: s.sample_data,
+      });
+    } catch (e) {
+      console.error('⚠ Failed to record schema suggestion:', e.message);
+    }
+  }
+}
+
 // ── PUBLIC FUNCTIONS ────────────────────────────────────────────────────
 async function extractFacts(rawText, ctx = {}) {
   const trace = makeTrace('extract_facts', ctx);
-  const { text: system, langfusePrompt } = await getPrompt('extract_facts', { profile_schema: PROFILE_SCHEMA });
+  const approvedCategories = await formatApprovedCategories();
+  const { text: system, langfusePrompt } = await getPrompt('extract_facts', { profile_schema: PROFILE_SCHEMA, approved_categories: approvedCategories });
   const result = await askJson(system, `Extract facts from:\n\n"""${rawText}"""`, 'extract_facts', trace, langfusePrompt);
   evalExtraction(trace, result);
   const ambiguities = result.ambiguities || [];
@@ -704,6 +802,11 @@ async function extractFacts(rawText, ctx = {}) {
     langfuse.score({ traceId: trace.id, name: 'ambiguities', value: ambiguities.length, comment: ambiguities.map(a => a.field).join(', ') });
   }
   result._ambiguities = ambiguities.length ? ambiguities : undefined;
+
+  const schemaSuggestions = result.schema_suggestions || [];
+  delete result.schema_suggestions;
+  await recordSchemaSuggestions(trace, schemaSuggestions);
+
   return result;
 }
 
@@ -812,6 +915,25 @@ async function smartMerge(currentProfile, newExtraction, ctx = {}) {
   return result;
 }
 
+// Backfill: classify a user's existing uncategorized custom_facts against a newly-approved category
+async function classifyCustomFacts(customFacts, category, ctx = {}) {
+  const trace = makeTrace('classify_custom_facts', ctx, { category: category.category });
+  const { text: system, langfusePrompt } = await getPrompt('classify_custom_facts', {
+    category_display_name: category.display_name || category.category,
+    category_key: category.category,
+    category_description: category.description || '',
+    category_fields: (category.example_fields || []).join(', ') || 'none specified',
+  });
+
+  const indexedFacts = customFacts.map((f, i) => `[${i}] ${typeof f === 'string' ? f : f.text || ''}`).join('\n');
+  const user = `RAW FACTS (indexed):\n${indexedFacts}`;
+
+  const result = await askJson(system, user, 'classify_custom_facts', trace, langfusePrompt);
+  const matches = result.matches || [];
+  langfuse.score({ traceId: trace.id, name: 'facts-reclassified', value: matches.length, comment: `${matches.length}/${customFacts.length} facts matched ${category.category}` });
+  return matches;
+}
+
 function scoreIngestionCoverage(traceId, drops) {
   if (!traceId || !drops) return;
   const total = drops.totalExtracted || 1;
@@ -827,4 +949,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, scoreIngestionCoverage, langfuse, syncPrompts };

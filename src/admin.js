@@ -1,7 +1,8 @@
 'use strict';
 
-const { pool } = require('./db');
+const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus } = require('./db');
 const { runBatch } = require('./cron');
+const { backfillApprovedCategory } = require('./profile');
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'arjun.resumeai@gmail.com';
 
@@ -190,4 +191,56 @@ async function updateSettings(req, res) {
   }
 }
 
-module.exports = { adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs, triggerCron, getSettings, updateSettings };
+// GET /api/admin/schema-proposals
+async function getSchemaProposalsHandler(req, res) {
+  try {
+    const proposals = await getSchemaProposals();
+    res.json({ proposals });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// POST /api/admin/schema-proposals/:id/approve
+async function approveSchemaProposal(req, res) {
+  const { id } = req.params;
+  try {
+    const proposal = await updateSchemaProposalStatus(id, 'approved', req.userEmail);
+    if (!proposal) return res.status(404).json({ error: 'proposal not found' });
+
+    res.json({ ok: true, proposal, backfillQueued: true });
+
+    // Backfill runs after responding — re-scans every user's uncategorized
+    // custom_facts for data that now belongs to this newly approved category.
+    (async () => {
+      await setBackfillStatus(id, 'running');
+      try {
+        const result = await backfillApprovedCategory(proposal);
+        console.log(`✓ Backfill for "${proposal.category}": ${result.profilesUpdated}/${result.profilesScanned} profiles updated, ${result.factsReclassified} facts reclassified`);
+        await setBackfillStatus(id, `done:${result.profilesUpdated}/${result.profilesScanned} profiles, ${result.factsReclassified} facts`);
+      } catch (e) {
+        console.error(`✗ Backfill failed for "${proposal.category}":`, e.message);
+        await setBackfillStatus(id, `failed:${e.message}`);
+      }
+    })();
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// POST /api/admin/schema-proposals/:id/reject
+async function rejectSchemaProposal(req, res) {
+  const { id } = req.params;
+  try {
+    const proposal = await updateSchemaProposalStatus(id, 'rejected', req.userEmail);
+    if (!proposal) return res.status(404).json({ error: 'proposal not found' });
+    res.json({ ok: true, proposal });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+module.exports = {
+  adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs, triggerCron, getSettings, updateSettings,
+  getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
+};

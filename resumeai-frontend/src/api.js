@@ -255,4 +255,17 @@ export const api = {
     });
     return res.json();
   },
+
+  async adminGetSchemaProposals() {
+    const res = await checkedFetch(`${BASE}/admin/schema-proposals`, { headers: await getHeaders() });
+    return res.json();
+  },
+  async adminApproveSchemaProposal(id) {
+    const res = await checkedFetch(`${BASE}/admin/schema-proposals/${id}/approve`, { method: 'POST', headers: await getHeaders() });
+    return res.json();
+  },
+  async adminRejectSchemaProposal(id) {
+    const res = await checkedFetch(`${BASE}/admin/schema-proposals/${id}/reject`, { method: 'POST', headers: await getHeaders() });
+    return res.json();
+  },
 };

@@ -164,6 +164,11 @@ function renderContent(doc, resume, opts = {}) {
           .text(`  (${p.tags.join(', ')})`);
         doc.fillColor('#000000');
       }
+      if (Array.isArray(p.tech_stack) && p.tech_stack.length) {
+        doc.fontSize(f.tagline).font('Helvetica-Bold').fillColor('#444444')
+          .text(p.tech_stack.join('  •  '));
+        doc.fillColor('#000000');
+      }
       if (p.url) {
         doc.fontSize(f.tagline).font('Helvetica').fillColor('#1a6ed8').text(p.url);
         doc.fillColor('#000000');

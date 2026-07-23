@@ -12,7 +12,7 @@ const EMPTY_PROFILE = {
   contact: {}, summary: '', skills: [],
   experience: [], projects: [], education: [],
   certifications: [], languages: [], activities: [], interests: [],
-  custom_facts: [],
+  custom_facts: [], custom_sections: [],
 };
 
 async function initSchema() {
@@ -73,6 +73,23 @@ async function initSchema() {
       ALTER TABLE master_profile ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 1;
       ALTER TABLE master_profile ADD COLUMN IF NOT EXISTS change_source TEXT DEFAULT 'unknown';
     EXCEPTION WHEN others THEN NULL; END $$;
+
+    -- Schema proposals: agentic discovery of new profile field types, admin-approved
+    CREATE TABLE IF NOT EXISTS schema_proposals (
+      id              SERIAL PRIMARY KEY,
+      category        TEXT NOT NULL UNIQUE,
+      display_name    TEXT NOT NULL,
+      description     TEXT,
+      example_fields  JSONB DEFAULT '[]',
+      sample_data     JSONB DEFAULT '[]',
+      status          TEXT NOT NULL DEFAULT 'pending',
+      proposed_count  INTEGER NOT NULL DEFAULT 1,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      reviewed_at     TIMESTAMPTZ,
+      reviewed_by     TEXT,
+      backfill_status TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_schema_proposals_status ON schema_proposals(status);
   `);
 }
 
@@ -243,11 +260,76 @@ async function getJobsForUser(userId = 'me', limit = 50) {
   return rows.slice(0, limit);
 }
 
+// ── SCHEMA PROPOSALS (agentic profile schema discovery) ────────────────
+
+function normalizeCategory(category) {
+  return String(category || '').trim().toLowerCase().replace(/\s+/g, '_');
+}
+
+async function upsertSchemaProposal({ category, description, exampleFields, sampleData }) {
+  const key = normalizeCategory(category);
+  if (!key) return;
+
+  const { rows } = await pool.query('SELECT id, status, sample_data FROM schema_proposals WHERE category = $1', [key]);
+
+  if (!rows.length) {
+    await pool.query(
+      `INSERT INTO schema_proposals (category, display_name, description, example_fields, sample_data)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [key, category, description || null, JSON.stringify(exampleFields || []), JSON.stringify(sampleData ? [sampleData] : [])]
+    );
+    return;
+  }
+
+  // Only accumulate evidence while still pending — approved/rejected are terminal
+  if (rows[0].status === 'pending') {
+    const samples = [...(rows[0].sample_data || []), ...(sampleData ? [sampleData] : [])].slice(-5);
+    await pool.query(
+      `UPDATE schema_proposals SET proposed_count = proposed_count + 1, sample_data = $2 WHERE id = $1`,
+      [rows[0].id, JSON.stringify(samples)]
+    );
+  }
+}
+
+async function getSchemaProposals(status = null) {
+  const { rows } = status
+    ? await pool.query('SELECT * FROM schema_proposals WHERE status = $1 ORDER BY created_at DESC', [status])
+    : await pool.query('SELECT * FROM schema_proposals ORDER BY created_at DESC');
+  return rows;
+}
+
+async function getApprovedCategories() {
+  const { rows } = await pool.query(
+    `SELECT category, display_name, description, example_fields FROM schema_proposals WHERE status = 'approved'`
+  );
+  return rows;
+}
+
+async function updateSchemaProposalStatus(id, status, reviewedBy) {
+  const { rows } = await pool.query(
+    `UPDATE schema_proposals SET status = $2, reviewed_at = now(), reviewed_by = $3 WHERE id = $1 RETURNING *`,
+    [id, status, reviewedBy || null]
+  );
+  return rows[0] || null;
+}
+
+async function setBackfillStatus(id, status) {
+  await pool.query('UPDATE schema_proposals SET backfill_status = $2 WHERE id = $1', [id, status]);
+}
+
+async function getAllProfiles() {
+  const { rows } = await pool.query(
+    `SELECT DISTINCT ON (user_id) user_id, profile FROM master_profile ORDER BY user_id, version DESC`
+  );
+  return rows.map(r => ({ userId: r.user_id, profile: { ...EMPTY_PROFILE, ...r.profile } }));
+}
+
 module.exports = {
   pool, initSchema, getProfile, saveProfile,
   getProfileVersions, restoreProfileVersion,
   seenJobBefore, saveTailored, markDelivered,
   getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs,
+  upsertSchemaProposal, getSchemaProposals, getApprovedCategories, updateSchemaProposalStatus, setBackfillStatus, getAllProfiles,
   EMPTY_PROFILE,
 };
 

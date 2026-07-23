@@ -33,8 +33,10 @@ export default function Admin() {
   const [users, setUsers] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [settings, setSettings] = useState(null);
+  const [schemaProposals, setSchemaProposals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cronMsg, setCronMsg] = useState('');
+  const [reviewingId, setReviewingId] = useState(null);
 
   useEffect(() => {
     if (user?.email !== ADMIN_EMAIL) {
@@ -47,20 +49,47 @@ export default function Admin() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [s, u, j, cfg] = await Promise.all([
+      const [s, u, j, cfg, sp] = await Promise.all([
         api.adminGetStats(),
         api.adminGetUsers(),
         api.adminGetJobs(),
         api.adminGetSettings(),
+        api.adminGetSchemaProposals(),
       ]);
       setStats(s);
       setUsers(u.users || []);
       setJobs(j.jobs || []);
       setSettings(cfg);
+      setSchemaProposals(sp.proposals || []);
     } catch (e) {
       console.error(e);
     }
     setLoading(false);
+  };
+
+  const refreshSchemaProposals = async () => {
+    const sp = await api.adminGetSchemaProposals();
+    setSchemaProposals(sp.proposals || []);
+  };
+
+  const handleApproveProposal = async (id) => {
+    setReviewingId(id);
+    try {
+      await api.adminApproveSchemaProposal(id);
+      await refreshSchemaProposals();
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const handleRejectProposal = async (id) => {
+    setReviewingId(id);
+    try {
+      await api.adminRejectSchemaProposal(id);
+      await refreshSchemaProposals();
+    } finally {
+      setReviewingId(null);
+    }
   };
 
   const handleToggleUser = async (userId, active) => {
@@ -124,15 +153,21 @@ export default function Admin() {
             { id: 'overview', label: 'Overview' },
             { id: 'users', label: 'Users' },
             { id: 'jobs', label: 'Jobs' },
+            { id: 'schema', label: 'Schema Proposals', badge: schemaProposals.filter(p => p.status === 'pending').length },
             { id: 'settings', label: 'Settings' },
-          ].map(({ id, label }) => (
+          ].map(({ id, label, badge }) => (
             <button key={id} onClick={() => setTab(id)} style={{
-              width: '100%', textAlign: 'left',
+              width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               background: tab === id ? '#ffffff' : 'transparent',
               border: `1px solid ${tab === id ? '#e7e5e4' : 'transparent'}`,
               borderRadius: '6px', padding: '9px 12px', marginBottom: '3px',
               color: tab === id ? '#1c1917' : '#78716c', fontSize: '13px', cursor: 'pointer',
-            }}>{label}</button>
+            }}>
+              <span>{label}</span>
+              {!!badge && (
+                <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", background: '#f59e0b', color: '#1c1917', borderRadius: '10px', padding: '1px 7px', fontWeight: 600 }}>{badge}</span>
+              )}
+            </button>
           ))}
 
           <div style={{ marginTop: '20px', borderTop: '1px solid #e7e5e4', paddingTop: '16px' }}>
@@ -265,6 +300,103 @@ export default function Admin() {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* SCHEMA PROPOSALS */}
+          {tab === 'schema' && (
+            <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '760px' }}>
+              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '4px' }}>Schema Proposals</h2>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '24px' }}>
+                Arjun flags resume sections it can't fit into the existing profile schema (Publications, Patents, Awards, etc). Approve to make the category permanent — every user's existing uncategorized data is automatically re-scanned and backfilled into it.
+              </p>
+
+              {(() => {
+                const pending = schemaProposals.filter(p => p.status === 'pending');
+                const reviewed = schemaProposals.filter(p => p.status !== 'pending');
+                return (
+                  <>
+                    <div style={{ marginBottom: '28px' }}>
+                      <Label>PENDING ({pending.length})</Label>
+                      {pending.length === 0 ? (
+                        <div style={{ fontSize: '13px', color: '#a8a29e', padding: '16px 0' }}>No pending proposals — Arjun hasn't found anything new yet.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {pending.map(p => (
+                            <Card key={p.id}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                <div>
+                                  <div style={{ fontSize: '15px', fontWeight: 600, marginBottom: '2px' }}>{p.display_name}</div>
+                                  <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{p.category} · suggested {p.proposed_count}×</div>
+                                </div>
+                              </div>
+                              {p.description && <div style={{ fontSize: '13px', color: '#57534e', marginBottom: '10px', lineHeight: 1.5 }}>{p.description}</div>}
+                              {(p.example_fields || []).length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '10px' }}>
+                                  {p.example_fields.map(f => (
+                                    <span key={f} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '3px 8px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>{f}</span>
+                                  ))}
+                                </div>
+                              )}
+                              {(p.sample_data || []).length > 0 && (
+                                <div style={{ background: '#fafaf9', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '10px 12px', marginBottom: '12px' }}>
+                                  <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>SAMPLE DATA SEEN</div>
+                                  {p.sample_data.slice(0, 3).map((s, i) => (
+                                    <div key={i} style={{ fontSize: '12px', color: '#78716c', padding: '2px 0' }}>· {String(s).slice(0, 140)}</div>
+                                  ))}
+                                </div>
+                              )}
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={() => handleApproveProposal(p.id)}
+                                  disabled={reviewingId === p.id}
+                                  style={{ flex: 1, background: '#22c55e', color: '#1c1917', border: 'none', padding: '9px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: reviewingId === p.id ? 0.6 : 1 }}
+                                >
+                                  {reviewingId === p.id ? 'Working...' : 'Approve + Backfill'}
+                                </button>
+                                <button
+                                  onClick={() => handleRejectProposal(p.id)}
+                                  disabled={reviewingId === p.id}
+                                  style={{ flex: 1, background: 'transparent', color: '#57534e', border: '1px solid #d6d3d1', padding: '9px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', opacity: reviewingId === p.id ? 0.6 : 1 }}
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {reviewed.length > 0 && (
+                      <div>
+                        <Label>REVIEWED</Label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {reviewed.map(p => (
+                            <div key={p.id} style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <span style={{ fontSize: '13px', fontWeight: 500 }}>{p.display_name}</span>
+                                <span style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginLeft: '10px' }}>{p.category}</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                {p.status === 'approved' && p.backfill_status && (
+                                  <span style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{p.backfill_status}</span>
+                                )}
+                                <span style={{
+                                  fontSize: '10px', fontFamily: "'DM Mono', monospace", borderRadius: '4px', padding: '2px 8px',
+                                  color: p.status === 'approved' ? '#22c55e' : '#ef4444',
+                                  background: p.status === 'approved' ? '#ecfdf5' : '#fef2f2',
+                                  border: `1px solid ${p.status === 'approved' ? '#22c55e33' : '#ef444422'}`,
+                                }}>{p.status}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           )}
 
