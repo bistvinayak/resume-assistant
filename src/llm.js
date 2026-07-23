@@ -204,14 +204,20 @@ Resumes sometimes contain whole sections that don't map to any field above — P
 
 {{approved_categories}}
 
+"custom_sections" is a RESTRICTED field. You may ONLY add an entry to it if its "category" key is an EXACT, VERBATIM match to one of the category keys listed under KNOWN CUSTOM CATEGORIES above. You are NEVER allowed to invent a category name and place it in custom_sections — not even one that seems obviously correct (e.g. "awards", "patents", "publications"). If the KNOWN CUSTOM CATEGORIES list says "none yet", then custom_sections MUST be an empty array in your output, with no exceptions, regardless of what the resume contains.
+
 RULES:
-1. If the data matches one of the KNOWN CUSTOM CATEGORIES above, file it under "custom_sections" using that EXACT category key, with items as { text, metric, impact } (same convention as bullets).
-2. If the data is genuinely novel and matches NO known category and NO hardcoded field above, do TWO things:
-   a. Still capture the raw text in "custom_facts" (as before, so nothing is lost)
+1. If the data matches one of the KNOWN CUSTOM CATEGORIES above (exact key match), file it under "custom_sections" using that EXACT category key, with items as { text, metric, impact } (same convention as bullets).
+2. For EVERYTHING ELSE that doesn't fit a hardcoded field above AND doesn't match an approved category, do TWO things — this is the ONLY path for novel data, there is no shortcut into custom_sections:
+   a. Capture the raw text in "custom_facts" (so nothing is lost)
    b. Propose it as a new category by adding an entry to "schema_suggestions":
       { "category": "short snake_case name, e.g. 'patents'", "display_name": "Human label, e.g. 'Patents'", "description": "one sentence describing what this section captures", "example_fields": ["field names you'd want captured, e.g. patent_number, status, date"], "sample_data": "the actual text you found, verbatim" }
-3. Only propose a new category for a genuine SECTION of the resume (multiple related facts), not a single one-off fact — those belong in custom_facts alone.
+3. Only propose a new category for a genuine SECTION of the resume (multiple related facts), not a single one-off fact — those belong in custom_facts alone, with no schema_suggestions entry.
 4. Never propose a category that duplicates a hardcoded field (skills, education, certifications, languages, etc.) or an already-known custom category.
+
+Example: resume has an "Awards & Recognition" section, and KNOWN CUSTOM CATEGORIES says "none yet".
+✗ WRONG: custom_sections: [{ category: "awards_recognition", items: [...] }]  ← invented a category, skipped review
+✓ CORRECT: custom_facts: ["Won Employee of the Quarter, Q3 2024", ...], schema_suggestions: [{ category: "awards_recognition", display_name: "Awards & Recognition", description: "...", example_fields: ["title","issuer","date"], sample_data: "Won Employee of the Quarter, Q3 2024" }]
 
 AMBIGUITY DETECTION:
 After extraction, review what you extracted and flag anything you are NOT confident about. Return an "ambiguities" array alongside the profile fields. Each ambiguity is an object:
