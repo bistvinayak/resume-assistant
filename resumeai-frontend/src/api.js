@@ -247,11 +247,24 @@ export const api = {
     return res.json();
   },
 
-  async sendFeedback(traceId, score, comment) {
+  async sendFeedback(traceId, score, comment, context = {}) {
     const res = await checkedFetch(`${BASE}/feedback`, {
       method: 'POST',
       headers: await getHeaders(),
-      body: JSON.stringify({ traceId, score, ...(comment ? { comment } : {}) }),
+      body: JSON.stringify({ traceId, score, ...(comment ? { comment } : {}), ...context }),
+    });
+    return res.json();
+  },
+
+  async adminGetFeedback() {
+    const res = await checkedFetch(`${BASE}/admin/feedback`, { headers: await getHeaders() });
+    return res.json();
+  },
+  async adminReviewFeedback(id, status, adminNote) {
+    const res = await checkedFetch(`${BASE}/admin/feedback/${id}`, {
+      method: 'PATCH',
+      headers: await getHeaders(),
+      body: JSON.stringify({ status, admin_note: adminNote }),
     });
     return res.json();
   },

@@ -1,6 +1,6 @@
 'use strict';
 
-const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus } = require('./db');
+const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus } = require('./db');
 const { runBatch } = require('./cron');
 const { backfillApprovedCategory } = require('./profile');
 
@@ -240,7 +240,29 @@ async function rejectSchemaProposal(req, res) {
   }
 }
 
+async function getFeedbackHandler(req, res) {
+  try {
+    const feedback = await getChatFeedback();
+    res.json({ feedback });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+async function reviewFeedback(req, res) {
+  const { id } = req.params;
+  const { status, admin_note } = req.body || {};
+  if (!status) return res.status(400).json({ error: 'status required' });
+  try {
+    await updateChatFeedbackStatus(id, status, admin_note);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
 module.exports = {
   adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs, triggerCron, getSettings, updateSettings,
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
+  getFeedbackHandler, reviewFeedback,
 };

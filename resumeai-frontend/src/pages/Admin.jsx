@@ -34,9 +34,11 @@ export default function Admin() {
   const [jobs, setJobs] = useState([]);
   const [settings, setSettings] = useState(null);
   const [schemaProposals, setSchemaProposals] = useState([]);
+  const [feedback, setFeedback] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cronMsg, setCronMsg] = useState('');
   const [reviewingId, setReviewingId] = useState(null);
+  const [feedbackNote, setFeedbackNote] = useState({});
 
   useEffect(() => {
     if (user?.email !== ADMIN_EMAIL) {
@@ -49,18 +51,20 @@ export default function Admin() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [s, u, j, cfg, sp] = await Promise.all([
+      const [s, u, j, cfg, sp, fb] = await Promise.all([
         api.adminGetStats(),
         api.adminGetUsers(),
         api.adminGetJobs(),
         api.adminGetSettings(),
         api.adminGetSchemaProposals(),
+        api.adminGetFeedback(),
       ]);
       setStats(s);
       setUsers(u.users || []);
       setJobs(j.jobs || []);
       setSettings(cfg);
       setSchemaProposals(sp.proposals || []);
+      setFeedback(fb.feedback || []);
     } catch (e) {
       console.error(e);
     }
@@ -87,6 +91,16 @@ export default function Admin() {
     try {
       await api.adminRejectSchemaProposal(id);
       await refreshSchemaProposals();
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const handleReviewFeedback = async (id, status) => {
+    setReviewingId(id);
+    try {
+      await api.adminReviewFeedback(id, status, feedbackNote[id] || '');
+      setFeedback(prev => prev.map(f => f.id === id ? { ...f, status, admin_note: feedbackNote[id] || '', reviewed_at: new Date().toISOString() } : f));
     } finally {
       setReviewingId(null);
     }
@@ -154,6 +168,7 @@ export default function Admin() {
             { id: 'users', label: 'Users' },
             { id: 'jobs', label: 'Jobs' },
             { id: 'schema', label: 'Schema Proposals', badge: schemaProposals.filter(p => p.status === 'pending').length },
+            { id: 'feedback', label: 'Feedback', badge: feedback.filter(f => f.status === 'open' && f.score === 0).length },
             { id: 'settings', label: 'Settings' },
           ].map(({ id, label, badge }) => (
             <button key={id} onClick={() => setTab(id)} style={{
@@ -388,6 +403,130 @@ export default function Admin() {
                                   background: p.status === 'approved' ? '#ecfdf5' : '#fef2f2',
                                   border: `1px solid ${p.status === 'approved' ? '#22c55e33' : '#ef444422'}`,
                                 }}>{p.status}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* FEEDBACK */}
+          {tab === 'feedback' && (
+            <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '820px' }}>
+              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '4px' }}>Chat Feedback</h2>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '24px' }}>
+                Thumbs-down feedback from users. Review the conversation, note what went wrong, and mark as actioned.
+              </p>
+
+              {(() => {
+                const open = feedback.filter(f => f.status === 'open');
+                const reviewed = feedback.filter(f => f.status !== 'open');
+                return (
+                  <>
+                    <div style={{ marginBottom: '28px' }}>
+                      <Label>OPEN ({open.length})</Label>
+                      {open.length === 0 ? (
+                        <div style={{ fontSize: '13px', color: '#a8a29e', padding: '16px 0' }}>No open feedback.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          {open.map(f => (
+                            <Card key={f.id}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                                <div>
+                                  <span style={{ fontSize: '13px', fontWeight: 500 }}>{f.user_email || f.user_id}</span>
+                                  <span style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginLeft: '10px' }}>
+                                    {f.chat_mode || 'chat'} · {new Date(f.created_at).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <span style={{ fontSize: '16px' }}>{f.score === 0 ? '👎' : '👍'}</span>
+                              </div>
+
+                              {f.comment && (
+                                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', padding: '10px 12px', marginBottom: '10px' }}>
+                                  <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", marginBottom: '4px' }}>USER COMPLAINT</div>
+                                  <div style={{ fontSize: '12px', color: '#1c1917', lineHeight: 1.5 }}>{f.comment}</div>
+                                </div>
+                              )}
+
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '12px' }}>
+                                <div style={{ background: '#fafaf9', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '10px 12px' }}>
+                                  <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginBottom: '4px' }}>USER SAID</div>
+                                  <div style={{ fontSize: '12px', color: '#57534e', lineHeight: 1.5, maxHeight: '120px', overflowY: 'auto' }}>{f.user_message || '—'}</div>
+                                </div>
+                                <div style={{ background: '#fafaf9', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '10px 12px' }}>
+                                  <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '4px' }}>ARJUN REPLIED</div>
+                                  <div style={{ fontSize: '12px', color: '#57534e', lineHeight: 1.5, maxHeight: '120px', overflowY: 'auto' }}>{f.arjun_reply || '—'}</div>
+                                </div>
+                              </div>
+
+                              <div style={{ marginBottom: '10px' }}>
+                                <textarea
+                                  value={feedbackNote[f.id] || ''}
+                                  onChange={e => setFeedbackNote(prev => ({ ...prev, [f.id]: e.target.value }))}
+                                  placeholder="What should have happened? What prompt change would fix this?"
+                                  style={{ width: '100%', minHeight: '48px', background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '6px', padding: '8px 10px', fontSize: '12px', fontFamily: "'DM Sans', sans-serif", color: '#1c1917', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+                                />
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={() => handleReviewFeedback(f.id, 'actioned')}
+                                  disabled={reviewingId === f.id}
+                                  style={{ flex: 1, background: '#22c55e', color: '#1c1917', border: 'none', padding: '9px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: reviewingId === f.id ? 0.6 : 1 }}
+                                >
+                                  {reviewingId === f.id ? 'Saving...' : 'Mark Actioned'}
+                                </button>
+                                <button
+                                  onClick={() => handleReviewFeedback(f.id, 'wont_fix')}
+                                  disabled={reviewingId === f.id}
+                                  style={{ flex: 1, background: 'transparent', color: '#57534e', border: '1px solid #d6d3d1', padding: '9px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', opacity: reviewingId === f.id ? 0.6 : 1 }}
+                                >
+                                  Won't Fix
+                                </button>
+                                <button
+                                  onClick={() => handleReviewFeedback(f.id, 'dismissed')}
+                                  disabled={reviewingId === f.id}
+                                  style={{ background: 'transparent', color: '#a8a29e', border: '1px solid #e7e5e4', padding: '9px 14px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', opacity: reviewingId === f.id ? 0.6 : 1 }}
+                                >
+                                  Dismiss
+                                </button>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {reviewed.length > 0 && (
+                      <div>
+                        <Label>REVIEWED ({reviewed.length})</Label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {reviewed.map(f => (
+                            <div key={f.id} style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '12px 16px' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div style={{ flex: 1 }}>
+                                  <span style={{ fontSize: '13px', fontWeight: 500 }}>{f.user_email || f.user_id}</span>
+                                  <span style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginLeft: '10px' }}>
+                                    {f.chat_mode || 'chat'}
+                                  </span>
+                                  {f.comment && (
+                                    <div style={{ fontSize: '11px', color: '#78716c', marginTop: '2px' }}>{f.comment.slice(0, 100)}{f.comment.length > 100 ? '...' : ''}</div>
+                                  )}
+                                  {f.admin_note && (
+                                    <div style={{ fontSize: '11px', color: '#57534e', marginTop: '4px', fontStyle: 'italic' }}>Note: {f.admin_note.slice(0, 100)}</div>
+                                  )}
+                                </div>
+                                <span style={{
+                                  fontSize: '10px', fontFamily: "'DM Mono', monospace", borderRadius: '4px', padding: '2px 8px',
+                                  color: f.status === 'actioned' ? '#22c55e' : f.status === 'wont_fix' ? '#f59e0b' : '#a8a29e',
+                                  background: f.status === 'actioned' ? '#ecfdf5' : f.status === 'wont_fix' ? '#fef3c7' : '#fafaf9',
+                                  border: `1px solid ${f.status === 'actioned' ? '#22c55e33' : f.status === 'wont_fix' ? '#f59e0b33' : '#e7e5e4'}`,
+                                }}>{f.status.replace('_', ' ')}</span>
                               </div>
                             </div>
                           ))}

@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile } = require('./profile');
 const { queueJob, getQueueStats } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
@@ -400,7 +400,7 @@ app.post(['/chat/confirm', '/api/chat/confirm'], async (req, res, next) => {
 // ── FEEDBACK ─────────────────────────────────────────────────────────────
 app.post(['/feedback', '/api/feedback'], async (req, res, next) => {
   try {
-    const { traceId, score, comment } = req.body || {};
+    const { traceId, score, comment, userMessage, arjunReply, chatMode } = req.body || {};
     if (!traceId || score === undefined) return res.status(400).json({ error: 'traceId and score required' });
 
     langfuse.score({
@@ -410,6 +410,17 @@ app.post(['/feedback', '/api/feedback'], async (req, res, next) => {
       ...(comment ? { comment } : {}),
     });
     await langfuse.flushAsync();
+
+    await saveChatFeedback({
+      userId: req.userId,
+      userEmail: req.userEmail,
+      traceId,
+      score,
+      comment,
+      userMessage,
+      arjunReply,
+      chatMode,
+    }).catch(e => console.error('⚠ Failed to save chat feedback:', e.message));
 
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -525,6 +536,7 @@ module.exports = app;
 const {
   adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs: adminGetJobs, triggerCron, getSettings, updateSettings,
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
+  getFeedbackHandler, reviewFeedback,
 } = require('./admin');
 
 app.get(['/admin/stats', '/api/admin/stats'], authMiddleware, adminOnly, getStats);
@@ -538,6 +550,8 @@ app.patch(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly,
 app.get(['/admin/schema-proposals', '/api/admin/schema-proposals'], authMiddleware, adminOnly, getSchemaProposalsHandler);
 app.post(['/admin/schema-proposals/:id/approve', '/api/admin/schema-proposals/:id/approve'], authMiddleware, adminOnly, approveSchemaProposal);
 app.post(['/admin/schema-proposals/:id/reject', '/api/admin/schema-proposals/:id/reject'], authMiddleware, adminOnly, rejectSchemaProposal);
+app.get(['/admin/feedback', '/api/admin/feedback'], authMiddleware, adminOnly, getFeedbackHandler);
+app.patch(['/admin/feedback/:id', '/api/admin/feedback/:id'], authMiddleware, adminOnly, reviewFeedback);
 
 // ── RESUME DOWNLOAD ────────────────────────────────────────────────────────
 

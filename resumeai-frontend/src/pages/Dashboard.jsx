@@ -85,38 +85,89 @@ const ThinkingSection = ({ job }) => {
   );
 };
 
-const FeedbackButtons = ({ traceId, feedback, onFeedback }) => {
+const FeedbackButtons = ({ traceId, feedback, onFeedback, userMessage, arjunReply, chatMode }) => {
+  const [showComment, setShowComment] = useState(false);
+  const [comment, setComment] = useState('');
+  const [submitted, setSubmitted] = useState(false);
+
   if (!traceId) return null;
+
+  const handleThumbsDown = () => {
+    setShowComment(true);
+  };
+
+  const handleSubmitComment = () => {
+    onFeedback(traceId, 0, comment.trim() || null, { userMessage, arjunReply, chatMode });
+    setSubmitted(true);
+    setShowComment(false);
+  };
+
+  const handleSkipComment = () => {
+    onFeedback(traceId, 0, null, { userMessage, arjunReply, chatMode });
+    setSubmitted(true);
+    setShowComment(false);
+  };
+
+  const isDone = feedback !== undefined || submitted;
+
   return (
-    <div style={{ display: 'flex', gap: '4px', marginTop: '8px' }}>
-      <button
-        onClick={() => onFeedback(traceId, 1)}
-        disabled={feedback !== undefined}
-        style={{
-          background: feedback === 1 ? '#ecfdf5' : 'transparent',
-          border: `1px solid ${feedback === 1 ? '#22c55e44' : '#e7e5e4'}`,
-          borderRadius: '4px', padding: '3px 8px', cursor: feedback !== undefined ? 'default' : 'pointer',
-          fontSize: '13px', opacity: feedback !== undefined && feedback !== 1 ? 0.3 : 1,
-          transition: 'all 0.15s',
-        }}
-        title="Helpful"
-      >
-        {feedback === 1 ? '👍' : '👍'}
-      </button>
-      <button
-        onClick={() => onFeedback(traceId, 0)}
-        disabled={feedback !== undefined}
-        style={{
-          background: feedback === 0 ? '#fef2f2' : 'transparent',
-          border: `1px solid ${feedback === 0 ? '#ef444444' : '#e7e5e4'}`,
-          borderRadius: '4px', padding: '3px 8px', cursor: feedback !== undefined ? 'default' : 'pointer',
-          fontSize: '13px', opacity: feedback !== undefined && feedback !== 0 ? 0.3 : 1,
-          transition: 'all 0.15s',
-        }}
-        title="Not helpful"
-      >
-        {feedback === 0 ? '👎' : '👎'}
-      </button>
+    <div style={{ marginTop: '8px' }}>
+      <div style={{ display: 'flex', gap: '4px' }}>
+        <button
+          onClick={() => onFeedback(traceId, 1, null, { userMessage, arjunReply, chatMode })}
+          disabled={isDone}
+          style={{
+            background: feedback === 1 ? '#ecfdf5' : 'transparent',
+            border: `1px solid ${feedback === 1 ? '#22c55e44' : '#e7e5e4'}`,
+            borderRadius: '4px', padding: '3px 8px', cursor: isDone ? 'default' : 'pointer',
+            fontSize: '13px', opacity: isDone && feedback !== 1 ? 0.3 : 1,
+            transition: 'all 0.15s',
+          }}
+          title="Helpful"
+        >
+          👍
+        </button>
+        <button
+          onClick={handleThumbsDown}
+          disabled={isDone}
+          style={{
+            background: (feedback === 0 || submitted) ? '#fef2f2' : 'transparent',
+            border: `1px solid ${(feedback === 0 || submitted) ? '#ef444444' : '#e7e5e4'}`,
+            borderRadius: '4px', padding: '3px 8px', cursor: isDone ? 'default' : 'pointer',
+            fontSize: '13px', opacity: isDone && feedback !== 0 && !submitted ? 0.3 : 1,
+            transition: 'all 0.15s',
+          }}
+          title="Not helpful"
+        >
+          👎
+        </button>
+      </div>
+      {showComment && !isDone && (
+        <div style={{ marginTop: '8px', background: '#fafaf9', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '10px' }}>
+          <div style={{ fontSize: '11px', color: '#78716c', marginBottom: '6px' }}>What went wrong?</div>
+          <textarea
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            placeholder="Wrong info, missed context, tone, formatting..."
+            style={{ width: '100%', minHeight: '50px', background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '6px', padding: '8px', fontSize: '12px', fontFamily: "'DM Sans', sans-serif", color: '#1c1917', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+            autoFocus
+          />
+          <div style={{ display: 'flex', gap: '6px', marginTop: '6px' }}>
+            <button
+              onClick={handleSubmitComment}
+              style={{ background: '#ef4444', color: '#fff', border: 'none', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', fontWeight: 600, cursor: 'pointer' }}
+            >
+              Submit
+            </button>
+            <button
+              onClick={handleSkipComment}
+              style={{ background: 'transparent', color: '#78716c', border: '1px solid #d6d3d1', padding: '5px 12px', borderRadius: '4px', fontSize: '11px', cursor: 'pointer' }}
+            >
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -171,9 +222,9 @@ export default function Dashboard() {
   const chatEndRef = useRef(null);
   const tailorEndRef = useRef(null);
 
-  const handleFeedback = async (traceId, score) => {
+  const handleFeedback = async (traceId, score, comment, context = {}) => {
     setFeedbackMap(prev => ({ ...prev, [traceId]: score }));
-    try { await api.sendFeedback(traceId, score); } catch {}
+    try { await api.sendFeedback(traceId, score, comment, context); } catch {}
   };
 
   const handleDownload = async (e, jobId, format = 'docx') => {
@@ -1965,7 +2016,9 @@ export default function Dashboard() {
                         </div>
                       )}
                       {msg.role === 'arjun' && (
-                        <FeedbackButtons traceId={msg.traceId} feedback={feedbackMap[msg.traceId]} onFeedback={handleFeedback} />
+                        <FeedbackButtons traceId={msg.traceId} feedback={feedbackMap[msg.traceId]} onFeedback={handleFeedback}
+                          userMessage={chatMessages[i-1]?.role === 'user' ? chatMessages[i-1].text : null}
+                          arjunReply={msg.text} chatMode="profile" />
                       )}
                     </div>
                   </div>
@@ -2264,7 +2317,9 @@ export default function Dashboard() {
                         )}
                         {msg.text}
                         {msg.role === 'arjun' && (
-                          <FeedbackButtons traceId={msg.traceId} feedback={feedbackMap[msg.traceId]} onFeedback={handleFeedback} />
+                          <FeedbackButtons traceId={msg.traceId} feedback={feedbackMap[msg.traceId]} onFeedback={handleFeedback}
+                            userMessage={tailorMessages[i-1]?.role === 'user' ? tailorMessages[i-1].text : null}
+                            arjunReply={msg.text} chatMode="tailor" />
                         )}
                       </div>
                     </div>

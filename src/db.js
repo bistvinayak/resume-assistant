@@ -105,6 +105,23 @@ async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_uncategorized_facts_user ON uncategorized_facts(user_id);
     CREATE INDEX IF NOT EXISTS idx_uncategorized_facts_unmatched ON uncategorized_facts(matched_category) WHERE matched_category IS NULL;
+
+    CREATE TABLE IF NOT EXISTS chat_feedback (
+      id            SERIAL PRIMARY KEY,
+      user_id       TEXT NOT NULL,
+      user_email    TEXT,
+      trace_id      TEXT NOT NULL,
+      score         INTEGER NOT NULL,
+      comment       TEXT,
+      user_message  TEXT,
+      arjun_reply   TEXT,
+      chat_mode     TEXT,
+      status        TEXT NOT NULL DEFAULT 'open',
+      admin_note    TEXT,
+      reviewed_at   TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_feedback_status ON chat_feedback(status);
   `);
 }
 
@@ -415,6 +432,28 @@ async function getUnmatchedFactsByUser() {
   return rows.map(r => ({ userId: r.user_id, ids: r.ids, texts: r.texts }));
 }
 
+async function saveChatFeedback({ userId, userEmail, traceId, score, comment, userMessage, arjunReply, chatMode }) {
+  await pool.query(
+    `INSERT INTO chat_feedback (user_id, user_email, trace_id, score, comment, user_message, arjun_reply, chat_mode)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [userId, userEmail || null, traceId, score, comment || null, userMessage || null, arjunReply || null, chatMode || null]
+  );
+}
+
+async function getChatFeedback(status = null) {
+  const { rows } = status
+    ? await pool.query('SELECT * FROM chat_feedback WHERE status = $1 ORDER BY created_at DESC', [status])
+    : await pool.query('SELECT * FROM chat_feedback ORDER BY created_at DESC');
+  return rows;
+}
+
+async function updateChatFeedbackStatus(id, status, adminNote) {
+  await pool.query(
+    'UPDATE chat_feedback SET status = $1, admin_note = $2, reviewed_at = now() WHERE id = $3',
+    [status, adminNote || null, id]
+  );
+}
+
 async function markFactsMatched(ids, category) {
   if (!ids?.length) return;
   await pool.query(
@@ -430,6 +469,7 @@ module.exports = {
   getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs,
   upsertSchemaProposal, getSchemaProposals, getApprovedCategories, updateSchemaProposalStatus, setBackfillStatus,
   recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched,
+  saveChatFeedback, getChatFeedback, updateChatFeedbackStatus,
   EMPTY_PROFILE,
 };
 

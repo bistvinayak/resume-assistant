@@ -23,26 +23,28 @@ Quick-lookup graph of the codebase. Check here FIRST before reading files — go
 | GET | /ingest/status | server.js:248 | — |
 | POST | /chat | server.js:261 | getProfile, getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, queueJob, classifyIntent, saveProfile, chatEnrich |
 | POST | /chat/confirm | server.js:382 | getProfile, mergeProfile, applyDeletions, saveProfile |
-| POST | /feedback | server.js:401 | — |
-| GET | /jobs | server.js:420 | getJobsForUser |
-| POST | /jobs/process | server.js:428 | queueJob |
-| POST | /jobs/submit-url | server.js:437 | getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, queueJob |
-| POST | /jobs/run-batch | server.js:491 | runBatch |
-| POST | /gmail/connect | server.js:498 | connectGmail |
-| GET | /projects/arjun | server.js:501 | — |
-| GET | /admin/stats | server.js:530 | adminOnly, getStats, authMiddleware |
-| GET | /admin/users | server.js:531 | adminOnly, getUsers, authMiddleware |
-| PATCH | /admin/users/:userId | server.js:532 | adminOnly, updateUser, authMiddleware |
-| DELETE | /admin/users/:userId | server.js:533 | adminOnly, deleteUser, authMiddleware |
-| GET | /admin/jobs | server.js:534 | adminOnly, authMiddleware |
-| POST | /admin/cron/run | server.js:535 | adminOnly, triggerCron, authMiddleware |
-| GET | /admin/settings | server.js:536 | adminOnly, getSettings, authMiddleware |
-| PATCH | /admin/settings | server.js:537 | adminOnly, updateSettings, authMiddleware |
-| GET | /admin/schema-proposals | server.js:538 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
-| POST | /admin/schema-proposals/:id/approve | server.js:539 | adminOnly, approveSchemaProposal, authMiddleware |
-| POST | /admin/schema-proposals/:id/reject | server.js:540 | adminOnly, rejectSchemaProposal, authMiddleware |
-| GET | /jobs/:jobId/download | server.js:546 | renderResumePdf, renderResumeDocx |
-| POST | /gmail/verify | server.js:588 | — |
+| POST | /feedback | server.js:401 | saveChatFeedback |
+| GET | /jobs | server.js:431 | getJobsForUser |
+| POST | /jobs/process | server.js:439 | queueJob |
+| POST | /jobs/submit-url | server.js:448 | getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, queueJob |
+| POST | /jobs/run-batch | server.js:502 | runBatch |
+| POST | /gmail/connect | server.js:509 | connectGmail |
+| GET | /projects/arjun | server.js:512 | — |
+| GET | /admin/stats | server.js:542 | adminOnly, getStats, authMiddleware |
+| GET | /admin/users | server.js:543 | adminOnly, getUsers, authMiddleware |
+| PATCH | /admin/users/:userId | server.js:544 | adminOnly, updateUser, authMiddleware |
+| DELETE | /admin/users/:userId | server.js:545 | adminOnly, deleteUser, authMiddleware |
+| GET | /admin/jobs | server.js:546 | adminOnly, authMiddleware |
+| POST | /admin/cron/run | server.js:547 | adminOnly, triggerCron, authMiddleware |
+| GET | /admin/settings | server.js:548 | adminOnly, getSettings, authMiddleware |
+| PATCH | /admin/settings | server.js:549 | adminOnly, updateSettings, authMiddleware |
+| GET | /admin/schema-proposals | server.js:550 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
+| POST | /admin/schema-proposals/:id/approve | server.js:551 | adminOnly, approveSchemaProposal, authMiddleware |
+| POST | /admin/schema-proposals/:id/reject | server.js:552 | adminOnly, rejectSchemaProposal, authMiddleware |
+| GET | /admin/feedback | server.js:553 | adminOnly, getFeedbackHandler, authMiddleware |
+| PATCH | /admin/feedback/:id | server.js:554 | adminOnly, reviewFeedback, authMiddleware |
+| GET | /jobs/:jobId/download | server.js:560 | renderResumePdf, renderResumeDocx |
+| POST | /gmail/verify | server.js:602 | — |
 
 ## Chat Flow (server.js:261)
 
@@ -97,16 +99,16 @@ applyPartial(partial, userId) [profile.js:259]
 
 ```
 processJob(job, userId) [pipeline.js:250]
-  → seenJobBefore(job) [db.js:180]
-  → getProfile(userId) [db.js:111]
+  → seenJobBefore(job) [db.js:197]
+  → getProfile(userId) [db.js:128]
   → tailorResume(profile, job, trace) [llm.js:819]  — LLM
   → calculateAtsScore(resume, job, trace) [llm.js:846]  — LLM
   → if ats < 95:
        → improveResume(resume, job, ats, trace) [llm.js:832]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:9]
-  → saveTailored(jobId, resume, filePath) [db.js:196]
-  → markDelivered(tailoredId, jobId, atsData) [db.js:204]
+  → saveTailored(jobId, resume, filePath) [db.js:213]
+  → markDelivered(tailoredId, jobId, atsData) [db.js:221]
   → sendResumeEmail (if source=cron) [mailer.js:57]
 ```
 
@@ -114,7 +116,7 @@ processJob(job, userId) [pipeline.js:250]
 
 ```
 startCron() [cron.js:74]  — runs every 2 hours
-  → recoverStaleJobs(10) [db.js:261]
+  → recoverStaleJobs(10) [db.js:278]
   → runBatch(userId) [cron.js:9]
        → fetchLinkedInJobs() [gmail.js:7]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
@@ -162,38 +164,42 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | tailored_resume | id (SERIAL), job_id (TEXT), user_id (TEXT), resume_json (JSONB), file_path (TEXT), delivered (BOOLEAN), created_at (TIMESTAMPTZ) |
 | schema_proposals | id (SERIAL), category (TEXT), display_name (TEXT), description (TEXT), example_fields (JSONB), sample_data (JSONB), status (TEXT), proposed_count (INTEGER), created_at (TIMESTAMPTZ), reviewed_at (TIMESTAMPTZ), reviewed_by (TEXT), backfill_status (TEXT) |
 | uncategorized_facts | id (SERIAL), user_id (TEXT), text (TEXT), source (TEXT), matched_category (TEXT), created_at (TIMESTAMPTZ), matched_at (TIMESTAMPTZ) |
+| chat_feedback | id (SERIAL), user_id (TEXT), user_email (TEXT), trace_id (TEXT), score (INTEGER), comment (TEXT), user_message (TEXT), arjun_reply (TEXT), chat_mode (TEXT), status (TEXT), admin_note (TEXT), reviewed_at (TIMESTAMPTZ), created_at (TIMESTAMPTZ) |
 
 ### DB Functions
 
 | Function | Line | Purpose |
 |----------|------|---------|
 | initSchema | 18 | Create tables on startup |
-| getProfile | 111 | Get latest profile (adds _onboarded flag) |
-| saveProfile | 121 | Upsert profile, increments version |
-| getProfileVersions | 155 | List profile version history |
-| restoreProfileVersion | 170 | Restore a previous version |
-| seenJobBefore | 180 | Dedup check by job_id |
-| saveTailored | 196 | Save rendered resume |
-| markDelivered | 204 | Mark resume delivered + store ATS metadata |
-| getJobByJobId | 230 | Get single job |
-| insertJobProcessing | 242 | Insert job with status=processing |
-| markJobFailed | 254 | Mark job as failed with reason |
-| recoverStaleJobs | 261 | Find jobs stuck in processing > N minutes |
-| getJobsForUser | 271 | List jobs for user |
-| upsertSchemaProposal | 290 |  |
-| getSchemaProposals | 323 |  |
-| getApprovedCategories | 330 |  |
-| updateSchemaProposalStatus | 337 |  |
-| setBackfillStatus | 386 |  |
-| recordUncategorizedFacts | 392 |  |
-| getUnmatchedFactsByUser | 410 |  |
-| markFactsMatched | 418 |  |
+| getProfile | 128 | Get latest profile (adds _onboarded flag) |
+| saveProfile | 138 | Upsert profile, increments version |
+| getProfileVersions | 172 | List profile version history |
+| restoreProfileVersion | 187 | Restore a previous version |
+| seenJobBefore | 197 | Dedup check by job_id |
+| saveTailored | 213 | Save rendered resume |
+| markDelivered | 221 | Mark resume delivered + store ATS metadata |
+| getJobByJobId | 247 | Get single job |
+| insertJobProcessing | 259 | Insert job with status=processing |
+| markJobFailed | 271 | Mark job as failed with reason |
+| recoverStaleJobs | 278 | Find jobs stuck in processing > N minutes |
+| getJobsForUser | 288 | List jobs for user |
+| upsertSchemaProposal | 307 |  |
+| getSchemaProposals | 340 |  |
+| getApprovedCategories | 347 |  |
+| updateSchemaProposalStatus | 354 |  |
+| setBackfillStatus | 403 |  |
+| recordUncategorizedFacts | 409 |  |
+| getUnmatchedFactsByUser | 427 |  |
+| saveChatFeedback | 435 |  |
+| getChatFeedback | 443 |  |
+| updateChatFeedbackStatus | 450 |  |
+| markFactsMatched | 457 |  |
 
 ## Frontend Pages
 
 | Page | File | API Calls |
 |------|------|-----------|
-| Admin | pages/Admin.jsx | api.adminGetStats, api.adminGetUsers, api.adminGetJobs, api.adminGetSettings, api.adminGetSchemaProposals, api.adminApproveSchemaProposal, api.adminRejectSchemaProposal, api.adminUpdateUser, api.adminDeleteUser, api.adminTriggerCron, api.adminUpdateSettings |
+| Admin | pages/Admin.jsx | api.adminGetStats, api.adminGetUsers, api.adminGetJobs, api.adminGetSettings, api.adminGetSchemaProposals, api.adminGetFeedback, api.adminApproveSchemaProposal, api.adminRejectSchemaProposal, api.adminReviewFeedback, api.adminUpdateUser, api.adminDeleteUser, api.adminTriggerCron, api.adminUpdateSettings |
 | Dashboard | pages/Dashboard.jsx | api.sendFeedback, api.downloadResume, api.getProfile, api.updateProfile, api.getProfileVersions, api.restoreProfileVersion, api.addKeywordToProfile, api.submitJobUrl, api.confirmChanges, api.chat, api.getJobs, api.ingestFiles, api.getIngestionStatus, api.resolveConflicts, api.resolveAmbiguities |
 | GmailOAuthCallback | pages/GmailOAuthCallback.jsx | api.connectGmail, api.verifyGmailFilter |
 | Landing | pages/Landing.jsx | api.getProfile |
@@ -211,14 +217,14 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | api.restoreProfileVersion() | /api/profile/restore | server.js:94 |
 | api.resolveAmbiguities() | /api/profile/resolve-ambiguities | server.js:94 |
 | api.resolveConflicts() | /api/profile/resolve-conflicts | server.js:94 |
-| api.submitJobUrl() | /api/jobs/submit-url | server.js:420 |
-| api.getJobs() | /api/jobs | server.js:420 |
-| api.runBatch() | /api/jobs/run-batch | server.js:420 |
+| api.submitJobUrl() | /api/jobs/submit-url | server.js:431 |
+| api.getJobs() | /api/jobs | server.js:431 |
+| api.runBatch() | /api/jobs/run-batch | server.js:431 |
 | api.chat() | /api/chat | server.js:261 |
 | api.connectGmail() | /api/gmail/connect | — |
 | api.verifyGmailFilter() | /api/gmail/verify | — |
 | api.confirmChanges() | /api/chat/confirm | server.js:261 |
-| api.downloadResume() | /api/jobs/:id/download | server.js:420 |
+| api.downloadResume() | /api/jobs/:id/download | server.js:431 |
 | api.adminGetStats() | /api/admin/stats | — |
 | api.adminGetUsers() | /api/admin/users | — |
 | api.adminUpdateUser() | /api/admin/users/:id | — |
@@ -228,6 +234,8 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | api.adminGetSettings() | /api/admin/settings | — |
 | api.adminUpdateSettings() | /api/admin/settings | — |
 | api.sendFeedback() | /api/feedback | server.js:401 |
+| api.adminGetFeedback() | /api/admin/feedback | — |
+| api.adminReviewFeedback() | /api/admin/feedback/:id | — |
 | api.adminGetSchemaProposals() | /api/admin/schema-proposals | — |
 | api.adminApproveSchemaProposal() | /api/admin/schema-proposals/:id/approve | — |
 | api.adminRejectSchemaProposal() | /api/admin/schema-proposals/:id/reject | — |
@@ -250,6 +258,8 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | getSchemaProposalsHandler | 195 | yes |
 | approveSchemaProposal | 205 | yes |
 | rejectSchemaProposal | 232 | yes |
+| getFeedbackHandler | 243 | yes |
+| reviewFeedback | 252 | yes |
 
 ### auth.js
 
@@ -269,28 +279,31 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | Function | Line | Exported |
 |----------|------|----------|
 | initSchema | 18 | yes |
-| getProfile | 111 | yes |
-| saveProfile | 121 | yes |
-| getProfileVersions | 155 | yes |
-| restoreProfileVersion | 170 | yes |
-| seenJobBefore | 180 | yes |
-| saveTailored | 196 | yes |
-| markDelivered | 204 | yes |
-| getJobByJobId | 230 | yes |
-| insertJobProcessing | 242 | yes |
-| markJobFailed | 254 | yes |
-| recoverStaleJobs | 261 | yes |
-| getJobsForUser | 271 | yes |
-| normalizeCategory | 286 | no |
-| upsertSchemaProposal | 290 | yes |
-| getSchemaProposals | 323 | yes |
-| getApprovedCategories | 330 | yes |
-| updateSchemaProposalStatus | 337 | yes |
-| enforceApprovedCustomSections | 350 | no |
-| setBackfillStatus | 386 | yes |
-| recordUncategorizedFacts | 392 | yes |
-| getUnmatchedFactsByUser | 410 | yes |
-| markFactsMatched | 418 | yes |
+| getProfile | 128 | yes |
+| saveProfile | 138 | yes |
+| getProfileVersions | 172 | yes |
+| restoreProfileVersion | 187 | yes |
+| seenJobBefore | 197 | yes |
+| saveTailored | 213 | yes |
+| markDelivered | 221 | yes |
+| getJobByJobId | 247 | yes |
+| insertJobProcessing | 259 | yes |
+| markJobFailed | 271 | yes |
+| recoverStaleJobs | 278 | yes |
+| getJobsForUser | 288 | yes |
+| normalizeCategory | 303 | no |
+| upsertSchemaProposal | 307 | yes |
+| getSchemaProposals | 340 | yes |
+| getApprovedCategories | 347 | yes |
+| updateSchemaProposalStatus | 354 | yes |
+| enforceApprovedCustomSections | 367 | no |
+| setBackfillStatus | 403 | yes |
+| recordUncategorizedFacts | 409 | yes |
+| getUnmatchedFactsByUser | 427 | yes |
+| saveChatFeedback | 435 | yes |
+| getChatFeedback | 443 | yes |
+| updateChatFeedbackStatus | 450 | yes |
+| markFactsMatched | 457 | yes |
 
 ### gmail-connect.js
 
@@ -428,10 +441,10 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 
 ```
 admin.js
-  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus)
+  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus)
   ├── cron.js (runBatch)
   ├── profile.js (backfillApprovedCategory)
-  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus)
+  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus)
   ├── cron.js (runBatch)
   └── profile.js (backfillApprovedCategory)
 
@@ -476,7 +489,7 @@ profile.js
   └── llm.js (extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts)
 
 server.js
-  ├── db.js (pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs)
+  ├── db.js (pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback)
   ├── profile.js (ingestText, ingestPdf, ingestFiles, extractTextFromFile)
   ├── pipeline.js (queueJob, getQueueStats)
   ├── cron.js (startCron, runBatch)
@@ -489,7 +502,7 @@ server.js
   ├── profile.js (ALLOWED_EXTENSIONS)
   ├── admin.js
   ├── renderPdf.js (renderResumePdf)
-  ├── db.js (pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs)
+  ├── db.js (pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback)
   ├── profile.js (ingestText, ingestPdf, ingestFiles, extractTextFromFile)
   ├── pipeline.js (queueJob, getQueueStats)
   ├── cron.js (startCron, runBatch)
