@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
-const { getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched, upsertSchemaProposal } = require('./db');
+const { getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched } = require('./db');
 const { extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts } = require('./llm');
 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.txt', '.json']);
@@ -270,16 +270,6 @@ async function applyPartial(partial, userId = 'me', ctx = {}) {
     console.error('⚠ Failed to record uncategorized facts:', e.message)
   );
 
-  for (const s of (partial.schema_suggestions || [])) {
-    if (!s.category) continue;
-    upsertSchemaProposal({
-      category: s.category,
-      description: s.description || '',
-      exampleFields: s.example_fields || [],
-      sampleData: s.sample_data || null,
-      displayName: s.display_name || s.category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-    }).catch(e => console.error(`⚠ Failed to queue schema proposal "${s.category}":`, e.message));
-  }
   delete partial.schema_suggestions;
 
   let merged;

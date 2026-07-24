@@ -53,7 +53,7 @@ POST /api/chat { message, mode, history }
   │
   ├─ mode=tailor + URL → scrapeLinkedInJob → processJob (background)
   │
-  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:861]
+  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:871]
   │    ├─ URL structural detection (no LLM)
   │    │    ├─ url_job → "switch to Tailor tab" response
   │    │    └─ url_profile → save to contact field → done
@@ -63,7 +63,7 @@ POST /api/chat { message, mode, history }
   │         ├─ question → reply from intent gate using profile, done
   │         └─ add_info/delete/clarify → in_scope=true, continue ↓
   │
-  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:900]
+  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:910]
        └─ Returns { reply, extracted, deletions }
             → frontend shows pendingChanges for confirm/reject
 ```
@@ -72,7 +72,7 @@ POST /api/chat { message, mode, history }
 
 ```
 ingestText(text, userId) [profile.js:100]
-  → extractFacts(text) [llm.js:799]  — LLM extracts structured profile
+  → extractFacts(text) [llm.js:809]  — LLM extracts structured profile
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestPdf(filePath, userId) [profile.js:105]
@@ -80,7 +80,7 @@ ingestPdf(filePath, userId) [profile.js:105]
        ├─ .pdf → pdf-parse + pdfjs hyperlink extraction
        ├─ .docx/.doc → mammoth (text + HTML hyperlink extraction)
        └─ .txt → fs.readFile
-  → extractFacts(text) [llm.js:799]
+  → extractFacts(text) [llm.js:809]
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestFiles(files[], userId) [profile.js:111]
@@ -89,7 +89,7 @@ ingestFiles(files[], userId) [profile.js:111]
 applyPartial(partial, userId) [profile.js:259]
   → getProfile(userId)
   → if empty profile: mergeProfile (programmatic)
-  → if existing profile: smartMerge (LLM) [llm.js:912]
+  → if existing profile: smartMerge (LLM) [llm.js:922]
        └─ fallback: mergeProfile + detectConflicts
   → saveProfile(merged, userId)
   → returns merged (with _conflicts if any)
@@ -101,10 +101,10 @@ applyPartial(partial, userId) [profile.js:259]
 processJob(job, userId) [pipeline.js:250]
   → seenJobBefore(job) [db.js:197]
   → getProfile(userId) [db.js:128]
-  → tailorResume(profile, job, trace) [llm.js:819]  — LLM
-  → calculateAtsScore(resume, job, trace) [llm.js:846]  — LLM
+  → tailorResume(profile, job, trace) [llm.js:829]  — LLM
+  → calculateAtsScore(resume, job, trace) [llm.js:856]  — LLM
   → if ats < 95:
-       → improveResume(resume, job, ats, trace) [llm.js:832]  — LLM
+       → improveResume(resume, job, ats, trace) [llm.js:842]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:9]
   → saveTailored(jobId, resume, filePath) [db.js:213]
@@ -123,19 +123,19 @@ startCron() [cron.js:74]  — runs every 2 hours
        → per job: processJob(job, userId) [pipeline.js:250]
 ```
 
-## Merge Logic (profile.js:426)
+## Merge Logic (profile.js:416)
 
 ```
-mergeProfile(base, incoming, conflicts) [profile.js:426]
+mergeProfile(base, incoming, conflicts) [profile.js:416]
   ├─ contact: shallow merge
-  ├─ experience: upsertExperience [profile.js:563]
-  │    └─ fuzzyMatchExperience (normCompany) [profile.js:526]
-  ├─ education: upsertById with fuzzyMatchEducation [profile.js:651]
-  │    └─ fuzzyMatchEducation (normSchool + normDegree) [profile.js:530]
-  ├─ projects: upsertProjects [profile.js:626]
-  ├─ certifications: upsertById [profile.js:651]
-  ├─ technical_skills: upsertTechnicalSkills [profile.js:493]
-  ├─ skills/soft_skills: unionCI [profile.js:536]
+  ├─ experience: upsertExperience [profile.js:553]
+  │    └─ fuzzyMatchExperience (normCompany) [profile.js:516]
+  ├─ education: upsertById with fuzzyMatchEducation [profile.js:641]
+  │    └─ fuzzyMatchEducation (normSchool + normDegree) [profile.js:520]
+  ├─ projects: upsertProjects [profile.js:616]
+  ├─ certifications: upsertById [profile.js:641]
+  ├─ technical_skills: upsertTechnicalSkills [profile.js:483]
+  ├─ skills/soft_skills: unionCI [profile.js:526]
   └─ cross-array skill dedup (tech > soft > flat)
 ```
 
@@ -143,15 +143,15 @@ mergeProfile(base, incoming, conflicts) [profile.js:426]
 
 | Function | Line | Purpose |
 |----------|------|---------|
-| extractFacts | 799 | Parse raw text → structured profile JSON |
-| tailorResume | 819 | Rewrite profile into job-tailored resume |
-| improveResume | 832 | Rewrite bullets with missing JD keywords |
-| calculateAtsScore | 846 | Score resume vs JD |
-| classifyIntent | 861 | Intent gate: scope check + direct reply for questions |
-| chatEnrich | 900 | Extract profile data from conversation |
-| smartMerge | 912 | LLM-powered merge of existing + new profile |
+| extractFacts | 809 | Parse raw text → structured profile JSON |
+| tailorResume | 829 | Rewrite profile into job-tailored resume |
+| improveResume | 842 | Rewrite bullets with missing JD keywords |
+| calculateAtsScore | 856 | Score resume vs JD |
+| classifyIntent | 871 | Intent gate: scope check + direct reply for questions |
+| chatEnrich | 910 | Extract profile data from conversation |
+| smartMerge | 922 | LLM-powered merge of existing + new profile |
 
-All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
+All use `askJson(system, user, name, trace, prompt, history)` [llm.js:720] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
 
 ## Database (db.js)
 
@@ -324,27 +324,27 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | Function | Line | Exported |
 |----------|------|----------|
 | formatApprovedCategories | 23 | no |
-| syncPrompts | 596 | yes |
-| getPrompt | 617 | no |
-| evalExtraction | 632 | no |
-| evalAtsScore | 660 | no |
-| evalTailoring | 666 | no |
-| evalImprovement | 683 | no |
-| countProfileBullets | 689 | no |
-| evalSmartMerge | 693 | no |
-| askJson | 711 | no |
-| makeTrace | 759 | no |
-| createJobTrace | 772 | yes |
-| recordSchemaSuggestions | 781 | no |
-| extractFacts | 799 | yes |
-| tailorResume | 819 | yes |
-| improveResume | 832 | yes |
-| calculateAtsScore | 846 | yes |
-| classifyIntent | 861 | yes |
-| chatEnrich | 900 | yes |
-| smartMerge | 912 | yes |
-| classifyCustomFacts | 925 | yes |
-| scoreIngestionCoverage | 943 | yes |
+| syncPrompts | 605 | yes |
+| getPrompt | 626 | no |
+| evalExtraction | 641 | no |
+| evalAtsScore | 669 | no |
+| evalTailoring | 675 | no |
+| evalImprovement | 692 | no |
+| countProfileBullets | 698 | no |
+| evalSmartMerge | 702 | no |
+| askJson | 720 | no |
+| makeTrace | 768 | no |
+| createJobTrace | 781 | yes |
+| recordSchemaSuggestions | 790 | no |
+| extractFacts | 809 | yes |
+| tailorResume | 829 | yes |
+| improveResume | 842 | yes |
+| calculateAtsScore | 856 | yes |
+| classifyIntent | 871 | yes |
+| chatEnrich | 910 | yes |
+| smartMerge | 922 | yes |
+| classifyCustomFacts | 935 | yes |
+| scoreIngestionCoverage | 953 | yes |
 
 ### mailer.js
 
@@ -382,23 +382,23 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:711] — O
 | summarizeExtraction | 152 | no |
 | diffCoverage | 177 | no |
 | applyPartial | 259 | no |
-| detectConflicts | 314 | no |
-| datesOverlap | 365 | no |
-| validateMerge | 378 | no |
-| mergeProfile | 426 | yes |
-| upsertTechnicalSkills | 493 | no |
-| fuzzyMatchExperience | 526 | no |
-| fuzzyMatchEducation | 530 | no |
-| unionCI | 536 | no |
-| mergeBullets | 545 | no |
-| upsertExperience | 563 | no |
-| mergeBulletArrays | 594 | no |
-| mergeCustomSections | 608 | no |
-| upsertProjects | 626 | no |
-| upsertById | 651 | no |
-| applyDeletions | 677 | yes |
-| resolveConflicts | 728 | yes |
-| backfillApprovedCategory | 771 | yes |
+| detectConflicts | 304 | no |
+| datesOverlap | 355 | no |
+| validateMerge | 368 | no |
+| mergeProfile | 416 | yes |
+| upsertTechnicalSkills | 483 | no |
+| fuzzyMatchExperience | 516 | no |
+| fuzzyMatchEducation | 520 | no |
+| unionCI | 526 | no |
+| mergeBullets | 535 | no |
+| upsertExperience | 553 | no |
+| mergeBulletArrays | 584 | no |
+| mergeCustomSections | 598 | no |
+| upsertProjects | 616 | no |
+| upsertById | 641 | no |
+| applyDeletions | 667 | yes |
+| resolveConflicts | 718 | yes |
+| backfillApprovedCategory | 761 | yes |
 
 ### renderDocx.js
 
@@ -483,9 +483,9 @@ pipeline.js
   └── mailer.js (sendResumeEmail)
 
 profile.js
-  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched, upsertSchemaProposal)
+  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched)
   ├── llm.js (extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts)
-  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched, upsertSchemaProposal)
+  ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched)
   └── llm.js (extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts)
 
 server.js

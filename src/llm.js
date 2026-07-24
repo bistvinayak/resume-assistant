@@ -103,7 +103,16 @@ Return ONLY JSON matching this shape (omit fields you found nothing for):
       ]
     }
   ],
-  "custom_facts": []
+  "custom_facts": [],
+  "schema_suggestions": [
+    {
+      "category": "short_snake_case_name",
+      "display_name": "Human-Readable Label",
+      "description": "One sentence: what this section captures",
+      "example_fields": ["field1", "field2"],
+      "sample_data": "Verbatim text from the resume"
+    }
+  ]
 }
 
 SKILL CLASSIFICATION RULES:
@@ -785,6 +794,7 @@ async function recordSchemaSuggestions(trace, suggestions) {
     try {
       await upsertSchemaProposal({
         category: s.category,
+        displayName: s.display_name,
         description: s.description,
         exampleFields: s.example_fields,
         sampleData: s.sample_data,
