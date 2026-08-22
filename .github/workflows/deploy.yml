@@ -1,0 +1,43 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Build frontend
+        run: |
+          cd resumeai-frontend
+          npm ci
+          npm run build
+
+      - name: Deploy to EC2
+        uses: easingthemes/ssh-deploy@v5
+        with:
+          SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+          REMOTE_HOST: ${{ secrets.EC2_HOST }}
+          REMOTE_USER: ec2-user
+          TARGET: /home/ec2-user/arjun/
+          EXCLUDE: "node_modules/, .git/, .env, deploy/, logs/, resumeai-frontend/node_modules/"
+
+      - name: Install deps & restart
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ec2-user/arjun
+            mkdir -p logs
+            npm ci --omit=dev
+            pm2 startOrRestart deploy/ecosystem.config.js --update-env
+            pm2 save

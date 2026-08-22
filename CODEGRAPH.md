@@ -99,16 +99,16 @@ applyPartial(partial, userId) [profile.js:259]
 
 ```
 processJob(job, userId) [pipeline.js:250]
-  → seenJobBefore(job) [db.js:197]
-  → getProfile(userId) [db.js:128]
+  → seenJobBefore(job) [db.js:199]
+  → getProfile(userId) [db.js:130]
   → tailorResume(profile, job, trace) [llm.js:829]  — LLM
   → calculateAtsScore(resume, job, trace) [llm.js:856]  — LLM
   → if ats < 95:
        → improveResume(resume, job, ats, trace) [llm.js:842]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:9]
-  → saveTailored(jobId, resume, filePath) [db.js:213]
-  → markDelivered(tailoredId, jobId, atsData) [db.js:221]
+  → saveTailored(jobId, resume, filePath) [db.js:215]
+  → markDelivered(tailoredId, jobId, atsData) [db.js:223]
   → sendResumeEmail (if source=cron) [mailer.js:57]
 ```
 
@@ -116,7 +116,7 @@ processJob(job, userId) [pipeline.js:250]
 
 ```
 startCron() [cron.js:74]  — runs every 2 hours
-  → recoverStaleJobs(10) [db.js:278]
+  → recoverStaleJobs(10) [db.js:280]
   → runBatch(userId) [cron.js:9]
        → fetchLinkedInJobs() [gmail.js:7]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
@@ -170,30 +170,30 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:720] — O
 
 | Function | Line | Purpose |
 |----------|------|---------|
-| initSchema | 18 | Create tables on startup |
-| getProfile | 128 | Get latest profile (adds _onboarded flag) |
-| saveProfile | 138 | Upsert profile, increments version |
-| getProfileVersions | 172 | List profile version history |
-| restoreProfileVersion | 187 | Restore a previous version |
-| seenJobBefore | 197 | Dedup check by job_id |
-| saveTailored | 213 | Save rendered resume |
-| markDelivered | 221 | Mark resume delivered + store ATS metadata |
-| getJobByJobId | 247 | Get single job |
-| insertJobProcessing | 259 | Insert job with status=processing |
-| markJobFailed | 271 | Mark job as failed with reason |
-| recoverStaleJobs | 278 | Find jobs stuck in processing > N minutes |
-| getJobsForUser | 288 | List jobs for user |
-| upsertSchemaProposal | 307 |  |
-| getSchemaProposals | 340 |  |
-| getApprovedCategories | 347 |  |
-| updateSchemaProposalStatus | 354 |  |
-| setBackfillStatus | 403 |  |
-| recordUncategorizedFacts | 409 |  |
-| getUnmatchedFactsByUser | 427 |  |
-| saveChatFeedback | 435 |  |
-| getChatFeedback | 443 |  |
-| updateChatFeedbackStatus | 450 |  |
-| markFactsMatched | 457 |  |
+| initSchema | 20 | Create tables on startup |
+| getProfile | 130 | Get latest profile (adds _onboarded flag) |
+| saveProfile | 140 | Upsert profile, increments version |
+| getProfileVersions | 174 | List profile version history |
+| restoreProfileVersion | 189 | Restore a previous version |
+| seenJobBefore | 199 | Dedup check by job_id |
+| saveTailored | 215 | Save rendered resume |
+| markDelivered | 223 | Mark resume delivered + store ATS metadata |
+| getJobByJobId | 249 | Get single job |
+| insertJobProcessing | 261 | Insert job with status=processing |
+| markJobFailed | 273 | Mark job as failed with reason |
+| recoverStaleJobs | 280 | Find jobs stuck in processing > N minutes |
+| getJobsForUser | 290 | List jobs for user |
+| upsertSchemaProposal | 309 |  |
+| getSchemaProposals | 342 |  |
+| getApprovedCategories | 349 |  |
+| updateSchemaProposalStatus | 356 |  |
+| setBackfillStatus | 405 |  |
+| recordUncategorizedFacts | 411 |  |
+| getUnmatchedFactsByUser | 429 |  |
+| saveChatFeedback | 437 |  |
+| getChatFeedback | 445 |  |
+| updateChatFeedbackStatus | 452 |  |
+| markFactsMatched | 459 |  |
 
 ## Frontend Pages
 
@@ -278,32 +278,32 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:720] — O
 
 | Function | Line | Exported |
 |----------|------|----------|
-| initSchema | 18 | yes |
-| getProfile | 128 | yes |
-| saveProfile | 138 | yes |
-| getProfileVersions | 172 | yes |
-| restoreProfileVersion | 187 | yes |
-| seenJobBefore | 197 | yes |
-| saveTailored | 213 | yes |
-| markDelivered | 221 | yes |
-| getJobByJobId | 247 | yes |
-| insertJobProcessing | 259 | yes |
-| markJobFailed | 271 | yes |
-| recoverStaleJobs | 278 | yes |
-| getJobsForUser | 288 | yes |
-| normalizeCategory | 303 | no |
-| upsertSchemaProposal | 307 | yes |
-| getSchemaProposals | 340 | yes |
-| getApprovedCategories | 347 | yes |
-| updateSchemaProposalStatus | 354 | yes |
-| enforceApprovedCustomSections | 367 | no |
-| setBackfillStatus | 403 | yes |
-| recordUncategorizedFacts | 409 | yes |
-| getUnmatchedFactsByUser | 427 | yes |
-| saveChatFeedback | 435 | yes |
-| getChatFeedback | 443 | yes |
-| updateChatFeedbackStatus | 450 | yes |
-| markFactsMatched | 457 | yes |
+| initSchema | 20 | yes |
+| getProfile | 130 | yes |
+| saveProfile | 140 | yes |
+| getProfileVersions | 174 | yes |
+| restoreProfileVersion | 189 | yes |
+| seenJobBefore | 199 | yes |
+| saveTailored | 215 | yes |
+| markDelivered | 223 | yes |
+| getJobByJobId | 249 | yes |
+| insertJobProcessing | 261 | yes |
+| markJobFailed | 273 | yes |
+| recoverStaleJobs | 280 | yes |
+| getJobsForUser | 290 | yes |
+| normalizeCategory | 305 | no |
+| upsertSchemaProposal | 309 | yes |
+| getSchemaProposals | 342 | yes |
+| getApprovedCategories | 349 | yes |
+| updateSchemaProposalStatus | 356 | yes |
+| enforceApprovedCustomSections | 369 | no |
+| setBackfillStatus | 405 | yes |
+| recordUncategorizedFacts | 411 | yes |
+| getUnmatchedFactsByUser | 429 | yes |
+| saveChatFeedback | 437 | yes |
+| getChatFeedback | 445 | yes |
+| updateChatFeedbackStatus | 452 | yes |
+| markFactsMatched | 459 | yes |
 
 ### gmail-connect.js
 
