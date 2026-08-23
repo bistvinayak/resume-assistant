@@ -11,6 +11,9 @@ const client = new OpenAI({
   maxRetries: 0,
 });
 const MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+// Resume-writing steps (tailor/improve) get a stronger model — the prose quality and
+// strict "select+reframe, never invent" constraint matter more here than in extraction/scoring.
+const WRITING_MODEL = process.env.OPENROUTER_WRITING_MODEL || 'anthropic/claude-sonnet-5';
 
 const langfuse = new Langfuse({
   secretKey: process.env.LANGFUSE_SECRET_KEY,
@@ -744,7 +747,7 @@ function evalSmartMerge(trace, current, incoming, result) {
 }
 
 // ── ASK JSON ────────────────────────────────────────────────────────────
-async function askJson(system, user, generationName, trace, langfusePrompt, history = []) {
+async function askJson(system, user, generationName, trace, langfusePrompt, history = [], model = MODEL) {
   const messages = [
     { role: 'system', content: system },
     ...history,
@@ -753,14 +756,14 @@ async function askJson(system, user, generationName, trace, langfusePrompt, hist
 
   const generation = trace.generation({
     name: generationName,
-    model: MODEL,
+    model,
     input: messages,
     ...(langfusePrompt ? { prompt: langfusePrompt } : {}),
   });
 
   try {
     const res = await client.chat.completions.create({
-      model: MODEL,
+      model,
       temperature: 0.2,
       response_format: { type: 'json_object' },
       messages,
@@ -861,7 +864,7 @@ async function tailorResume(profile, job, trace) {
     `Description:\n${job.jd_text}\n\n` +
     `CANDIDATE PROFILE:\n${JSON.stringify(profile)}`;
 
-  const result = await askJson(system, user, 'tailor_resume', trace, langfusePrompt);
+  const result = await askJson(system, user, 'tailor_resume', trace, langfusePrompt, [], WRITING_MODEL);
   evalTailoring(trace, result);
   return result;
 }
@@ -875,7 +878,7 @@ async function improveResume(resume, job, ats, trace) {
     `JOB DESCRIPTION:\n${job.jd_text}\n\n` +
     `CURRENT RESUME:\n${JSON.stringify(resume)}`;
 
-  const result = await askJson(system, user, 'improve_resume', trace, langfusePrompt);
+  const result = await askJson(system, user, 'improve_resume', trace, langfusePrompt, [], WRITING_MODEL);
   evalImprovement(trace, result, ats.score);
   return result;
 }
