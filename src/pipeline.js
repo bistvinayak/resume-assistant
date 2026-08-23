@@ -402,7 +402,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     console.log(`⏱ [${elapsed()}] Starting improvement pass...`);
     try {
       const improveResult = await withRetry(
-        () => improveResume(resume, job, ats, trace),
+        () => improveResume(resume, job, ats, trace, tailoringNotes, jdRequirements),
         `improve:${job.company}`,
         1
       );

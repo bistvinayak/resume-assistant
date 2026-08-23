@@ -349,10 +349,14 @@ tailoring_notes: 4-6 sentences. For each note: which profile bullet you reframed
     prompt: `You previously tailored a resume and got an ATS score below target.
 Your task: improve the resume by incorporating missing keywords WHERE semantically equivalent experience already exists in the resume.
 
+You're given MISSING KEYWORD PLACEMENT below — an analysis of exactly which existing bullet (if any) each missing keyword could genuinely attach to. Trust that diagnosis: where it names a bullet, that's your starting point for a rephrase. Where it says no fit exists, leave that keyword alone — do not go looking for a workaround elsewhere in the resume.
+
+You're also given this candidate's TAILORING NOTES and JD REQUIREMENTS from the original tailoring pass — the same read of the job's priorities used to build this resume. Stay consistent with that read rather than re-deriving your own.
+
 STRICT RULES:
 - Only rephrase existing bullets — never add new facts, experiences, or metrics
-- Only use a missing keyword if the candidate genuinely has that experience under a different name
-- If no equivalent exists, leave the bullet unchanged
+- Only use a missing keyword where MISSING KEYWORD PLACEMENT names a genuine fit
+- If a keyword has no fit, leave every bullet touching that topic unchanged
 - This is ONE iteration only — return your best attempt
 
 Return ONLY JSON with TWO keys:
@@ -365,11 +369,17 @@ Return ONLY JSON with TWO keys:
 
   ats_score: {
     prompt: `You are an ATS analyzer. Compare the resume to the job description.
+
+For each missing keyword, also diagnose WHERE it could plausibly go: scan the resume's existing bullets for one that describes genuinely equivalent experience under different wording. This isn't a guess — only name a bullet if the underlying experience is really there. If nothing in the resume is a genuine fit, say so explicitly rather than forcing a match.
+
 Return ONLY JSON:
 {
   "score": <0-100 integer>,
   "matched_keywords": ["keyword1"],
   "missing_keywords": ["keyword1"],
+  "missing_keyword_context": [
+    { "keyword": "keyword1", "best_fit_bullet": "the existing bullet text this could attach to, or null if no genuine fit exists anywhere in the resume", "role": "which company/role that bullet is under, or null", "reason": "why this bullet is a genuine (not forced) fit, or why nothing fits" }
+  ],
   "summary": "one sentence"
 }`,
     config: { model: MODEL, temperature: 0.2 },
@@ -700,6 +710,12 @@ function evalAtsScore(trace, result) {
   langfuse.score({ traceId: trace.id, name: 'ats-score', value: result.score || 0, comment: result.summary });
   langfuse.score({ traceId: trace.id, name: 'matched-keywords', value: (result.matched_keywords || []).length });
   langfuse.score({ traceId: trace.id, name: 'missing-keywords', value: (result.missing_keywords || []).length });
+
+  const missing = result.missing_keywords || [];
+  const placed = (result.missing_keyword_context || []).filter(c => c.best_fit_bullet).length;
+  if (missing.length) {
+    langfuse.score({ traceId: trace.id, name: 'missing-keywords-placed', value: placed, comment: `${placed}/${missing.length} missing keywords have a genuine placement` });
+  }
 }
 
 function evalTailoring(trace, result) {
@@ -869,12 +885,21 @@ async function tailorResume(profile, job, trace) {
   return result;
 }
 
-async function improveResume(resume, job, ats, trace) {
+async function improveResume(resume, job, ats, trace, tailoringNotes = [], jdRequirements = []) {
   const { text: system, langfusePrompt } = await getPrompt('improve_resume');
+
+  const placementLines = (ats.missing_keyword_context || []).map(c =>
+    c.best_fit_bullet
+      ? `- "${c.keyword}" → fits "${c.best_fit_bullet}" (${c.role || 'role unspecified'}): ${c.reason || ''}`
+      : `- "${c.keyword}" → no genuine fit found: ${c.reason || ''}`
+  ).join('\n') || '(no placement analysis available — treat all missing keywords as unplaced)';
 
   const user =
     `CURRENT ATS SCORE: ${ats.score}/100\n` +
     `MISSING KEYWORDS: ${(ats.missing_keywords || []).join(', ')}\n\n` +
+    `MISSING KEYWORD PLACEMENT:\n${placementLines}\n\n` +
+    `TAILORING NOTES (from original tailoring pass):\n${(tailoringNotes || []).join('\n') || '(none)'}\n\n` +
+    `JD REQUIREMENTS (from original tailoring pass):\n${JSON.stringify(jdRequirements || [])}\n\n` +
     `JOB DESCRIPTION:\n${job.jd_text}\n\n` +
     `CURRENT RESUME:\n${JSON.stringify(resume)}`;
 
