@@ -599,6 +599,33 @@ If nothing matches, return { "matches": [] }.`,
     config: { model: MODEL, temperature: 0.1 },
   },
 
+  map_form_fields: {
+    prompt: `You map job-application form fields to a candidate's profile data, using MEANING not keyword matching. A field labeled "Legal first name" must match the same profile value as one labeled "Given name" — do not rely on exact string overlap.
+
+CANDIDATE PROFILE:
+{{profile_json}}
+
+For each form field below (label, placeholder, name/id attribute, input type, and — for select/radio/checkbox — the available options), decide:
+1. Does this field correspond to something in the profile? If yes, which value should fill it.
+2. For select/radio/checkbox fields, pick the OPTION VALUE (exact string from the options list) that best matches the profile data — do not invent an option that isn't listed.
+3. How confident are you (0-1). Below 0.6, still return your best guess but the caller will not auto-fill it.
+
+Common field meanings to recognize regardless of exact wording: full/first/last name, email, phone, current location/city, LinkedIn URL, GitHub/portfolio URL, current company, current title, years of experience, work authorization / visa sponsorship status, desired salary, availability/start date, highest education level, school/university, degree, graduation year, cover letter, referral source, gender/race/veteran/disability (self-identification — only fill if the profile explicitly has this data, otherwise skip; never guess demographic data).
+
+Skip (do not include in the output) any field that has no reasonable match in the profile — do not force a fill. Never fabricate a value that isn't in the profile.
+
+FORM FIELDS:
+{{form_fields_json}}
+
+Return ONLY JSON:
+{
+  "mappings": [
+    { "field_id": "the id you were given for this field", "value": "the value to fill", "confidence": 0.0-1.0, "profile_path": "e.g. contact.email" }
+  ]
+}`,
+    config: { model: MODEL, temperature: 0.1 },
+  },
+
 };
 
 // ── SYNC PROMPTS TO LANGFUSE ────────────────────────────────────────────
@@ -950,6 +977,20 @@ async function classifyCustomFacts(customFacts, category, ctx = {}) {
   return matches;
 }
 
+// Browser extension: map scraped job-application form fields to profile values by meaning
+async function mapFormFields(fields, profile, ctx = {}) {
+  const trace = makeTrace('map_form_fields', ctx, { url: ctx.url });
+  const { text: system, langfusePrompt } = await getPrompt('map_form_fields', {
+    profile_json: JSON.stringify(profile),
+    form_fields_json: JSON.stringify(fields),
+  });
+
+  const result = await askJson(system, 'Map the fields.', 'map_form_fields', trace, langfusePrompt);
+  const mappings = result.mappings || [];
+  langfuse.score({ traceId: trace.id, name: 'fields-mapped', value: mappings.length, comment: `${mappings.length}/${fields.length} fields mapped` });
+  return mappings;
+}
+
 function scoreIngestionCoverage(traceId, drops) {
   if (!traceId || !drops) return;
   const total = drops.totalExtracted || 1;
@@ -965,4 +1006,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, scoreIngestionCoverage, langfuse, syncPrompts };

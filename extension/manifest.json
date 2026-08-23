@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Arjun Autofill",
+  "version": "1.0.0",
+  "description": "Fills job application forms from your Arjun profile using semantic field matching.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAry+Bji/uVAkhpZTESbVLK2VZKrxln2d4Mmf1WtTmYA++PtlSqzeLt1WHXhw/JRDY+959fzu76Q8VnwnFx6fp5WkokPIbHe7vcHIeKS0ZrTrk7tk9/wqGG9Pkj/umybji7Cy/08HRa2ajzN3X7YoSjPVUGlCCxS7eu+ncYFEo0tYfKMrae3bkrzSLDbYyTLIUwXMD2UkhiUjaFJ6C4eZU//ZSVglX/hQZyfXs+vXquB1s/YsM/t+xC+j+M6QyitSdGIQpbv9gwW7FcOmmzNGywLfNn30SVjceFsy4nAJZ5k8tULwUZ/TgXGBkL8WPT33kVzk0e/RtxjOmz6lYd+SrdQIDAQAB",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://vinayakbist.com/*"
+  ],
+  "externally_connectable": {
+    "matches": [
+      "https://vinayakbist.com/*"
+    ]
+  }
+}

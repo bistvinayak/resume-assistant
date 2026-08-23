@@ -8,52 +8,53 @@ Quick-lookup graph of the codebase. Check here FIRST before reading files — go
 
 | Method | Route | File:Line | Calls |
 |--------|-------|-----------|-------|
-| GET | /projects/arjun/* | server.js:76 | — |
-| GET | /health | server.js:90 | — |
-| GET | /api/queue/stats | server.js:91 | authMiddleware, getQueueStats |
-| GET | /profile | server.js:94 | getProfile |
-| PUT | /profile | server.js:98 | saveProfile, getProfile |
-| GET | /profile/versions | server.js:108 | getProfileVersions |
-| POST | /profile/restore | server.js:112 | restoreProfileVersion |
-| POST | /profile/resolve-conflicts | server.js:121 | getProfile, resolveConflicts, saveProfile |
-| POST | /profile/resolve-ambiguities | server.js:132 | getProfile, saveProfile |
-| POST | /ingest/text | server.js:158 | ingestText |
-| POST | /ingest/pdf | server.js:165 | ingestPdf |
-| POST | /ingest/files | server.js:184 | extractTextFromFile, ingestFiles |
-| GET | /ingest/status | server.js:248 | — |
-| POST | /chat | server.js:261 | getProfile, getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, queueJob, classifyIntent, saveProfile, chatEnrich |
-| POST | /chat/confirm | server.js:382 | getProfile, mergeProfile, applyDeletions, saveProfile |
-| POST | /feedback | server.js:401 | saveChatFeedback |
-| GET | /jobs | server.js:431 | getJobsForUser |
-| POST | /jobs/process | server.js:439 | queueJob |
-| POST | /jobs/submit-url | server.js:448 | getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, queueJob |
-| POST | /jobs/run-batch | server.js:502 | runBatch |
-| POST | /gmail/connect | server.js:509 | connectGmail |
-| GET | /projects/arjun | server.js:512 | — |
-| GET | /admin/stats | server.js:542 | adminOnly, getStats, authMiddleware |
-| GET | /admin/users | server.js:543 | adminOnly, getUsers, authMiddleware |
-| PATCH | /admin/users/:userId | server.js:544 | adminOnly, updateUser, authMiddleware |
-| DELETE | /admin/users/:userId | server.js:545 | adminOnly, deleteUser, authMiddleware |
-| GET | /admin/jobs | server.js:546 | adminOnly, authMiddleware |
-| POST | /admin/cron/run | server.js:547 | adminOnly, triggerCron, authMiddleware |
-| GET | /admin/settings | server.js:548 | adminOnly, getSettings, authMiddleware |
-| PATCH | /admin/settings | server.js:549 | adminOnly, updateSettings, authMiddleware |
-| GET | /admin/schema-proposals | server.js:550 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
-| POST | /admin/schema-proposals/:id/approve | server.js:551 | adminOnly, approveSchemaProposal, authMiddleware |
-| POST | /admin/schema-proposals/:id/reject | server.js:552 | adminOnly, rejectSchemaProposal, authMiddleware |
-| GET | /admin/feedback | server.js:553 | adminOnly, getFeedbackHandler, authMiddleware |
-| PATCH | /admin/feedback/:id | server.js:554 | adminOnly, reviewFeedback, authMiddleware |
-| GET | /jobs/:jobId/download | server.js:560 | renderResumePdf, renderResumeDocx |
-| POST | /gmail/verify | server.js:602 | — |
+| GET | /projects/arjun/* | server.js:77 | — |
+| GET | /health | server.js:91 | — |
+| GET | /api/queue/stats | server.js:92 | authMiddleware, getQueueStats |
+| GET | /profile | server.js:95 | getProfile |
+| PUT | /profile | server.js:99 | saveProfile, getProfile |
+| GET | /profile/versions | server.js:109 | getProfileVersions |
+| POST | /profile/restore | server.js:113 | restoreProfileVersion |
+| POST | /profile/resolve-conflicts | server.js:122 | getProfile, resolveConflicts, saveProfile |
+| POST | /profile/resolve-ambiguities | server.js:133 | getProfile, saveProfile |
+| POST | /ingest/text | server.js:159 | ingestText |
+| POST | /ingest/pdf | server.js:166 | ingestPdf |
+| POST | /ingest/files | server.js:185 | extractTextFromFile, ingestFiles |
+| GET | /ingest/status | server.js:249 | — |
+| POST | /chat | server.js:262 | getProfile, getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, queueJob, classifyIntent, saveProfile, chatEnrich |
+| POST | /chat/confirm | server.js:383 | getProfile, mergeProfile, applyDeletions, saveProfile |
+| POST | /feedback | server.js:402 | saveChatFeedback |
+| GET | /jobs | server.js:432 | getJobsForUser |
+| POST | /jobs/process | server.js:440 | queueJob |
+| POST | /jobs/submit-url | server.js:449 | getJobByJobId, insertJobProcessing, scrapeLinkedInJob, markJobFailed, queueJob |
+| POST | /jobs/run-batch | server.js:503 | runBatch |
+| POST | /gmail/connect | server.js:510 | connectGmail |
+| POST | /api/extension/map-fields | server.js:514 | getProfile, mapFormFields |
+| GET | /projects/arjun | server.js:526 | — |
+| GET | /admin/stats | server.js:556 | adminOnly, getStats, authMiddleware |
+| GET | /admin/users | server.js:557 | adminOnly, getUsers, authMiddleware |
+| PATCH | /admin/users/:userId | server.js:558 | adminOnly, updateUser, authMiddleware |
+| DELETE | /admin/users/:userId | server.js:559 | adminOnly, deleteUser, authMiddleware |
+| GET | /admin/jobs | server.js:560 | adminOnly, authMiddleware |
+| POST | /admin/cron/run | server.js:561 | adminOnly, triggerCron, authMiddleware |
+| GET | /admin/settings | server.js:562 | adminOnly, getSettings, authMiddleware |
+| PATCH | /admin/settings | server.js:563 | adminOnly, updateSettings, authMiddleware |
+| GET | /admin/schema-proposals | server.js:564 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
+| POST | /admin/schema-proposals/:id/approve | server.js:565 | adminOnly, approveSchemaProposal, authMiddleware |
+| POST | /admin/schema-proposals/:id/reject | server.js:566 | adminOnly, rejectSchemaProposal, authMiddleware |
+| GET | /admin/feedback | server.js:567 | adminOnly, getFeedbackHandler, authMiddleware |
+| PATCH | /admin/feedback/:id | server.js:568 | adminOnly, reviewFeedback, authMiddleware |
+| GET | /jobs/:jobId/download | server.js:574 | renderResumePdf, renderResumeDocx |
+| POST | /gmail/verify | server.js:616 | — |
 
-## Chat Flow (server.js:261)
+## Chat Flow (server.js:262)
 
 ```
 POST /api/chat { message, mode, history }
   │
   ├─ mode=tailor + URL → scrapeLinkedInJob → processJob (background)
   │
-  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:871]
+  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:898]
   │    ├─ URL structural detection (no LLM)
   │    │    ├─ url_job → "switch to Tailor tab" response
   │    │    └─ url_profile → save to contact field → done
@@ -63,7 +64,7 @@ POST /api/chat { message, mode, history }
   │         ├─ question → reply from intent gate using profile, done
   │         └─ add_info/delete/clarify → in_scope=true, continue ↓
   │
-  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:910]
+  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:937]
        └─ Returns { reply, extracted, deletions }
             → frontend shows pendingChanges for confirm/reject
 ```
@@ -72,7 +73,7 @@ POST /api/chat { message, mode, history }
 
 ```
 ingestText(text, userId) [profile.js:100]
-  → extractFacts(text) [llm.js:809]  — LLM extracts structured profile
+  → extractFacts(text) [llm.js:836]  — LLM extracts structured profile
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestPdf(filePath, userId) [profile.js:105]
@@ -80,7 +81,7 @@ ingestPdf(filePath, userId) [profile.js:105]
        ├─ .pdf → pdf-parse + pdfjs hyperlink extraction
        ├─ .docx/.doc → mammoth (text + HTML hyperlink extraction)
        └─ .txt → fs.readFile
-  → extractFacts(text) [llm.js:809]
+  → extractFacts(text) [llm.js:836]
   → applyPartial(partial, userId) [profile.js:259]
 
 ingestFiles(files[], userId) [profile.js:111]
@@ -89,7 +90,7 @@ ingestFiles(files[], userId) [profile.js:111]
 applyPartial(partial, userId) [profile.js:259]
   → getProfile(userId)
   → if empty profile: mergeProfile (programmatic)
-  → if existing profile: smartMerge (LLM) [llm.js:922]
+  → if existing profile: smartMerge (LLM) [llm.js:949]
        └─ fallback: mergeProfile + detectConflicts
   → saveProfile(merged, userId)
   → returns merged (with _conflicts if any)
@@ -101,10 +102,10 @@ applyPartial(partial, userId) [profile.js:259]
 processJob(job, userId) [pipeline.js:250]
   → seenJobBefore(job) [db.js:199]
   → getProfile(userId) [db.js:130]
-  → tailorResume(profile, job, trace) [llm.js:829]  — LLM
-  → calculateAtsScore(resume, job, trace) [llm.js:856]  — LLM
+  → tailorResume(profile, job, trace) [llm.js:856]  — LLM
+  → calculateAtsScore(resume, job, trace) [llm.js:883]  — LLM
   → if ats < 95:
-       → improveResume(resume, job, ats, trace) [llm.js:842]  — LLM
+       → improveResume(resume, job, ats, trace) [llm.js:869]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:9]
   → saveTailored(jobId, resume, filePath) [db.js:215]
@@ -143,15 +144,15 @@ mergeProfile(base, incoming, conflicts) [profile.js:416]
 
 | Function | Line | Purpose |
 |----------|------|---------|
-| extractFacts | 809 | Parse raw text → structured profile JSON |
-| tailorResume | 829 | Rewrite profile into job-tailored resume |
-| improveResume | 842 | Rewrite bullets with missing JD keywords |
-| calculateAtsScore | 856 | Score resume vs JD |
-| classifyIntent | 871 | Intent gate: scope check + direct reply for questions |
-| chatEnrich | 910 | Extract profile data from conversation |
-| smartMerge | 922 | LLM-powered merge of existing + new profile |
+| extractFacts | 836 | Parse raw text → structured profile JSON |
+| tailorResume | 856 | Rewrite profile into job-tailored resume |
+| improveResume | 869 | Rewrite bullets with missing JD keywords |
+| calculateAtsScore | 883 | Score resume vs JD |
+| classifyIntent | 898 | Intent gate: scope check + direct reply for questions |
+| chatEnrich | 937 | Extract profile data from conversation |
+| smartMerge | 949 | LLM-powered merge of existing + new profile |
 
-All use `askJson(system, user, name, trace, prompt, history)` [llm.js:720] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
+All use `askJson(system, user, name, trace, prompt, history)` [llm.js:747] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
 
 ## Database (db.js)
 
@@ -209,22 +210,22 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:720] — O
 
 | Frontend Method | Route | Backend Line |
 |-----------------|-------|-------------|
-| api.getProfile() | /api/profile | server.js:94 |
-| api.updateProfile() | /api/profile | server.js:94 |
+| api.getProfile() | /api/profile | server.js:95 |
+| api.updateProfile() | /api/profile | server.js:95 |
 | api.ingestText() | /api/ingest/text | — |
 | api.getIngestionStatus() | /api/ingest/status | — |
-| api.getProfileVersions() | /api/profile/versions | server.js:94 |
-| api.restoreProfileVersion() | /api/profile/restore | server.js:94 |
-| api.resolveAmbiguities() | /api/profile/resolve-ambiguities | server.js:94 |
-| api.resolveConflicts() | /api/profile/resolve-conflicts | server.js:94 |
-| api.submitJobUrl() | /api/jobs/submit-url | server.js:431 |
-| api.getJobs() | /api/jobs | server.js:431 |
-| api.runBatch() | /api/jobs/run-batch | server.js:431 |
-| api.chat() | /api/chat | server.js:261 |
+| api.getProfileVersions() | /api/profile/versions | server.js:95 |
+| api.restoreProfileVersion() | /api/profile/restore | server.js:95 |
+| api.resolveAmbiguities() | /api/profile/resolve-ambiguities | server.js:95 |
+| api.resolveConflicts() | /api/profile/resolve-conflicts | server.js:95 |
+| api.submitJobUrl() | /api/jobs/submit-url | server.js:432 |
+| api.getJobs() | /api/jobs | server.js:432 |
+| api.runBatch() | /api/jobs/run-batch | server.js:432 |
+| api.chat() | /api/chat | server.js:262 |
 | api.connectGmail() | /api/gmail/connect | — |
 | api.verifyGmailFilter() | /api/gmail/verify | — |
-| api.confirmChanges() | /api/chat/confirm | server.js:261 |
-| api.downloadResume() | /api/jobs/:id/download | server.js:431 |
+| api.confirmChanges() | /api/chat/confirm | server.js:262 |
+| api.downloadResume() | /api/jobs/:id/download | server.js:432 |
 | api.adminGetStats() | /api/admin/stats | — |
 | api.adminGetUsers() | /api/admin/users | — |
 | api.adminUpdateUser() | /api/admin/users/:id | — |
@@ -233,7 +234,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:720] — O
 | api.adminTriggerCron() | /api/admin/cron/run | — |
 | api.adminGetSettings() | /api/admin/settings | — |
 | api.adminUpdateSettings() | /api/admin/settings | — |
-| api.sendFeedback() | /api/feedback | server.js:401 |
+| api.sendFeedback() | /api/feedback | server.js:402 |
 | api.adminGetFeedback() | /api/admin/feedback | — |
 | api.adminReviewFeedback() | /api/admin/feedback/:id | — |
 | api.adminGetSchemaProposals() | /api/admin/schema-proposals | — |
@@ -324,27 +325,28 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:720] — O
 | Function | Line | Exported |
 |----------|------|----------|
 | formatApprovedCategories | 23 | no |
-| syncPrompts | 605 | yes |
-| getPrompt | 626 | no |
-| evalExtraction | 641 | no |
-| evalAtsScore | 669 | no |
-| evalTailoring | 675 | no |
-| evalImprovement | 692 | no |
-| countProfileBullets | 698 | no |
-| evalSmartMerge | 702 | no |
-| askJson | 720 | no |
-| makeTrace | 768 | no |
-| createJobTrace | 781 | yes |
-| recordSchemaSuggestions | 790 | no |
-| extractFacts | 809 | yes |
-| tailorResume | 829 | yes |
-| improveResume | 842 | yes |
-| calculateAtsScore | 856 | yes |
-| classifyIntent | 871 | yes |
-| chatEnrich | 910 | yes |
-| smartMerge | 922 | yes |
-| classifyCustomFacts | 935 | yes |
-| scoreIngestionCoverage | 953 | yes |
+| syncPrompts | 632 | yes |
+| getPrompt | 653 | no |
+| evalExtraction | 668 | no |
+| evalAtsScore | 696 | no |
+| evalTailoring | 702 | no |
+| evalImprovement | 719 | no |
+| countProfileBullets | 725 | no |
+| evalSmartMerge | 729 | no |
+| askJson | 747 | no |
+| makeTrace | 795 | no |
+| createJobTrace | 808 | yes |
+| recordSchemaSuggestions | 817 | no |
+| extractFacts | 836 | yes |
+| tailorResume | 856 | yes |
+| improveResume | 869 | yes |
+| calculateAtsScore | 883 | yes |
+| classifyIntent | 898 | yes |
+| chatEnrich | 937 | yes |
+| smartMerge | 949 | yes |
+| classifyCustomFacts | 962 | yes |
+| mapFormFields | 981 | yes |
+| scoreIngestionCoverage | 994 | yes |
 
 ### mailer.js
 
@@ -435,7 +437,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:720] — O
 | Function | Line | Exported |
 |----------|------|----------|
 | normalizeJobUrl | 22 | no |
-| langfuseCtx | 63 | no |
+| langfuseCtx | 64 | no |
 
 ## File Dependencies
 
@@ -497,7 +499,7 @@ server.js
   ├── gmail-connect.js (connectGmail)
   ├── scraper.js (scrapeLinkedInJob)
   ├── renderDocx.js (renderResumeDocx)
-  ├── llm.js (classifyIntent, chatEnrich, langfuse, syncPrompts)
+  ├── llm.js (classifyIntent, chatEnrich, mapFormFields, langfuse, syncPrompts)
   ├── profile.js (mergeProfile, applyDeletions, resolveConflicts)
   ├── profile.js (ALLOWED_EXTENSIONS)
   ├── admin.js
@@ -510,7 +512,7 @@ server.js
   ├── gmail-connect.js (connectGmail)
   ├── scraper.js (scrapeLinkedInJob)
   ├── renderDocx.js (renderResumeDocx)
-  ├── llm.js (classifyIntent, chatEnrich, langfuse, syncPrompts)
+  ├── llm.js (classifyIntent, chatEnrich, mapFormFields, langfuse, syncPrompts)
   ├── profile.js (mergeProfile, applyDeletions, resolveConflicts)
   ├── profile.js (ALLOWED_EXTENSIONS)
   ├── admin.js

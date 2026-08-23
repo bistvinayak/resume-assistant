@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    body {
+      width: 260px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, "DM Sans", system-ui, sans-serif;
+      color: #1c1917;
+    }
+    h1 {
+      font-size: 15px;
+      margin: 0 0 4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    h1 img { width: 20px; height: 20px; }
+    .status {
+      font-size: 12px;
+      color: #78716c;
+      margin-bottom: 14px;
+    }
+    .status.ok { color: #16a34a; }
+    .status.warn { color: #d97706; }
+    button {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      background: #f59e0b;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:disabled { background: #d6d3d1; cursor: not-allowed; }
+    a { color: #f59e0b; }
+    #result { font-size: 12px; margin-top: 10px; color: #78716c; min-height: 14px; }
+  </style>
+</head>
+<body>
+  <h1><img src="icons/icon48.png" alt="" />Arjun Autofill</h1>
+  <div id="status" class="status">Checking login…</div>
+  <button id="fillBtn" disabled>Fill this page</button>
+  <div id="result"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

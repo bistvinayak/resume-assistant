@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { auth } from './firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { api } from './api';
+import { syncExtensionAuth } from './extensionBridge';
 import Landing from './pages/Landing';
 import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
@@ -34,7 +35,10 @@ export default function App() {
   const [user, setUser] = useState(undefined);
 
   useEffect(() => {
-    return onAuthStateChanged(auth, (u) => setUser(u || null));
+    return onAuthStateChanged(auth, (u) => {
+      setUser(u || null);
+      syncExtensionAuth(u || null);
+    });
   }, []);
 
   if (user === undefined) return (

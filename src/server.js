@@ -15,7 +15,7 @@ const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { renderResumeDocx } = require('./renderDocx');
-const { classifyIntent, chatEnrich, langfuse, syncPrompts } = require('./llm');
+const { classifyIntent, chatEnrich, mapFormFields, langfuse, syncPrompts } = require('./llm');
 const { mergeProfile, applyDeletions, resolveConflicts } = require('./profile');
 
 // Normalize LinkedIn URLs to direct job view format
@@ -48,6 +48,7 @@ app.use(cors({
     'http://localhost:5173',
     'http://localhost:3000',
     'https://vinayakbist.com',
+    'chrome-extension://ljeplebcfpakamlgehpfmemkbmnalfdc', // Arjun autofill extension
     process.env.FRONTEND_URL,
   ].filter(Boolean),
   credentials: true,
@@ -507,6 +508,19 @@ app.post(['/jobs/run-batch', '/api/jobs/run-batch'], async (req, res, next) => {
 });
 
 app.post(['/gmail/connect', '/api/gmail/connect'], async (req, res) => connectGmail(req, res));
+
+// ── BROWSER EXTENSION ────────────────────────────────────────────────────
+// Maps scraped job-application form fields to profile values by meaning (LLM), not string matching.
+app.post('/api/extension/map-fields', async (req, res, next) => {
+  try {
+    const { fields, url } = req.body;
+    if (!Array.isArray(fields) || !fields.length) return res.json({ mappings: [] });
+
+    const profile = await getProfile(req.userId);
+    const mappings = await mapFormFields(fields, profile, { ...langfuseCtx(req), url });
+    res.json({ mappings });
+  } catch (e) { next(e); }
+});
 
 // ── SPA FALLBACK ──────────────────────────────────────────────────────────
 app.get(['/projects/arjun', '/projects/arjun/*'], (req, res) => {
