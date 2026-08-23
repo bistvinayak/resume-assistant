@@ -352,11 +352,11 @@ export default function Dashboard() {
     }));
   };
 
-  const removeSkill = (idx) => {
+  const removeSkill = (source, idx) => {
     setEditProfile(p => {
-      const skills = [...(p.skills || [])];
-      skills.splice(idx, 1);
-      return { ...p, skills };
+      const arr = [...(p[source] || [])];
+      arr.splice(idx, 1);
+      return { ...p, [source]: arr };
     });
   };
 
@@ -1454,7 +1454,9 @@ export default function Dashboard() {
                       <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
                         <span style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", minWidth: 70, textTransform: 'capitalize' }}>{field}</span>
                         <input
-                          value={editProfile.contact?.[field] || ''}
+                          value={(field === 'linkedin'
+                            ? (editProfile.contact?.linkedin || editProfile.contact?.linkedIn || editProfile.contact?.LinkedIn)
+                            : editProfile.contact?.[field]) || ''}
                           onChange={e => updateContact(field, e.target.value)}
                           placeholder={['linkedin', 'github', 'portfolio'].includes(field) ? `https://...` : field}
                           style={{ flex: 1, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '13px', padding: '8px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none' }}
@@ -1479,10 +1481,14 @@ export default function Dashboard() {
                   <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>SKILLS</div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
-                      {(editProfile.skills || []).map((skill, si) => (
-                        <span key={si} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 8px 4px 10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>
-                          {skill}
-                          <button onClick={() => removeSkill(si)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
+                      {[
+                        ...(editProfile.technical_skills || []).map((s, i) => ({ source: 'technical_skills', idx: i, name: typeof s === 'string' ? s : s.name })),
+                        ...(editProfile.soft_skills || []).map((s, i) => ({ source: 'soft_skills', idx: i, name: s })),
+                        ...(editProfile.skills || []).map((s, i) => ({ source: 'skills', idx: i, name: s })),
+                      ].map((item) => (
+                        <span key={`${item.source}-${item.idx}`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#e7e5e4', border: '1px solid #d6d3d1', borderRadius: '4px', padding: '4px 8px 4px 10px', fontSize: '11px', color: '#57534e', fontFamily: "'DM Mono', monospace" }}>
+                          {item.name}
+                          <button onClick={() => removeSkill(item.source, item.idx)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '14px', cursor: 'pointer', padding: '0 2px', lineHeight: 1 }}>×</button>
                         </span>
                       ))}
                     </div>

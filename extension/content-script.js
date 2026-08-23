@@ -77,9 +77,13 @@
   function setNativeValue(el, value) {
     const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
     const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    el.dispatchEvent(new Event('focus', { bubbles: true }));
     if (setter) setter.call(el, value); else el.value = value;
     el.dispatchEvent(new Event('input', { bubbles: true }));
     el.dispatchEvent(new Event('change', { bubbles: true }));
+    // Many form frameworks (Formik/React Hook Form/Phenom's own validators) only
+    // re-validate a field once it's "touched" — that happens on blur, not on value change.
+    el.dispatchEvent(new Event('blur', { bubbles: true }));
   }
 
   function fillField(el, mapping) {
