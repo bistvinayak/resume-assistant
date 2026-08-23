@@ -10,7 +10,7 @@ const client = new OpenAI({
   timeout: 60_000,
   maxRetries: 0,
 });
-const MODEL = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
+const MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-3.7-flash';
 // Resume-writing steps (tailor/improve) get a stronger model — the prose quality and
 // strict "select+reframe, never invent" constraint matter more here than in extraction/scoring.
 const WRITING_MODEL = process.env.OPENROUTER_WRITING_MODEL || 'anthropic/claude-sonnet-5';
@@ -783,6 +783,10 @@ async function askJson(system, user, generationName, trace, langfusePrompt, hist
       temperature: 0.2,
       response_format: { type: 'json_object' },
       messages,
+      // Gemini's reasoning models burn hidden "thinking" tokens by default (~100x cost
+      // on trivial calls) — these are structured extraction/classification tasks, not
+      // reasoning tasks, so keep it off. Ignored by providers that don't support it.
+      ...(model.startsWith('google/') ? { reasoning: { effort: 'minimal' } } : {}),
     });
 
     const raw = res.choices[0].message.content;
