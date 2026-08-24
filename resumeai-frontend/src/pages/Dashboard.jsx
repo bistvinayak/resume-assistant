@@ -218,6 +218,11 @@ export default function Dashboard() {
   const [feedbackMap, setFeedbackMap] = useState({});
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState([]);
+  const [resumeFormat, setResumeFormat] = useState(null);
+  const [formatFile, setFormatFile] = useState(null);
+  const [formatTargetPages, setFormatTargetPages] = useState(1);
+  const [formatUploading, setFormatUploading] = useState(false);
+  const [formatError, setFormatError] = useState('');
   const [restoringVersion, setRestoringVersion] = useState(null);
   const chatEndRef = useRef(null);
   const tailorEndRef = useRef(null);
@@ -934,8 +939,36 @@ export default function Dashboard() {
   useEffect(() => {
     if (tab === 'profile') {
       api.getProfile().then(p => setProfile(p)).catch(() => {});
+      api.getResumeFormat().then(f => setResumeFormat(f)).catch(() => {});
     }
   }, [tab]);
+
+  const uploadResumeFormat = async () => {
+    if (!formatFile) return;
+    setFormatUploading(true);
+    setFormatError('');
+    try {
+      const saved = await api.uploadResumeFormat(formatFile, formatTargetPages);
+      setResumeFormat(saved);
+      setFormatFile(null);
+    } catch (e) {
+      setFormatError(e.message || 'Upload failed');
+    } finally {
+      setFormatUploading(false);
+    }
+  };
+
+  const removeResumeFormat = async () => {
+    setFormatUploading(true);
+    try {
+      await api.deleteResumeFormat();
+      setResumeFormat(null);
+    } catch (e) {
+      setFormatError(e.message || 'Failed to remove');
+    } finally {
+      setFormatUploading(false);
+    }
+  };
 
   useEffect(() => {
     if (tab === 'chat' && chatMessages.length === 0) {
@@ -1190,6 +1223,45 @@ export default function Dashboard() {
 
               {!editing ? (
                 <>
+                  <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '10px' }}>RESUME FORMAT</div>
+                    <p style={{ fontSize: '12px', color: '#78716c', marginBottom: '14px' }}>
+                      Upload a resume as a style reference — future tailored resumes will match its section order, heading style, and page count.
+                    </p>
+
+                    {resumeFormat ? (
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '8px', padding: '12px 14px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', fontWeight: 500 }}>{resumeFormat.source_filename}</div>
+                          <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '2px' }}>
+                            target: {resumeFormat.target_pages} page{resumeFormat.target_pages === 1 ? '' : 's'} · order: {(resumeFormat.style_profile?.section_order || []).join(', ')}
+                          </div>
+                        </div>
+                        <button onClick={removeResumeFormat} disabled={formatUploading} style={{ background: 'none', border: '1px solid #fecaca', color: '#ef4444', padding: '6px 12px', borderRadius: '6px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+                          {formatUploading ? '...' : 'Remove'}
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                        <label style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px', border: `2px dashed ${formatFile ? '#22c55e44' : '#d6d3d1'}`, borderRadius: '8px', padding: '10px 14px', cursor: 'pointer', background: formatFile ? '#ecfdf5' : '#fafaf9' }}>
+                          <input type="file" accept=".pdf,.docx,.doc" style={{ display: 'none' }} onChange={e => setFormatFile(e.target.files[0] || null)} />
+                          <span>{formatFile ? '✅' : '📄'}</span>
+                          <span style={{ fontSize: '12px', color: '#57534e' }}>{formatFile ? formatFile.name : 'Upload PDF or DOCX'}</span>
+                        </label>
+                        <input
+                          type="number" min="1" max="10" value={formatTargetPages}
+                          onChange={e => setFormatTargetPages(parseInt(e.target.value, 10) || 1)}
+                          title="Target page count"
+                          style={{ width: 70, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '12px', padding: '9px 10px', fontFamily: "'DM Mono', monospace", outline: 'none' }}
+                        />
+                        <button onClick={uploadResumeFormat} disabled={!formatFile || formatUploading} style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#57534e', padding: '9px 16px', borderRadius: '6px', fontSize: '12px', cursor: formatFile ? 'pointer' : 'not-allowed', opacity: formatFile ? 1 : 0.6 }}>
+                          {formatUploading ? 'Analyzing...' : 'Save'}
+                        </button>
+                      </div>
+                    )}
+                    {formatError && <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '8px' }}>{formatError}</div>}
+                  </div>
+
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                     <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px' }}>
                       <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>COMPLETENESS</div>

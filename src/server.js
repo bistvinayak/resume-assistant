@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile } = require('./profile');
 const { queueJob, getQueueStats } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
@@ -15,7 +15,7 @@ const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { renderResumeDocx } = require('./renderDocx');
-const { classifyIntent, chatEnrich, mapFormFields, langfuse, syncPrompts } = require('./llm');
+const { classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts } = require('./llm');
 const { mergeProfile, applyDeletions, resolveConflicts } = require('./profile');
 
 // Normalize LinkedIn URLs to direct job view format
@@ -256,6 +256,39 @@ app.get(['/ingest/status', '/api/ingest/status'], async (req, res) => {
     return res.json(status);
   }
   res.json(status);
+});
+
+// ── RESUME FORMAT (style reference for tailored resume rendering) ──────────
+app.get(['/resume-format', '/api/resume-format'], async (req, res, next) => {
+  try {
+    res.json(await getResumeFormat(req.userId));
+  } catch (e) { next(e); }
+});
+
+app.post(['/resume-format', '/api/resume-format'], upload.single('file'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'file required' });
+    const targetPages = parseInt(req.body?.target_pages, 10);
+    if (!targetPages || targetPages < 1) return res.status(400).json({ error: 'target_pages (positive integer) required' });
+
+    const text = await extractTextFromFile(req.file.path, req.file.originalname);
+    if (!text || text.trim().length < 50) return res.status(400).json({ error: 'Could not read enough text from the uploaded file' });
+
+    const styleProfile = await analyzeResumeFormat(text, targetPages, langfuseCtx(req));
+    const saved = await saveResumeFormat(req.userId, {
+      target_pages: targetPages,
+      style_profile: styleProfile,
+      source_filename: req.file.originalname,
+    });
+    res.json(saved);
+  } catch (e) { next(e); }
+});
+
+app.delete(['/resume-format', '/api/resume-format'], async (req, res, next) => {
+  try {
+    await deleteResumeFormat(req.userId);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 });
 
 // ── CHAT (INTENT-FIRST) ─────────────────────────────────────────────────

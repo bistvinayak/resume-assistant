@@ -103,6 +103,35 @@ export const api = {
     return res.json();
   },
 
+  async getResumeFormat() {
+    const res = await checkedFetch(`${BASE}/resume-format`, { headers: await getHeaders() });
+    return res.json();
+  },
+
+  async uploadResumeFormat(file, targetPages) {
+    const user = await waitForAuth();
+    const token = await user.getIdToken(true);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('target_pages', String(targetPages));
+    const res = await checkedFetch(`${BASE}/resume-format`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'X-Session-Id': SESSION_ID },
+      body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
+    return data;
+  },
+
+  async deleteResumeFormat() {
+    const res = await checkedFetch(`${BASE}/resume-format`, {
+      method: 'DELETE',
+      headers: await getHeaders(),
+    });
+    return res.json();
+  },
+
   async getProfileVersions() {
     const res = await checkedFetch(`${BASE}/profile/versions`, { headers: await getHeaders() });
     return res.json();

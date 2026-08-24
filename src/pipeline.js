@@ -2,7 +2,7 @@
 
 const path = require('path');
 const os = require('os');
-const { getProfile, seenJobBefore, saveTailored, markDelivered, markJobFailed } = require('./db');
+const { getProfile, getResumeFormat, seenJobBefore, saveTailored, markDelivered, markJobFailed } = require('./db');
 const { tailorResume, calculateAtsScore, improveResume, createJobTrace } = require('./llm');
 const { renderResumeDocx } = require('./renderDocx');
 const { measureResumePdf } = require('./renderPdf');
@@ -263,6 +263,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
 
   const trace = createJobTrace(job, { userId, sessionId, userEmail, userName });
   const profile = await getProfile(userId);
+  const resumeFormat = await getResumeFormat(userId).catch(() => null);
 
   // Step 1: Tailor resume — LLM selects + reframes all relevant bullets
   let resume, tailoringNotes, jdRequirements;
@@ -340,37 +341,62 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
 
   // Step 1.6: Measure → expand/tighten → pick layout
   let layoutOpts = { fontScale: 1.0, lineGap: 1.5, sectionGap: 0.6, roleGap: 0.3 };
+  if (resumeFormat?.style_profile?.section_order) layoutOpts.sectionOrder = resumeFormat.style_profile.section_order;
+  if (resumeFormat?.style_profile?.heading_case) layoutOpts.headingCase = resumeFormat.style_profile.heading_case;
+  const targetPages = resumeFormat?.target_pages || null;
+
   try {
     let m = await measureResumePdf(resume, layoutOpts);
     console.log(`📐 Initial: ${m.pages} page(s), last page ${m.lastPageFill}% filled`);
 
-    // Gap #5: 1-page underuse — if 1 page at <75%, pull more content
-    if (m.pages === 1 && m.lastPageFill < 75) {
-      console.log(`↕ 1-page at ${m.lastPageFill}% — expanding to use space`);
-      expandResume(resume, profile, 'medium');
-      m = await measureResumePdf(resume, layoutOpts);
-      console.log(`📐 After 1-page expand: ${m.pages} page(s), ${m.lastPageFill}% filled`);
+    if (targetPages) {
+      // A saved format pins an explicit page count — converge on it instead of the
+      // reactive fill-based heuristic below. Bounded iterations since expand/tighten
+      // can run out of profile content to add/remove before hitting the exact target.
+      let iterations = 0;
+      const MAX_TARGET_ITERATIONS = 4;
+      while (m.pages !== targetPages && iterations < MAX_TARGET_ITERATIONS) {
+        const changed = m.pages < targetPages
+          ? expandResume(resume, profile, (targetPages - m.pages) >= 2 ? 'heavy' : 'medium')
+          : tightenResume(resume, targetPages);
+        if (!changed) {
+          console.log(`↕ Stopped at ${m.pages}/${targetPages} target pages — no more content to ${m.pages < targetPages ? 'add' : 'trim'}`);
+          break;
+        }
+        m = await measureResumePdf(resume, layoutOpts);
+        iterations++;
+        console.log(`📐 [target ${targetPages}pg, iteration ${iterations}] ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
+    } else {
+      // Gap #5: 1-page underuse — if 1 page at <75%, pull more content
+      if (m.pages === 1 && m.lastPageFill < 75) {
+        console.log(`↕ 1-page at ${m.lastPageFill}% — expanding to use space`);
+        expandResume(resume, profile, 'medium');
+        m = await measureResumePdf(resume, layoutOpts);
+        console.log(`📐 After 1-page expand: ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
+
+      // Gap #2/#3: Multi-page underfill — aggressive expand based on how empty the last page is
+      if (m.pages > 1 && m.lastPageFill < 60) {
+        const aggression = m.lastPageFill < 30 ? 'heavy' : m.lastPageFill < 50 ? 'medium' : 'light';
+        console.log(`↕ Page ${m.pages} at ${m.lastPageFill}% — ${aggression} expand`);
+        expandResume(resume, profile, aggression);
+        m = await measureResumePdf(resume, layoutOpts);
+        console.log(`📐 After expand: ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
+
+      // Gap #1: Tighten — if content spills to an extra page with <40% fill, trim back
+      if (m.pages > 2 && m.lastPageFill < 40) {
+        console.log(`✂ ${m.pages} pages, last at ${m.lastPageFill}% — tightening`);
+        tightenResume(resume, m.pages - 1);
+        m = await measureResumePdf(resume, layoutOpts);
+        console.log(`📐 After tighten: ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
     }
 
-    // Gap #2/#3: Multi-page underfill — aggressive expand based on how empty the last page is
-    if (m.pages > 1 && m.lastPageFill < 60) {
-      const aggression = m.lastPageFill < 30 ? 'heavy' : m.lastPageFill < 50 ? 'medium' : 'light';
-      console.log(`↕ Page ${m.pages} at ${m.lastPageFill}% — ${aggression} expand`);
-      expandResume(resume, profile, aggression);
-      m = await measureResumePdf(resume, layoutOpts);
-      console.log(`📐 After expand: ${m.pages} page(s), ${m.lastPageFill}% filled`);
-    }
-
-    // Gap #1: Tighten — if content spills to an extra page with <40% fill, trim back
-    if (m.pages > 2 && m.lastPageFill < 40) {
-      console.log(`✂ ${m.pages} pages, last at ${m.lastPageFill}% — tightening`);
-      tightenResume(resume, m.pages - 1);
-      m = await measureResumePdf(resume, layoutOpts);
-      console.log(`📐 After tighten: ${m.pages} page(s), ${m.lastPageFill}% filled`);
-    }
-
-    // Gap #4: Pick layout opts — font scale, line spacing, section spacing
-    layoutOpts = pickLayoutOpts(m.pages, m.lastPageFill);
+    // Gap #4: Pick layout opts — font scale, line spacing, section spacing (spacing polish
+    // either way; preserves sectionOrder/headingCase already set above from the saved format)
+    layoutOpts = { ...layoutOpts, ...pickLayoutOpts(m.pages, m.lastPageFill) };
     if (layoutOpts.fontScale !== 1.0 || layoutOpts.lineGap !== 1.5) {
       m = await measureResumePdf(resume, layoutOpts);
       console.log(`📐 Layout tuned (font ${layoutOpts.fontScale}, lineGap ${layoutOpts.lineGap}): ${m.pages} page(s), ${m.lastPageFill}% filled`);

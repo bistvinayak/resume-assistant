@@ -124,6 +124,16 @@ async function initSchema() {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_chat_feedback_status ON chat_feedback(status);
+
+    -- Per-user resume style reference: an uploaded template's inferred section order/
+    -- heading style plus a target page count, applied when rendering future tailored resumes.
+    CREATE TABLE IF NOT EXISTS resume_format (
+      user_id         TEXT PRIMARY KEY,
+      target_pages    INTEGER,
+      style_profile   JSONB,
+      source_filename TEXT,
+      updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
   `);
 }
 
@@ -464,6 +474,29 @@ async function markFactsMatched(ids, category) {
   );
 }
 
+async function getResumeFormat(userId = 'me') {
+  const { rows } = await pool.query(
+    'SELECT target_pages, style_profile, source_filename, updated_at FROM resume_format WHERE user_id = $1',
+    [userId]
+  );
+  return rows[0] || null;
+}
+
+async function saveResumeFormat(userId = 'me', { target_pages, style_profile, source_filename }) {
+  await pool.query(
+    `INSERT INTO resume_format (user_id, target_pages, style_profile, source_filename, updated_at)
+     VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (user_id) DO UPDATE SET
+       target_pages = $2, style_profile = $3, source_filename = $4, updated_at = now()`,
+    [userId, target_pages, style_profile, source_filename]
+  );
+  return getResumeFormat(userId);
+}
+
+async function deleteResumeFormat(userId = 'me') {
+  await pool.query('DELETE FROM resume_format WHERE user_id = $1', [userId]);
+}
+
 module.exports = {
   pool, initSchema, getProfile, saveProfile,
   getProfileVersions, restoreProfileVersion,
@@ -472,6 +505,7 @@ module.exports = {
   upsertSchemaProposal, getSchemaProposals, getApprovedCategories, updateSchemaProposalStatus, setBackfillStatus,
   recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched,
   saveChatFeedback, getChatFeedback, updateChatFeedbackStatus,
+  getResumeFormat, saveResumeFormat, deleteResumeFormat,
   EMPTY_PROFILE,
 };
 

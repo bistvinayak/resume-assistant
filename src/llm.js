@@ -639,6 +639,33 @@ Return ONLY JSON:
     config: { model: MODEL, temperature: 0.1 },
   },
 
+  analyze_resume_format: {
+    prompt: `You analyze a resume that a candidate uploaded as a STYLE REFERENCE — not to extract their career facts (that already happens elsewhere), but to describe its visual/structural presentation so a different candidate's resume can be rendered in a similar style.
+
+The candidate also gave a target page count: {{target_pages}}.
+
+Look at:
+- SECTION ORDER: the order sections actually appear in (e.g. does Skills come before or after Experience? Is a Projects section present and where?)
+- HEADING CASE: are section headings ALL CAPS or Title Case?
+- DENSITY: are bullets terse one-liners, or longer/more detailed? Is the resume visually dense or spacious?
+
+Only describe what you can actually observe in the text below — do not invent structure that isn't there.
+
+RESUME TEXT:
+{{template_text}}
+
+Return ONLY JSON:
+{
+  "section_order": ["summary", "skills", "experience", "projects", "education", "certifications", "activities", "interests"],
+  "heading_case": "upper" | "title",
+  "density": "concise" | "detailed",
+  "notes": "one or two sentences on anything else notable about the presentation — not directly rendered, just useful context"
+}
+
+"section_order" should only include sections actually present in the uploaded resume, in the order they appear. Use exactly these keys: summary, skills, experience, projects, education, certifications, activities, interests.`,
+    config: { model: MODEL, temperature: 0.1 },
+  },
+
 };
 
 // ── SYNC PROMPTS TO LANGFUSE ────────────────────────────────────────────
@@ -1023,6 +1050,29 @@ async function mapFormFields(fields, profile, ctx = {}) {
   return mappings;
 }
 
+const VALID_SECTIONS = ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'activities', 'interests'];
+
+// Analyzes an uploaded resume as a STYLE reference (section order/heading case/density) —
+// not fact extraction. Used to render future tailored resumes in a similar presentation.
+async function analyzeResumeFormat(templateText, targetPages, ctx = {}) {
+  const trace = makeTrace('analyze_resume_format', ctx);
+  const { text: system, langfusePrompt } = await getPrompt('analyze_resume_format', {
+    template_text: templateText,
+    target_pages: targetPages || 'not specified',
+  });
+
+  const result = await askJson(system, 'Analyze the format.', 'analyze_resume_format', trace, langfusePrompt);
+  const sectionOrder = (result.section_order || []).filter(s => VALID_SECTIONS.includes(s));
+  const styleProfile = {
+    section_order: sectionOrder.length ? sectionOrder : VALID_SECTIONS,
+    heading_case: result.heading_case === 'title' ? 'title' : 'upper',
+    density: result.density === 'detailed' ? 'detailed' : 'concise',
+    notes: result.notes || '',
+  };
+  langfuse.score({ traceId: trace.id, name: 'sections-detected', value: sectionOrder.length });
+  return styleProfile;
+}
+
 function scoreIngestionCoverage(traceId, drops) {
   if (!traceId || !drops) return;
   const total = drops.totalExtracted || 1;
@@ -1038,4 +1088,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, scoreIngestionCoverage, langfuse, syncPrompts };
