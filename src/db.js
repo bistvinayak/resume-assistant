@@ -64,6 +64,8 @@ async function initSchema() {
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tailoring_notes JSONB DEFAULT '[]';
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS jd_requirements JSONB DEFAULT '[]';
       ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'me';
+      ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS cover_letter_text TEXT;
+      ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS cover_letter_file_path TEXT;
     EXCEPTION WHEN others THEN NULL; END $$;
 
     CREATE INDEX IF NOT EXISTS idx_master_profile_user ON master_profile(user_id);
@@ -222,10 +224,11 @@ async function seenJobBefore(job, userId = 'me') {
   return res.rowCount === 0;
 }
 
-async function saveTailored(jobId, resumeJson, filePath, userId = 'me') {
+async function saveTailored(jobId, resumeJson, filePath, userId = 'me', coverLetterText = null, coverLetterFilePath = null) {
   const { rows } = await pool.query(
-    `INSERT INTO tailored_resume (job_id, user_id, resume_json, file_path) VALUES ($1, $2, $3, $4) RETURNING id`,
-    [jobId, userId, resumeJson, filePath || null]
+    `INSERT INTO tailored_resume (job_id, user_id, resume_json, file_path, cover_letter_text, cover_letter_file_path)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [jobId, userId, resumeJson, filePath || null, coverLetterText, coverLetterFilePath]
   );
   return rows[0].id;
 }
@@ -258,7 +261,7 @@ async function markDelivered(tailoredId, jobId, atsData) {
 
 async function getJobByJobId(jobId, userId = 'me') {
   const { rows } = await pool.query(
-    `SELECT j.*, t.file_path, t.created_at AS resume_created_at
+    `SELECT j.*, t.file_path, t.cover_letter_file_path, t.created_at AS resume_created_at
      FROM jobs j
      LEFT JOIN tailored_resume t ON t.job_id = j.job_id AND t.user_id = j.user_id AND t.delivered = true
      WHERE j.job_id = $1 AND j.user_id = $2

@@ -609,7 +609,7 @@ app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, 
     const { jobId } = req.params;
     const format = (req.query.format || 'docx').toLowerCase();
     const { rows } = await pool.query(
-      `SELECT t.resume_json, t.file_path, j.title, j.company
+      `SELECT t.resume_json, t.file_path, t.cover_letter_text, j.title, j.company
        FROM tailored_resume t
        JOIN jobs j ON j.job_id = t.job_id
        WHERE t.job_id = $1 AND t.user_id = $2
@@ -619,10 +619,20 @@ app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, 
 
     if (!rows.length) return res.status(404).json({ error: 'Resume not found' });
 
-    const { resume_json, title, company } = rows[0];
+    const { resume_json, cover_letter_text, title, company } = rows[0];
     const safe = s => String(s || 'resume').replace(/[^a-z0-9]+/gi, '_');
 
-    if (format === 'pdf') {
+    if (format === 'cover_letter') {
+      if (!cover_letter_text) return res.status(404).json({ error: 'No cover letter for this job' });
+      const { renderCoverLetterDocx } = require('./renderCoverLetter');
+      const fileName = `arjun_cover_letter_${safe(company)}_${safe(title)}.docx`;
+      const filePath = require('path').join(require('os').tmpdir(), fileName);
+      const paragraphs = cover_letter_text.split('\n\n');
+      await renderCoverLetterDocx(resume_json, { title, company }, paragraphs, filePath);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.sendFile(filePath);
+    } else if (format === 'pdf') {
       const { renderResumePdf } = require('./renderPdf');
       const fileName = `arjun_${safe(company)}_${safe(title)}.pdf`;
       const filePath = require('path').join(require('os').tmpdir(), fileName);

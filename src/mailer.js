@@ -17,10 +17,12 @@ oauth2Client.setCredentials({
 
 const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
+const DEFAULT_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
 /**
- * Build a raw RFC 2822 email message with optional attachment.
+ * Build a raw RFC 2822 email message with zero or more attachments.
  */
-function buildRawEmail({ from, to, subject, text, attachmentPath, attachmentName }) {
+function buildRawEmail({ from, to, subject, text, attachments = [] }) {
   const boundary = `boundary_${Date.now()}`;
   const nl = '\r\n';
 
@@ -37,12 +39,13 @@ function buildRawEmail({ from, to, subject, text, attachmentPath, attachmentName
     `Content-Type: text/plain; charset="UTF-8"${nl}${nl}` +
     `${text}${nl}${nl}`;
 
-  // Attachment part
-  if (attachmentPath && fs.existsSync(attachmentPath)) {
+  // Attachment parts
+  for (const { path: attachmentPath, name: attachmentName, mimeType } of attachments) {
+    if (!attachmentPath || !fs.existsSync(attachmentPath)) continue;
     const fileData = fs.readFileSync(attachmentPath).toString('base64');
     raw +=
       `--${boundary}${nl}` +
-      `Content-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document${nl}` +
+      `Content-Type: ${mimeType || DEFAULT_MIME_TYPE}${nl}` +
       `Content-Transfer-Encoding: base64${nl}` +
       `Content-Disposition: attachment; filename="${attachmentName}"${nl}${nl}` +
       `${fileData}${nl}${nl}`;
@@ -54,11 +57,11 @@ function buildRawEmail({ from, to, subject, text, attachmentPath, attachmentName
   return Buffer.from(raw).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-async function sendResumeEmail({ to, subject, text, attachmentPath, attachmentName }) {
+async function sendResumeEmail({ to, subject, text, attachments = [] }) {
   const from = `"${process.env.FROM_NAME || 'Resume Assistant'}" <${process.env.FROM_EMAIL}>`;
   if (!to) to = process.env.TO_EMAIL;
 
-  const raw = buildRawEmail({ from, to, subject, text, attachmentPath, attachmentName });
+  const raw = buildRawEmail({ from, to, subject, text, attachments });
 
   const res = await gmail.users.messages.send({
     userId: 'me',

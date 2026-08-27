@@ -188,6 +188,13 @@ const DownloadButtons = ({ jobId, downloading, onDownload }) => (
     >
       {downloading === `${jobId}_pdf` ? 'Downloading...' : '↓ Download .pdf'}
     </button>
+    <button
+      onClick={(e) => onDownload(e, jobId, 'cover_letter')}
+      disabled={downloading === `${jobId}_cover_letter`}
+      style={{ flex: 1, background: '#ffffff', color: '#1c1917', border: '1px solid #d6d3d1', padding: '10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === `${jobId}_cover_letter` ? 0.7 : 1 }}
+    >
+      {downloading === `${jobId}_cover_letter` ? 'Downloading...' : '↓ Cover Letter'}
+    </button>
   </div>
 );
 
@@ -879,7 +886,7 @@ export default function Dashboard() {
           setTailorMessages(prev => prev.map(m => {
             if (m.id !== progressId) return m;
             const elapsed = Math.floor((now - m.startTime) / 1000);
-            const newStage = elapsed < 8 ? 0 : elapsed < 16 ? 1 : elapsed < 28 ? 2 : elapsed < 38 ? 3 : 4;
+            const newStage = elapsed < 8 ? 0 : elapsed < 16 ? 1 : elapsed < 28 ? 2 : elapsed < 38 ? 3 : elapsed < 46 ? 4 : 5;
             return { ...m, elapsed, stage: newStage };
           }));
         }, 1000);
@@ -1683,6 +1690,7 @@ export default function Dashboard() {
                       'Tailoring resume with AI...',
                       'Calculating ATS match score...',
                       'Improving resume if needed...',
+                      'Writing cover letter...',
                     ];
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
@@ -2300,6 +2308,7 @@ export default function Dashboard() {
                       'Tailoring resume with AI...',
                       'Calculating ATS match score...',
                       'Improving resume if needed...',
+                      'Writing cover letter...',
                     ];
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>

@@ -666,6 +666,31 @@ Return ONLY JSON:
     config: { model: MODEL, temperature: 0.1 },
   },
 
+  cover_letter: {
+    prompt: `Write a cover letter for this candidate, for this specific job. Use the TAILORED RESUME below as your source of truth for what to emphasize — it already represents the best read of which of the candidate's experiences matter most for this job, so stay consistent with it rather than re-deriving your own angle.
+
+STRICT RULES:
+- Only reference experience, skills, and achievements that appear in the tailored resume. Never invent accomplishments, numbers, or experience.
+- 3-4 short paragraphs: opening (role + why this company specifically, using real detail from the job description — not generic flattery), 1-2 body paragraphs connecting specific resume achievements to what the job asks for, closing (enthusiasm + call to action).
+- Concrete over generic. Reference actual company/role details from the JD, actual metrics/achievements from the resume. Avoid empty phrases like "I am a hard worker" or "I am passionate about this opportunity."
+- No greeting/sign-off boilerplate beyond a simple "Dear Hiring Manager," open and "Sincerely, {{candidate_name}}" close — the greeting and sign-off are handled separately by the renderer, just write the body paragraphs.
+
+JOB:
+Title: {{job_title}}
+Company: {{job_company}}
+Description:
+{{job_description}}
+
+TAILORED RESUME:
+{{tailored_resume_json}}
+
+Return ONLY JSON:
+{
+  "paragraphs": ["opening paragraph text", "body paragraph text", "closing paragraph text"]
+}`,
+    config: { model: WRITING_MODEL, temperature: 0.4 },
+  },
+
 };
 
 // ── SYNC PROMPTS TO LANGFUSE ────────────────────────────────────────────
@@ -939,6 +964,21 @@ async function improveResume(resume, job, ats, trace, tailoringNotes = [], jdReq
   return result;
 }
 
+async function coverLetter(resume, job, trace) {
+  const { text: system, langfusePrompt } = await getPrompt('cover_letter', {
+    job_title: job.title || '',
+    job_company: job.company || '',
+    job_description: job.jd_text || '',
+    tailored_resume_json: JSON.stringify(resume),
+    candidate_name: resume.contact?.name || '',
+  });
+
+  const result = await askJson(system, 'Write the cover letter.', 'cover_letter', trace, langfusePrompt, [], WRITING_MODEL);
+  const paragraphs = (result.paragraphs || []).filter(p => typeof p === 'string' && p.trim().length);
+  langfuse.score({ traceId: trace.id, name: 'cover-letter-paragraphs', value: paragraphs.length });
+  return paragraphs;
+}
+
 async function calculateAtsScore(resume, job, trace) {
   const { text: system, langfusePrompt } = await getPrompt('ats_score');
 
@@ -1088,4 +1128,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };

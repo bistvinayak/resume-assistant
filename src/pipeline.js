@@ -3,8 +3,9 @@
 const path = require('path');
 const os = require('os');
 const { getProfile, getResumeFormat, seenJobBefore, saveTailored, markDelivered, markJobFailed } = require('./db');
-const { tailorResume, calculateAtsScore, improveResume, createJobTrace } = require('./llm');
+const { tailorResume, calculateAtsScore, improveResume, coverLetter, createJobTrace } = require('./llm');
 const { renderResumeDocx } = require('./renderDocx');
+const { renderCoverLetterDocx } = require('./renderCoverLetter');
 const { measureResumePdf } = require('./renderPdf');
 const { sendResumeEmail } = require('./mailer');
 
@@ -477,20 +478,44 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     throw e;
   }
 
+  // Step 4.5: Cover letter — generated every time, alongside the resume
+  let coverLetterText = null;
+  let coverLetterFilePath = null;
+  try {
+    console.log(`⏱ [${elapsed()}] Writing cover letter...`);
+    const paragraphs = await withRetry(
+      () => coverLetter(resume, job, trace),
+      `cover-letter:${job.company}`,
+      1
+    );
+    if (paragraphs.length) {
+      coverLetterText = paragraphs.join('\n\n');
+      const coverLetterFileName = `cover_letter_${safe(job.company)}_${safe(job.title)}.docx`;
+      coverLetterFilePath = path.join(os.tmpdir(), coverLetterFileName);
+      await renderCoverLetterDocx(resume, job, paragraphs, coverLetterFilePath);
+    }
+    console.log(`⏱ [${elapsed()}] Cover letter done`);
+  } catch (e) {
+    console.error(`⚠ Cover letter failed (resume still proceeds): ${e.message}`);
+  }
+
   // Step 5: Save & deliver
   const metadata = { ...ats, improved, substitutions, tailoring_notes: tailoringNotes, jd_requirements: jdRequirements, layoutOpts };
-  const tailoredId = await saveTailored(job.job_id, resume, filePath, userId);
+  const tailoredId = await saveTailored(job.job_id, resume, filePath, userId, coverLetterText, coverLetterFilePath);
   await markDelivered(tailoredId, job.job_id, metadata);
 
   if (source === 'cron') {
     const userEmail = profile.contact?.email || null;
+    const attachments = [{ path: filePath, name: fileName, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }];
+    if (coverLetterFilePath) {
+      attachments.push({ path: coverLetterFilePath, name: path.basename(coverLetterFilePath), mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+    }
     try {
       await sendResumeEmail({
         to: userEmail,
         subject: `[ATS ${ats.score}/100] ${job.title} @ ${job.company}`,
         text: buildEmailBody({ job, ats, improved, substitutions }),
-        attachmentPath: filePath,
-        attachmentName: fileName,
+        attachments,
       });
       console.log(`✓ Resume emailed to ${userEmail || 'default TO_EMAIL'}`);
     } catch (e) {
@@ -503,7 +528,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   console.log(`⏱ [${elapsed()}] Pipeline complete for ${job.company}`);
   trace.update({ output: { ats_score: ats.score, improved, substitutions_count: substitutions.length, resume_file: fileName, layoutOpts, jd_requirements_count: jdRequirements.length } });
 
-  return { skipped: false, filePath, tailoredId, atsScore: ats.score, improved, substitutions, tailoringNotes, jdRequirements, layoutOpts };
+  return { skipped: false, filePath, coverLetterFilePath, tailoredId, atsScore: ats.score, improved, substitutions, tailoringNotes, jdRequirements, layoutOpts };
 }
 
 function buildEmailBody({ job, ats, improved, substitutions }) {

@@ -233,7 +233,7 @@ export const api = {
     });
     if (!res.ok) throw new Error('Download failed');
     const blob = await res.blob();
-    const fallback = format === 'pdf' ? 'resume.pdf' : 'resume.docx';
+    const fallback = format === 'pdf' ? 'resume.pdf' : format === 'cover_letter' ? 'cover_letter.docx' : 'resume.docx';
     const filename = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || fallback;
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
