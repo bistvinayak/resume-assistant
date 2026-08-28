@@ -349,8 +349,11 @@ export default function Admin() {
                 {jobs.map(job => (
                   <div key={job.job_id} style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto', alignItems: 'center', gap: '16px' }}>
                     <div>
-                      <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>{job.title} · {job.company}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>{job.title || job.job_id} · {job.company || '—'}</div>
                       <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{job.user_email}</div>
+                      {job.error_reason && (
+                        <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '4px' }}>⚠ {job.error_reason}</div>
+                      )}
                     </div>
                     <span style={{ fontSize: '12px', fontFamily: "'DM Mono', monospace", color: job.ats_score == null ? '#a8a29e' : job.ats_score >= 90 ? '#22c55e' : job.ats_score >= 75 ? '#f59e0b' : '#ef4444' }}>
                       {job.ats_score != null ? `${job.ats_score}/100` : '—'}

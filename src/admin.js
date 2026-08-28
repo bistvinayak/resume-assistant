@@ -3,6 +3,7 @@
 const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob } = require('./db');
 const { runBatch } = require('./cron');
 const { queueJob } = require('./pipeline');
+const { scrapeLinkedInJob } = require('./scraper');
 const { backfillApprovedCategory } = require('./profile');
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'arjun.resumeai@gmail.com';
@@ -158,9 +159,19 @@ async function retryJob(req, res) {
   try {
     const job = await forceRequeueJob(jobId);
     if (!job) return res.status(404).json({ error: 'job not found' });
-    if (!job.jd_text || job.jd_text.length < 50) {
-      return res.status(400).json({ error: 'job has no job description text to retry with' });
+
+    if ((!job.jd_text || job.jd_text.length < 50) && job.url) {
+      const scraped = await scrapeLinkedInJob(job.url).catch(() => null);
+      if (scraped?.jd_text) {
+        job.jd_text = scraped.jd_text;
+        job.title = scraped.title || job.title;
+        job.company = scraped.company || job.company;
+      }
     }
+    if (!job.jd_text || job.jd_text.length < 50) {
+      return res.status(400).json({ error: 'No job description text available and re-scraping the URL failed — nothing to retry with.' });
+    }
+
     res.json({ ok: true, message: 'retry queued' });
     queueJob(job, job.user_id, { source: 'admin_retry' }).catch(e =>
       console.error(`✗ admin retry failed for ${jobId}:`, e.message)

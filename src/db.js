@@ -66,6 +66,7 @@ async function initSchema() {
       ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS user_id TEXT NOT NULL DEFAULT 'me';
       ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS cover_letter_text TEXT;
       ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS cover_letter_file_path TEXT;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_reason TEXT;
     EXCEPTION WHEN others THEN NULL; END $$;
 
     CREATE INDEX IF NOT EXISTS idx_master_profile_user ON master_profile(user_id);
@@ -298,7 +299,7 @@ async function insertJobProcessing(job, userId = 'me') {
 
 async function markJobFailed(jobId, reason) {
   await pool.query(
-    `UPDATE jobs SET status = 'failed', jd_text = COALESCE(jd_text, $2) WHERE job_id = $1`,
+    `UPDATE jobs SET status = 'failed', error_reason = $2 WHERE job_id = $1`,
     [jobId, reason || 'Scraping failed']
   );
 }
@@ -309,7 +310,7 @@ async function markJobFailed(jobId, reason) {
 // explicit human action and skips that guard.
 async function forceRequeueJob(jobId) {
   const { rows } = await pool.query(
-    `UPDATE jobs SET status = 'processing', seen_at = now() WHERE job_id = $1 RETURNING *`,
+    `UPDATE jobs SET status = 'processing', seen_at = now(), error_reason = NULL WHERE job_id = $1 RETURNING *`,
     [jobId]
   );
   return rows[0] || null;
@@ -317,7 +318,7 @@ async function forceRequeueJob(jobId) {
 
 async function recoverStaleJobs(minutes = 10) {
   const { rows } = await pool.query(
-    `UPDATE jobs SET status = 'failed', jd_text = COALESCE(jd_text, 'Timed out — processing took too long or server restarted')
+    `UPDATE jobs SET status = 'failed', error_reason = 'Timed out — processing took too long or server restarted'
      WHERE status = 'processing' AND seen_at < now() - interval '1 minute' * $1
      RETURNING job_id, user_id, title, company, jd_text, url`,
     [minutes]

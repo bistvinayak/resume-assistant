@@ -86,10 +86,19 @@ function startCron() {
   cron.schedule('*/5 * * * *', async () => {
     const recovered = await recoverStaleJobs(10).catch(() => []);
     if (!recovered.length) return;
-    console.log(`⚠ recovered ${recovered.length} stale job(s) — retrying those with JD text`);
+    console.log(`⚠ recovered ${recovered.length} stale job(s) — retrying`);
     for (const job of recovered) {
+      if ((!job.jd_text || job.jd_text.length < 50) && job.url) {
+        console.log(`  ↻ ${job.company} — no usable JD text, re-scraping ${job.url}`);
+        const scraped = await scrapeLinkedInJob(job.url).catch(() => null);
+        if (scraped?.jd_text) {
+          job.jd_text = scraped.jd_text;
+          job.title = scraped.title || job.title;
+          job.company = scraped.company || job.company;
+        }
+      }
       if (!job.jd_text || job.jd_text.length < 50) {
-        console.log(`  · ${job.company} — no JD text, staying failed`);
+        console.log(`  · ${job.company} — still no JD text, staying failed`);
         continue;
       }
       try {
