@@ -268,6 +268,10 @@ export const api = {
     const res = await checkedFetch(`${BASE}/admin/jobs`, { headers: await getHeaders() });
     return res.json();
   },
+  async adminRetryJob(jobId) {
+    const res = await checkedFetch(`${BASE}/admin/jobs/${jobId}/retry`, { method: 'POST', headers: await getHeaders() });
+    return res.json();
+  },
   async adminTriggerCron() {
     const res = await checkedFetch(`${BASE}/admin/cron/run`, { method: 'POST', headers: await getHeaders() });
     return res.json();

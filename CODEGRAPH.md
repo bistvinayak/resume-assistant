@@ -39,20 +39,21 @@ Quick-lookup graph of the codebase. Check here FIRST before reading files — go
 | PATCH | /admin/users/:userId | server.js:592 | adminOnly, updateUser, authMiddleware |
 | DELETE | /admin/users/:userId | server.js:593 | adminOnly, deleteUser, authMiddleware |
 | GET | /admin/jobs | server.js:594 | adminOnly, authMiddleware |
-| POST | /admin/cron/run | server.js:595 | adminOnly, triggerCron, authMiddleware |
-| GET | /admin/settings | server.js:596 | adminOnly, getSettings, authMiddleware |
-| PATCH | /admin/settings | server.js:597 | adminOnly, updateSettings, authMiddleware |
-| GET | /admin/schema-proposals | server.js:598 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
-| POST | /admin/schema-proposals/:id/approve | server.js:599 | adminOnly, approveSchemaProposal, authMiddleware |
-| POST | /admin/schema-proposals/:id/reject | server.js:600 | adminOnly, rejectSchemaProposal, authMiddleware |
-| GET | /admin/feedback | server.js:601 | adminOnly, getFeedbackHandler, authMiddleware |
-| PATCH | /admin/feedback/:id | server.js:602 | adminOnly, reviewFeedback, authMiddleware |
-| GET | /admin/gmail-forwarding | server.js:603 | adminOnly, getGmailForwardingHandler, authMiddleware |
-| POST | /admin/gmail-forwarding/:userId/approve | server.js:604 | adminOnly, approveGmailForwarding, authMiddleware |
-| POST | /admin/gmail-forwarding/:userId/reject | server.js:605 | adminOnly, rejectGmailForwarding, authMiddleware |
-| GET | /jobs/:jobId/download | server.js:611 | renderCoverLetterDocx, renderResumePdf, renderResumeDocx |
-| POST | /gmail/request-forwarding | server.js:665 | requestGmailForwarding |
-| GET | /gmail/forwarding-status | server.js:672 | getGmailForwardingStatus |
+| POST | /admin/jobs/:jobId/retry | server.js:595 | adminOnly, retryJob, authMiddleware |
+| POST | /admin/cron/run | server.js:596 | adminOnly, triggerCron, authMiddleware |
+| GET | /admin/settings | server.js:597 | adminOnly, getSettings, authMiddleware |
+| PATCH | /admin/settings | server.js:598 | adminOnly, updateSettings, authMiddleware |
+| GET | /admin/schema-proposals | server.js:599 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
+| POST | /admin/schema-proposals/:id/approve | server.js:600 | adminOnly, approveSchemaProposal, authMiddleware |
+| POST | /admin/schema-proposals/:id/reject | server.js:601 | adminOnly, rejectSchemaProposal, authMiddleware |
+| GET | /admin/feedback | server.js:602 | adminOnly, getFeedbackHandler, authMiddleware |
+| PATCH | /admin/feedback/:id | server.js:603 | adminOnly, reviewFeedback, authMiddleware |
+| GET | /admin/gmail-forwarding | server.js:604 | adminOnly, getGmailForwardingHandler, authMiddleware |
+| POST | /admin/gmail-forwarding/:userId/approve | server.js:605 | adminOnly, approveGmailForwarding, authMiddleware |
+| POST | /admin/gmail-forwarding/:userId/reject | server.js:606 | adminOnly, rejectGmailForwarding, authMiddleware |
+| GET | /jobs/:jobId/download | server.js:612 | renderCoverLetterDocx, renderResumePdf, renderResumeDocx |
+| POST | /gmail/request-forwarding | server.js:666 | requestGmailForwarding |
+| GET | /gmail/forwarding-status | server.js:673 | getGmailForwardingStatus |
 
 ## Chat Flow (server.js:295)
 
@@ -124,7 +125,7 @@ processJob(job, userId) [pipeline.js:251]
 
 ```
 startCron() [cron.js:84]  — runs every 2 hours
-  → recoverStaleJobs(10) [db.js:306]
+  → recoverStaleJobs(10) [db.js:318]
   → runBatch(userId) [cron.js:10]
        → fetchLinkedInJobs() [gmail.js:33]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
@@ -191,33 +192,34 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:824] — O
 | getJobByJobId | 275 | Get single job |
 | insertJobProcessing | 287 | Insert job with status=processing |
 | markJobFailed | 299 | Mark job as failed with reason |
-| recoverStaleJobs | 306 | Find jobs stuck in processing > N minutes |
-| getJobsForUser | 316 | List jobs for user |
-| upsertSchemaProposal | 335 |  |
-| getSchemaProposals | 368 |  |
-| getApprovedCategories | 375 |  |
-| updateSchemaProposalStatus | 382 |  |
-| setBackfillStatus | 431 |  |
-| recordUncategorizedFacts | 437 |  |
-| getUnmatchedFactsByUser | 455 |  |
-| saveChatFeedback | 463 |  |
-| getChatFeedback | 471 |  |
-| updateChatFeedbackStatus | 478 |  |
-| markFactsMatched | 485 |  |
-| requestGmailForwarding | 493 |  |
-| getGmailForwardingStatus | 504 |  |
-| getGmailForwardingRequests | 509 |  |
-| reviewGmailForwarding | 516 |  |
-| getApprovedForwardingMap | 524 |  |
-| getResumeFormat | 531 |  |
-| saveResumeFormat | 539 |  |
-| deleteResumeFormat | 550 |  |
+| forceRequeueJob | 310 |  |
+| recoverStaleJobs | 318 | Find jobs stuck in processing > N minutes |
+| getJobsForUser | 328 | List jobs for user |
+| upsertSchemaProposal | 347 |  |
+| getSchemaProposals | 380 |  |
+| getApprovedCategories | 387 |  |
+| updateSchemaProposalStatus | 394 |  |
+| setBackfillStatus | 443 |  |
+| recordUncategorizedFacts | 449 |  |
+| getUnmatchedFactsByUser | 467 |  |
+| saveChatFeedback | 475 |  |
+| getChatFeedback | 483 |  |
+| updateChatFeedbackStatus | 490 |  |
+| markFactsMatched | 497 |  |
+| requestGmailForwarding | 505 |  |
+| getGmailForwardingStatus | 516 |  |
+| getGmailForwardingRequests | 521 |  |
+| reviewGmailForwarding | 528 |  |
+| getApprovedForwardingMap | 536 |  |
+| getResumeFormat | 543 |  |
+| saveResumeFormat | 551 |  |
+| deleteResumeFormat | 562 |  |
 
 ## Frontend Pages
 
 | Page | File | API Calls |
 |------|------|-----------|
-| Admin | pages/Admin.jsx | api.adminGetStats, api.adminGetUsers, api.adminGetJobs, api.adminGetSettings, api.adminGetSchemaProposals, api.adminGetFeedback, api.adminGetGmailForwarding, api.adminApproveSchemaProposal, api.adminRejectSchemaProposal, api.adminApproveGmailForwarding, api.adminRejectGmailForwarding, api.adminReviewFeedback, api.adminUpdateUser, api.adminDeleteUser, api.adminTriggerCron, api.adminUpdateSettings |
+| Admin | pages/Admin.jsx | api.adminGetStats, api.adminGetUsers, api.adminGetJobs, api.adminGetSettings, api.adminGetSchemaProposals, api.adminGetFeedback, api.adminGetGmailForwarding, api.adminApproveSchemaProposal, api.adminRejectSchemaProposal, api.adminApproveGmailForwarding, api.adminRejectGmailForwarding, api.adminRetryJob, api.adminReviewFeedback, api.adminUpdateUser, api.adminDeleteUser, api.adminTriggerCron, api.adminUpdateSettings |
 | Dashboard | pages/Dashboard.jsx | api.sendFeedback, api.downloadResume, api.getProfile, api.getGmailForwardingStatus, api.updateProfile, api.getProfileVersions, api.restoreProfileVersion, api.addKeywordToProfile, api.submitJobUrl, api.confirmChanges, api.chat, api.getJobs, api.ingestFiles, api.getIngestionStatus, api.resolveConflicts, api.resolveAmbiguities, api.getResumeFormat, api.uploadResumeFormat, api.requestGmailForwarding, api.deleteResumeFormat |
 | GmailOAuthCallback | pages/GmailOAuthCallback.jsx | api.connectGmail, api.verifyGmailFilter |
 | Landing | pages/Landing.jsx | api.getProfile |
@@ -251,6 +253,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:824] — O
 | api.adminUpdateUser() | /api/admin/users/:id | — |
 | api.adminDeleteUser() | /api/admin/users/:id | — |
 | api.adminGetJobs() | /api/admin/jobs | — |
+| api.adminRetryJob() | /api/admin/jobs/:id/retry | — |
 | api.adminTriggerCron() | /api/admin/cron/run | — |
 | api.adminGetSettings() | /api/admin/settings | — |
 | api.adminUpdateSettings() | /api/admin/settings | — |
@@ -270,23 +273,24 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:824] — O
 
 | Function | Line | Exported |
 |----------|------|----------|
-| adminOnly | 10 | yes |
-| getStats | 18 | yes |
-| getUsers | 51 | yes |
-| updateUser | 94 | yes |
-| deleteUser | 117 | yes |
-| getJobs | 130 | yes |
-| triggerCron | 154 | yes |
-| getSettings | 164 | yes |
-| updateSettings | 181 | yes |
-| getSchemaProposalsHandler | 195 | yes |
-| approveSchemaProposal | 205 | yes |
-| rejectSchemaProposal | 232 | yes |
-| getFeedbackHandler | 243 | yes |
-| reviewFeedback | 252 | yes |
-| getGmailForwardingHandler | 265 | yes |
-| approveGmailForwarding | 275 | yes |
-| rejectGmailForwarding | 287 | yes |
+| adminOnly | 11 | yes |
+| getStats | 19 | yes |
+| getUsers | 52 | yes |
+| updateUser | 95 | yes |
+| deleteUser | 118 | yes |
+| getJobs | 131 | yes |
+| retryJob | 156 | yes |
+| triggerCron | 174 | yes |
+| getSettings | 184 | yes |
+| updateSettings | 201 | yes |
+| getSchemaProposalsHandler | 215 | yes |
+| approveSchemaProposal | 225 | yes |
+| rejectSchemaProposal | 252 | yes |
+| getFeedbackHandler | 263 | yes |
+| reviewFeedback | 272 | yes |
+| getGmailForwardingHandler | 285 | yes |
+| approveGmailForwarding | 295 | yes |
+| rejectGmailForwarding | 307 | yes |
 
 ### auth.js
 
@@ -316,29 +320,30 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:824] — O
 | getJobByJobId | 275 | yes |
 | insertJobProcessing | 287 | yes |
 | markJobFailed | 299 | yes |
-| recoverStaleJobs | 306 | yes |
-| getJobsForUser | 316 | yes |
-| normalizeCategory | 331 | no |
-| upsertSchemaProposal | 335 | yes |
-| getSchemaProposals | 368 | yes |
-| getApprovedCategories | 375 | yes |
-| updateSchemaProposalStatus | 382 | yes |
-| enforceApprovedCustomSections | 395 | no |
-| setBackfillStatus | 431 | yes |
-| recordUncategorizedFacts | 437 | yes |
-| getUnmatchedFactsByUser | 455 | yes |
-| saveChatFeedback | 463 | yes |
-| getChatFeedback | 471 | yes |
-| updateChatFeedbackStatus | 478 | yes |
-| markFactsMatched | 485 | yes |
-| requestGmailForwarding | 493 | yes |
-| getGmailForwardingStatus | 504 | yes |
-| getGmailForwardingRequests | 509 | yes |
-| reviewGmailForwarding | 516 | yes |
-| getApprovedForwardingMap | 524 | yes |
-| getResumeFormat | 531 | yes |
-| saveResumeFormat | 539 | yes |
-| deleteResumeFormat | 550 | yes |
+| forceRequeueJob | 310 | yes |
+| recoverStaleJobs | 318 | yes |
+| getJobsForUser | 328 | yes |
+| normalizeCategory | 343 | no |
+| upsertSchemaProposal | 347 | yes |
+| getSchemaProposals | 380 | yes |
+| getApprovedCategories | 387 | yes |
+| updateSchemaProposalStatus | 394 | yes |
+| enforceApprovedCustomSections | 407 | no |
+| setBackfillStatus | 443 | yes |
+| recordUncategorizedFacts | 449 | yes |
+| getUnmatchedFactsByUser | 467 | yes |
+| saveChatFeedback | 475 | yes |
+| getChatFeedback | 483 | yes |
+| updateChatFeedbackStatus | 490 | yes |
+| markFactsMatched | 497 | yes |
+| requestGmailForwarding | 505 | yes |
+| getGmailForwardingStatus | 516 | yes |
+| getGmailForwardingRequests | 521 | yes |
+| reviewGmailForwarding | 528 | yes |
+| getApprovedForwardingMap | 536 | yes |
+| getResumeFormat | 543 | yes |
+| saveResumeFormat | 551 | yes |
+| deleteResumeFormat | 562 | yes |
 
 ### gmail-connect.js
 
@@ -488,11 +493,13 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:824] — O
 
 ```
 admin.js
-  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding)
+  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob)
   ├── cron.js (runBatch)
+  ├── pipeline.js (queueJob)
   ├── profile.js (backfillApprovedCategory)
-  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding)
+  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob)
   ├── cron.js (runBatch)
+  ├── pipeline.js (queueJob)
   └── profile.js (backfillApprovedCategory)
 
 auth.js
@@ -578,5 +585,5 @@ Firebase Auth (Google OAuth) → JWT token
   → Every API request: Authorization: Bearer <token>
   → authMiddleware [auth.js:24] verifies via firebase-admin
   → Sets req.userId, req.userEmail, req.userName
-  → Admin routes: additional adminOnly check [admin.js:10]
+  → Admin routes: additional adminOnly check [admin.js:11]
 ```

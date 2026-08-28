@@ -581,7 +581,7 @@ module.exports = app;
 // ADD THESE ROUTES TO server.js after the existing routes
 // ── ADMIN ROUTES ──────────────────────────────────────────────────────────
 const {
-  adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs: adminGetJobs, triggerCron, getSettings, updateSettings,
+  adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs: adminGetJobs, retryJob, triggerCron, getSettings, updateSettings,
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
   getFeedbackHandler, reviewFeedback,
   getGmailForwardingHandler, approveGmailForwarding, rejectGmailForwarding,
@@ -592,6 +592,7 @@ app.get(['/admin/users', '/api/admin/users'], authMiddleware, adminOnly, getUser
 app.patch(['/admin/users/:userId', '/api/admin/users/:userId'], authMiddleware, adminOnly, updateUser);
 app.delete(['/admin/users/:userId', '/api/admin/users/:userId'], authMiddleware, adminOnly, deleteUser);
 app.get(['/admin/jobs', '/api/admin/jobs'], authMiddleware, adminOnly, adminGetJobs);
+app.post(['/admin/jobs/:jobId/retry', '/api/admin/jobs/:jobId/retry'], authMiddleware, adminOnly, retryJob);
 app.post(['/admin/cron/run', '/api/admin/cron/run'], authMiddleware, adminOnly, triggerCron);
 app.get(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, getSettings);
 app.patch(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, updateSettings);

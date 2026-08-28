@@ -1,7 +1,8 @@
 'use strict';
 
-const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding } = require('./db');
+const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob } = require('./db');
 const { runBatch } = require('./cron');
+const { queueJob } = require('./pipeline');
 const { backfillApprovedCategory } = require('./profile');
 
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'arjun.resumeai@gmail.com';
@@ -133,7 +134,6 @@ async function getJobs(req, res) {
       SELECT j.*, mp.profile->>'contact' as contact_raw
       FROM jobs j
       LEFT JOIN master_profile mp ON mp.user_id = j.user_id
-      WHERE j.status = 'delivered'
       ORDER BY j.seen_at DESC
       LIMIT 100
     `);
@@ -145,6 +145,26 @@ async function getJobs(req, res) {
     });
 
     res.json({ jobs });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// POST /api/admin/jobs/:jobId/retry — force a stuck/failed job back through the
+// pipeline right now, regardless of its current status. Admin override, not
+// gated by the same staleness checks the automatic recovery cron uses.
+async function retryJob(req, res) {
+  const { jobId } = req.params;
+  try {
+    const job = await forceRequeueJob(jobId);
+    if (!job) return res.status(404).json({ error: 'job not found' });
+    if (!job.jd_text || job.jd_text.length < 50) {
+      return res.status(400).json({ error: 'job has no job description text to retry with' });
+    }
+    res.json({ ok: true, message: 'retry queued' });
+    queueJob(job, job.user_id, { source: 'admin_retry' }).catch(e =>
+      console.error(`✗ admin retry failed for ${jobId}:`, e.message)
+    );
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -296,7 +316,7 @@ async function rejectGmailForwarding(req, res) {
 }
 
 module.exports = {
-  adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs, triggerCron, getSettings, updateSettings,
+  adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs, retryJob, triggerCron, getSettings, updateSettings,
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
   getFeedbackHandler, reviewFeedback,
   getGmailForwardingHandler, approveGmailForwarding, rejectGmailForwarding,

@@ -303,6 +303,18 @@ async function markJobFailed(jobId, reason) {
   );
 }
 
+// Admin override — force a job (regardless of current status) back into
+// 'processing' so it can be re-queued through the pipeline. Unlike
+// recoverStaleJobs (which only touches genuinely-stale jobs), this is an
+// explicit human action and skips that guard.
+async function forceRequeueJob(jobId) {
+  const { rows } = await pool.query(
+    `UPDATE jobs SET status = 'processing', seen_at = now() WHERE job_id = $1 RETURNING *`,
+    [jobId]
+  );
+  return rows[0] || null;
+}
+
 async function recoverStaleJobs(minutes = 10) {
   const { rows } = await pool.query(
     `UPDATE jobs SET status = 'failed', jd_text = COALESCE(jd_text, 'Timed out — processing took too long or server restarted')
@@ -555,7 +567,7 @@ module.exports = {
   pool, initSchema, getProfile, saveProfile,
   getProfileVersions, restoreProfileVersion,
   seenJobBefore, saveTailored, markDelivered,
-  getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs,
+  getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, forceRequeueJob,
   upsertSchemaProposal, getSchemaProposals, getApprovedCategories, updateSchemaProposalStatus, setBackfillStatus,
   recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched,
   saveChatFeedback, getChatFeedback, updateChatFeedbackStatus,

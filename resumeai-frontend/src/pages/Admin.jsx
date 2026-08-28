@@ -124,6 +124,23 @@ export default function Admin() {
     }
   };
 
+  const [retryingId, setRetryingId] = useState(null);
+  const refreshJobs = async () => {
+    const j = await api.adminGetJobs();
+    setJobs(j.jobs || []);
+  };
+  const handleRetryJob = async (jobId) => {
+    setRetryingId(jobId);
+    try {
+      await api.adminRetryJob(jobId);
+      await refreshJobs();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRetryingId(null);
+    }
+  };
+
   const handleReviewFeedback = async (id, status) => {
     setReviewingId(id);
     try {
@@ -330,17 +347,32 @@ export default function Admin() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 {jobs.map(job => (
-                  <div key={job.job_id} style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr auto auto auto auto', alignItems: 'center', gap: '16px' }}>
+                  <div key={job.job_id} style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto', alignItems: 'center', gap: '16px' }}>
                     <div>
                       <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>{job.title} · {job.company}</div>
                       <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{job.user_email}</div>
                     </div>
-                    <span style={{ fontSize: '12px', fontFamily: "'DM Mono', monospace", color: job.ats_score >= 90 ? '#22c55e' : job.ats_score >= 75 ? '#f59e0b' : '#ef4444' }}>
-                      {job.ats_score}/100
+                    <span style={{ fontSize: '12px', fontFamily: "'DM Mono', monospace", color: job.ats_score == null ? '#a8a29e' : job.ats_score >= 90 ? '#22c55e' : job.ats_score >= 75 ? '#f59e0b' : '#ef4444' }}>
+                      {job.ats_score != null ? `${job.ats_score}/100` : '—'}
                     </span>
                     {job.improved && <span style={{ fontSize: '10px', color: '#f59e0b', background: '#f59e0b11', border: '1px solid #f59e0b33', borderRadius: '4px', padding: '2px 8px', fontFamily: "'DM Mono', monospace" }}>2nd run</span>}
                     <span style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{new Date(job.seen_at).toLocaleDateString()}</span>
-                    <span style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>{job.status}</span>
+                    <span style={{
+                      fontSize: '10px', fontFamily: "'DM Mono', monospace", borderRadius: '4px', padding: '2px 8px', textAlign: 'center',
+                      color: job.status === 'delivered' ? '#22c55e' : job.status === 'failed' ? '#ef4444' : '#f59e0b',
+                      background: job.status === 'delivered' ? '#ecfdf5' : job.status === 'failed' ? '#fef2f2' : '#fffbeb',
+                      border: `1px solid ${job.status === 'delivered' ? '#22c55e33' : job.status === 'failed' ? '#ef444422' : '#f59e0b33'}`,
+                    }}>{job.status}</span>
+                    {job.status !== 'delivered' && (
+                      <button
+                        onClick={() => handleRetryJob(job.job_id)}
+                        disabled={retryingId === job.job_id}
+                        title={!job.jd_text || job.jd_text.length < 50 ? 'No job description text saved — retry will fail' : 'Re-run this job through the pipeline'}
+                        style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#57534e', padding: '5px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer', opacity: retryingId === job.job_id ? 0.6 : 1 }}
+                      >
+                        {retryingId === job.job_id ? 'Retrying...' : 'Retry'}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
