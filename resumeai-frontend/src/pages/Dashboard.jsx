@@ -227,6 +227,8 @@ export default function Dashboard() {
   const [versions, setVersions] = useState([]);
   const [gmailForwardingStatus, setGmailForwardingStatus] = useState(null);
   const [requestingForwarding, setRequestingForwarding] = useState(false);
+  const [deliveryEmailDraft, setDeliveryEmailDraft] = useState('');
+  const [savingDeliveryEmail, setSavingDeliveryEmail] = useState(false);
   const [resumeFormat, setResumeFormat] = useState(null);
   const [formatFile, setFormatFile] = useState(null);
   const [formatTargetPages, setFormatTargetPages] = useState(1);
@@ -261,6 +263,7 @@ export default function Dashboard() {
         }
         setProfile(p);
         setJobs(j.jobs || []);
+        setDeliveryEmailDraft(p.delivery_email || '');
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -968,6 +971,18 @@ export default function Dashboard() {
     }
   };
 
+  const saveDeliveryEmail = async () => {
+    setSavingDeliveryEmail(true);
+    try {
+      const updated = await api.updateProfile({ ...profile, delivery_email: deliveryEmailDraft.trim() });
+      setProfile(updated);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSavingDeliveryEmail(false);
+    }
+  };
+
   const requestGmailForwarding = async () => {
     setRequestingForwarding(true);
     try {
@@ -1179,6 +1194,31 @@ export default function Dashboard() {
                 {requestingForwarding ? 'Requesting...' : 'Request approval →'}
               </button>
             )}
+
+            <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #f5f5f4' }}>
+              <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginBottom: '6px' }}>
+                SEND TAILORED RESUMES TO
+              </div>
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <input
+                  type="email"
+                  value={deliveryEmailDraft}
+                  onChange={e => setDeliveryEmailDraft(e.target.value)}
+                  placeholder={profile?.contact?.email || 'you@example.com'}
+                  style={{ flex: 1, minWidth: 0, background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '11px', padding: '7px 8px', fontFamily: "'DM Mono', monospace", outline: 'none' }}
+                />
+                <button
+                  onClick={saveDeliveryEmail}
+                  disabled={savingDeliveryEmail || deliveryEmailDraft.trim() === (profile?.delivery_email || '')}
+                  style={{ background: '#e7e5e4', border: '1px solid #d6d3d1', color: '#57534e', padding: '7px 10px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer', opacity: (savingDeliveryEmail || deliveryEmailDraft.trim() === (profile?.delivery_email || '')) ? 0.6 : 1 }}
+                >
+                  {savingDeliveryEmail ? '...' : 'Save'}
+                </button>
+              </div>
+              <div style={{ fontSize: '10px', color: '#a8a29e', marginTop: '5px' }}>
+                Can be different from the account you forward alerts from — e.g. a school email you actually apply with.
+              </div>
+            </div>
           </div>
         </aside>
 

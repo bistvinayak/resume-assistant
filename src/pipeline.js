@@ -505,7 +505,11 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   await markDelivered(tailoredId, job.job_id, metadata);
 
   if (source === 'cron') {
-    const userEmail = profile.contact?.email || null;
+    // Explicit delivery address wins — a user may forward job alerts from one
+    // account (e.g. personal Gmail) but want the tailored resume sent to another
+    // (e.g. a school email they actually apply from). Falls back to contact.email
+    // for anyone who hasn't set this.
+    const userEmail = profile.delivery_email || profile.contact?.email || null;
     const attachments = [{ path: filePath, name: fileName, mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }];
     if (coverLetterFilePath) {
       attachments.push({ path: coverLetterFilePath, name: path.basename(coverLetterFilePath), mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });

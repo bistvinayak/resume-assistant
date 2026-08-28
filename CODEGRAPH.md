@@ -413,7 +413,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:824] — O
 | pickLayoutOpts | 225 | no |
 | withRetry | 238 | no |
 | processJob | 251 | yes |
-| buildEmailBody | 534 | no |
+| buildEmailBody | 538 | no |
 
 ### profile.js
 
