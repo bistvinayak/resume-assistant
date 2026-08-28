@@ -1,6 +1,6 @@
 'use strict';
 
-const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus } = require('./db');
+const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding } = require('./db');
 const { runBatch } = require('./cron');
 const { backfillApprovedCategory } = require('./profile');
 
@@ -261,8 +261,43 @@ async function reviewFeedback(req, res) {
   }
 }
 
+// GET /api/admin/gmail-forwarding
+async function getGmailForwardingHandler(req, res) {
+  try {
+    const requests = await getGmailForwardingRequests();
+    res.json({ requests });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// POST /api/admin/gmail-forwarding/:userId/approve
+async function approveGmailForwarding(req, res) {
+  const { userId } = req.params;
+  try {
+    const request = await reviewGmailForwarding(userId, 'approved', req.userEmail);
+    if (!request) return res.status(404).json({ error: 'request not found' });
+    res.json({ ok: true, request });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
+// POST /api/admin/gmail-forwarding/:userId/reject
+async function rejectGmailForwarding(req, res) {
+  const { userId } = req.params;
+  try {
+    const request = await reviewGmailForwarding(userId, 'rejected', req.userEmail);
+    if (!request) return res.status(404).json({ error: 'request not found' });
+    res.json({ ok: true, request });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
 module.exports = {
   adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs, triggerCron, getSettings, updateSettings,
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
   getFeedbackHandler, reviewFeedback,
+  getGmailForwardingHandler, approveGmailForwarding, rejectGmailForwarding,
 };

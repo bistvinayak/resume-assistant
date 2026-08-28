@@ -127,6 +127,19 @@ async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_chat_feedback_status ON chat_feedback(status);
 
+    -- Per-user opt-in to have forwarded job-alert emails processed. Admin-gated —
+    -- matching is by the user's verified login email (Firebase already proves ownership),
+    -- so no separate email-confirmation flow is needed, just the approval step.
+    CREATE TABLE IF NOT EXISTS gmail_forwarding (
+      user_id      TEXT PRIMARY KEY,
+      email        TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      reviewed_at  TIMESTAMPTZ,
+      reviewed_by  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_gmail_forwarding_status ON gmail_forwarding(status);
+
     -- Per-user resume style reference: an uploaded template's inferred section order/
     -- heading style plus a target page count, applied when rendering future tailored resumes.
     CREATE TABLE IF NOT EXISTS resume_format (
@@ -477,6 +490,44 @@ async function markFactsMatched(ids, category) {
   );
 }
 
+async function requestGmailForwarding(userId, email) {
+  const { rows } = await pool.query(
+    `INSERT INTO gmail_forwarding (user_id, email, status, requested_at)
+     VALUES ($1, $2, 'pending', now())
+     ON CONFLICT (user_id) DO UPDATE SET email = $2, status = 'pending', requested_at = now(), reviewed_at = NULL, reviewed_by = NULL
+     RETURNING *`,
+    [userId, email]
+  );
+  return rows[0];
+}
+
+async function getGmailForwardingStatus(userId) {
+  const { rows } = await pool.query('SELECT * FROM gmail_forwarding WHERE user_id = $1', [userId]);
+  return rows[0] || null;
+}
+
+async function getGmailForwardingRequests(status = null) {
+  const { rows } = status
+    ? await pool.query('SELECT * FROM gmail_forwarding WHERE status = $1 ORDER BY requested_at DESC', [status])
+    : await pool.query('SELECT * FROM gmail_forwarding ORDER BY requested_at DESC');
+  return rows;
+}
+
+async function reviewGmailForwarding(userId, status, reviewedBy) {
+  const { rows } = await pool.query(
+    `UPDATE gmail_forwarding SET status = $2, reviewed_at = now(), reviewed_by = $3 WHERE user_id = $1 RETURNING *`,
+    [userId, status, reviewedBy || null]
+  );
+  return rows[0] || null;
+}
+
+async function getApprovedForwardingMap() {
+  const { rows } = await pool.query(`SELECT user_id, email FROM gmail_forwarding WHERE status = 'approved'`);
+  const map = {};
+  for (const r of rows) map[r.email.toLowerCase()] = r.user_id;
+  return map;
+}
+
 async function getResumeFormat(userId = 'me') {
   const { rows } = await pool.query(
     'SELECT target_pages, style_profile, source_filename, updated_at FROM resume_format WHERE user_id = $1',
@@ -509,6 +560,7 @@ module.exports = {
   recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched,
   saveChatFeedback, getChatFeedback, updateChatFeedbackStatus,
   getResumeFormat, saveResumeFormat, deleteResumeFormat,
+  requestGmailForwarding, getGmailForwardingStatus, getGmailForwardingRequests, reviewGmailForwarding, getApprovedForwardingMap,
   EMPTY_PROFILE,
 };
 

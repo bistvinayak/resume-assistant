@@ -35,6 +35,7 @@ export default function Admin() {
   const [settings, setSettings] = useState(null);
   const [schemaProposals, setSchemaProposals] = useState([]);
   const [feedback, setFeedback] = useState([]);
+  const [gmailForwarding, setGmailForwarding] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cronMsg, setCronMsg] = useState('');
   const [reviewingId, setReviewingId] = useState(null);
@@ -51,13 +52,14 @@ export default function Admin() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [s, u, j, cfg, sp, fb] = await Promise.all([
+      const [s, u, j, cfg, sp, fb, gf] = await Promise.all([
         api.adminGetStats(),
         api.adminGetUsers(),
         api.adminGetJobs(),
         api.adminGetSettings(),
         api.adminGetSchemaProposals(),
         api.adminGetFeedback(),
+        api.adminGetGmailForwarding(),
       ]);
       setStats(s);
       setUsers(u.users || []);
@@ -65,6 +67,7 @@ export default function Admin() {
       setSettings(cfg);
       setSchemaProposals(sp.proposals || []);
       setFeedback(fb.feedback || []);
+      setGmailForwarding(gf.requests || []);
     } catch (e) {
       console.error(e);
     }
@@ -91,6 +94,31 @@ export default function Admin() {
     try {
       await api.adminRejectSchemaProposal(id);
       await refreshSchemaProposals();
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const refreshGmailForwarding = async () => {
+    const gf = await api.adminGetGmailForwarding();
+    setGmailForwarding(gf.requests || []);
+  };
+
+  const handleApproveGmailForwarding = async (userId) => {
+    setReviewingId(userId);
+    try {
+      await api.adminApproveGmailForwarding(userId);
+      await refreshGmailForwarding();
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const handleRejectGmailForwarding = async (userId) => {
+    setReviewingId(userId);
+    try {
+      await api.adminRejectGmailForwarding(userId);
+      await refreshGmailForwarding();
     } finally {
       setReviewingId(null);
     }
@@ -169,6 +197,7 @@ export default function Admin() {
             { id: 'jobs', label: 'Jobs' },
             { id: 'schema', label: 'Schema Proposals', badge: schemaProposals.filter(p => p.status === 'pending').length },
             { id: 'feedback', label: 'Feedback', badge: feedback.filter(f => f.status === 'open' && f.score === 0).length },
+            { id: 'gmail', label: 'Gmail Forwarding', badge: gmailForwarding.filter(g => g.status === 'pending').length },
             { id: 'settings', label: 'Settings' },
           ].map(({ id, label, badge }) => (
             <button key={id} onClick={() => setTab(id)} style={{
@@ -404,6 +433,81 @@ export default function Admin() {
                                   border: `1px solid ${p.status === 'approved' ? '#22c55e33' : '#ef444422'}`,
                                 }}>{p.status}</span>
                               </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* GMAIL FORWARDING */}
+          {tab === 'gmail' && (
+            <div style={{ animation: 'fadeIn 0.3s ease', maxWidth: '760px' }}>
+              <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '4px' }}>Gmail Forwarding</h2>
+              <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '24px' }}>
+                Users who've asked to have their forwarded LinkedIn job-alert emails processed. Matching is by their Arjun login email — approve to start attributing their forwarded mail to their account.
+              </p>
+
+              {(() => {
+                const pending = gmailForwarding.filter(g => g.status === 'pending');
+                const reviewed = gmailForwarding.filter(g => g.status !== 'pending');
+                return (
+                  <>
+                    <div style={{ marginBottom: '28px' }}>
+                      <Label>PENDING ({pending.length})</Label>
+                      {pending.length === 0 ? (
+                        <div style={{ fontSize: '13px', color: '#a8a29e', padding: '16px 0' }}>No pending requests.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {pending.map(g => (
+                            <Card key={g.user_id}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                <div>
+                                  <div style={{ fontSize: '13px', fontWeight: 500 }}>{g.email}</div>
+                                  <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '2px' }}>
+                                    requested {new Date(g.requested_at).toLocaleDateString()}
+                                  </div>
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: '8px' }}>
+                                <button
+                                  onClick={() => handleApproveGmailForwarding(g.user_id)}
+                                  disabled={reviewingId === g.user_id}
+                                  style={{ flex: 1, background: '#22c55e', color: '#1c1917', border: 'none', padding: '9px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: reviewingId === g.user_id ? 0.6 : 1 }}
+                                >
+                                  {reviewingId === g.user_id ? 'Working...' : 'Approve'}
+                                </button>
+                                <button
+                                  onClick={() => handleRejectGmailForwarding(g.user_id)}
+                                  disabled={reviewingId === g.user_id}
+                                  style={{ flex: 1, background: 'transparent', color: '#57534e', border: '1px solid #d6d3d1', padding: '9px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', opacity: reviewingId === g.user_id ? 0.6 : 1 }}
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            </Card>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {reviewed.length > 0 && (
+                      <div>
+                        <Label>REVIEWED</Label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {reviewed.map(g => (
+                            <div key={g.user_id} style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 500 }}>{g.email}</span>
+                              <span style={{
+                                fontSize: '10px', fontFamily: "'DM Mono', monospace", borderRadius: '4px', padding: '2px 8px',
+                                color: g.status === 'approved' ? '#22c55e' : '#ef4444',
+                                background: g.status === 'approved' ? '#ecfdf5' : '#fef2f2',
+                                border: `1px solid ${g.status === 'approved' ? '#22c55e33' : '#ef444422'}`,
+                              }}>{g.status}</span>
                             </div>
                           ))}
                         </div>

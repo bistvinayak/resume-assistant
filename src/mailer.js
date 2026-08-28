@@ -72,4 +72,20 @@ async function sendResumeEmail({ to, subject, text, attachments = [] }) {
   return res.data;
 }
 
-module.exports = { sendResumeEmail };
+async function sendAcknowledgmentEmail({ to, jobTitle, company }) {
+  if (!to) return;
+  const from = `"${process.env.FROM_NAME || 'Resume Assistant'}" <${process.env.FROM_EMAIL}>`;
+  const subject = company && company !== 'LinkedIn Alert'
+    ? `Got it — tailoring your resume for ${jobTitle} at ${company}`
+    : `Got your forwarded job alert`;
+  const text =
+    `Got your forwarded job alert${company && company !== 'LinkedIn Alert' ? ` for ${jobTitle} at ${company}` : ''}.\n\n` +
+    `Arjun is tailoring your resume now — check the app in a few minutes for your tailored resume and cover letter.`;
+
+  const raw = buildRawEmail({ from, to, subject, text, attachments: [] });
+  const res = await gmail.users.messages.send({ userId: 'me', requestBody: { raw } });
+  console.log(`✓ Acknowledgment email sent to ${to} — message ID: ${res.data.id}`);
+  return res.data;
+}
+
+module.exports = { sendResumeEmail, sendAcknowledgmentEmail };

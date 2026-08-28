@@ -225,6 +225,8 @@ export default function Dashboard() {
   const [feedbackMap, setFeedbackMap] = useState({});
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState([]);
+  const [gmailForwardingStatus, setGmailForwardingStatus] = useState(null);
+  const [requestingForwarding, setRequestingForwarding] = useState(false);
   const [resumeFormat, setResumeFormat] = useState(null);
   const [formatFile, setFormatFile] = useState(null);
   const [formatTargetPages, setFormatTargetPages] = useState(1);
@@ -262,6 +264,7 @@ export default function Dashboard() {
       })
       .catch(console.error)
       .finally(() => setLoading(false));
+    api.getGmailForwardingStatus().then(setGmailForwardingStatus).catch(() => {});
   }, []);
 
   const startEditing = () => {
@@ -965,6 +968,18 @@ export default function Dashboard() {
     }
   };
 
+  const requestGmailForwarding = async () => {
+    setRequestingForwarding(true);
+    try {
+      const { request } = await api.requestGmailForwarding();
+      setGmailForwardingStatus(request);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setRequestingForwarding(false);
+    }
+  };
+
   const removeResumeFormat = async () => {
     setFormatUploading(true);
     try {
@@ -1131,29 +1146,37 @@ export default function Dashboard() {
             ))}
           </div>
 
-          {/* Gmail connector */}
+          {/* Gmail forwarding */}
           <div style={{ marginTop: '20px', borderTop: '1px solid #e7e5e4', paddingTop: '16px' }}>
             <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '6px' }}>
-              ⚡ CONNECT GMAIL
+              ⚡ GMAIL FORWARDING
             </div>
             <div style={{ fontSize: '12px', color: '#666', marginBottom: '10px', lineHeight: 1.5 }}>
-              Auto-process job alerts every 2 hours
+              Forward LinkedIn job alerts to arjun.resumeai@gmail.com from this account — Arjun auto-processes them every 2 hours.
             </div>
-            {profile?.gmail_connected || profile?.gmail_filter_pending ? (
+            {gmailForwardingStatus?.status === 'approved' ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#22c55e', fontFamily: "'DM Mono', monospace" }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-                {profile?.gmail_connected ? 'Connected' : 'Filter pending'}
+                Approved
               </div>
+            ) : gmailForwardingStatus?.status === 'pending' ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#f59e0b', fontFamily: "'DM Mono', monospace" }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+                Pending admin approval
+              </div>
+            ) : gmailForwardingStatus?.status === 'rejected' ? (
+              <div style={{ fontSize: '11px', color: '#ef4444', fontFamily: "'DM Mono', monospace" }}>Request rejected</div>
             ) : (
               <button
-                onClick={() => navigate('/onboarding?step=gmail')}
+                onClick={requestGmailForwarding}
+                disabled={requestingForwarding}
                 style={{
                   width: '100%', background: '#f59e0b', color: '#1c1917',
                   border: 'none', padding: '8px', borderRadius: '6px',
-                  fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+                  fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: requestingForwarding ? 0.7 : 1,
                 }}
               >
-                Connect Gmail →
+                {requestingForwarding ? 'Requesting...' : 'Request approval →'}
               </button>
             )}
           </div>

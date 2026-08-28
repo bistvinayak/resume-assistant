@@ -21,9 +21,11 @@ export default function Onboarding() {
 
   useEffect(() => {
     if (searchParams.get('step') === 'gmail') {
-      api.getProfile().then(p => {
-        if (p?.gmail_connected || p?.gmail_filter_pending) {
+      api.getGmailForwardingStatus().then(status => {
+        if (status?.status === 'approved') {
           navigate('/dashboard', { replace: true });
+        } else if (status?.status === 'pending') {
+          setGmailVerified(true);
         }
       }).catch(() => {});
     }
@@ -32,10 +34,10 @@ export default function Onboarding() {
   const handleVerifyFilter = async () => {
     setVerifying(true);
     try {
-      await api.verifyGmailFilter();
+      await api.requestGmailForwarding();
       setGmailVerified(true);
     } catch (e) {
-      setError('Verification failed. Please try again.');
+      setError('Request failed. Please try again.');
     }
     setVerifying(false);
   };
@@ -183,23 +185,23 @@ export default function Onboarding() {
               <div style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎯</div>
                 <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '12px' }}>
-                  Gmail is live!
+                  Request sent!
                 </h2>
-                <div style={{ background: '#ecfdf5', border: '1px solid #22c55e22', borderRadius: '8px', padding: '14px', marginBottom: '20px' }}>
+                <div style={{ background: '#fffbeb', border: '1px solid #f59e0b22', borderRadius: '8px', padding: '14px', marginBottom: '20px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block', animation: 'pulse 2s infinite' }} />
-                    <span style={{ fontSize: '13px', color: '#22c55e88', fontFamily: "'DM Mono', monospace" }}>Arjun is watching for LinkedIn job alerts</span>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+                    <span style={{ fontSize: '13px', color: '#b45309', fontFamily: "'DM Mono', monospace" }}>Pending admin approval — you'll be notified once it's active</span>
                   </div>
                 </div>
                 <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '24px', textAlign: 'left' }}>
-                  <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>WHAT HAPPENS NEXT</div>
+                  <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '14px' }}>ONCE APPROVED</div>
                   {[
                     { icon: '📧', text: 'Your LinkedIn job alerts forward to Arjun automatically' },
                     { icon: '⏱', text: 'Every 2 hours: Arjun checks for new alerts' },
                     { icon: '🤖', text: 'Scrapes full job description from LinkedIn' },
                     { icon: '✍️', text: 'Tailors your resume using your profile' },
                     { icon: '📊', text: 'Calculates ATS score (target: 95/100)' },
-                    { icon: '📨', text: 'Emails you the tailored .docx resume' },
+                    { icon: '📨', text: 'Emails you the tailored resume and cover letter' },
                   ].map(({ icon, text }) => (
                     <div key={text} style={{ display: 'flex', gap: '12px', padding: '8px 0', borderBottom: '1px solid #e7e5e4' }}>
                       <span style={{ fontSize: '14px', flexShrink: 0 }}>{icon}</span>
@@ -251,7 +253,7 @@ export default function Onboarding() {
                 {error && <p style={{ color: '#ef4444', fontSize: '12px', marginBottom: '10px' }}>{error}</p>}
 
                 <button onClick={handleVerifyFilter} disabled={verifying} style={{ width: '100%', background: '#f59e0b', color: '#1c1917', border: 'none', padding: '14px', borderRadius: '8px', fontSize: '14px', fontWeight: 600, cursor: 'pointer', marginBottom: '10px', opacity: verifying ? 0.7 : 1 }}>
-                  {verifying ? 'Verifying...' : "✓ I've set up the filter"}
+                  {verifying ? 'Sending...' : "✓ I've set up the filter — request approval"}
                 </button>
                 <button onClick={() => navigate('/dashboard')} style={{ width: '100%', background: 'transparent', border: '1px solid #d6d3d1', color: '#78716c', padding: '12px', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
                   Skip — I'll do this later

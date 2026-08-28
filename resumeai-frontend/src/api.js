@@ -208,11 +208,16 @@ export const api = {
     return res.json();
   },
 
-  async verifyGmailFilter() {
-    const res = await checkedFetch(`${BASE}/gmail/verify`, {
+  async requestGmailForwarding() {
+    const res = await checkedFetch(`${BASE}/gmail/request-forwarding`, {
       method: 'POST',
       headers: await getHeaders(),
     });
+    return res.json();
+  },
+
+  async getGmailForwardingStatus() {
+    const res = await checkedFetch(`${BASE}/gmail/forwarding-status`, { headers: await getHeaders() });
     return res.json();
   },
 
@@ -308,6 +313,19 @@ export const api = {
   },
   async adminRejectSchemaProposal(id) {
     const res = await checkedFetch(`${BASE}/admin/schema-proposals/${id}/reject`, { method: 'POST', headers: await getHeaders() });
+    return res.json();
+  },
+
+  async adminGetGmailForwarding() {
+    const res = await checkedFetch(`${BASE}/admin/gmail-forwarding`, { headers: await getHeaders() });
+    return res.json();
+  },
+  async adminApproveGmailForwarding(userId) {
+    const res = await checkedFetch(`${BASE}/admin/gmail-forwarding/${userId}/approve`, { method: 'POST', headers: await getHeaders() });
+    return res.json();
+  },
+  async adminRejectGmailForwarding(userId) {
+    const res = await checkedFetch(`${BASE}/admin/gmail-forwarding/${userId}/reject`, { method: 'POST', headers: await getHeaders() });
     return res.json();
   },
 };

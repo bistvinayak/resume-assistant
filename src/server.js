@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile } = require('./profile');
 const { queueJob, getQueueStats } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
@@ -584,6 +584,7 @@ const {
   adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs: adminGetJobs, triggerCron, getSettings, updateSettings,
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
   getFeedbackHandler, reviewFeedback,
+  getGmailForwardingHandler, approveGmailForwarding, rejectGmailForwarding,
 } = require('./admin');
 
 app.get(['/admin/stats', '/api/admin/stats'], authMiddleware, adminOnly, getStats);
@@ -599,6 +600,9 @@ app.post(['/admin/schema-proposals/:id/approve', '/api/admin/schema-proposals/:i
 app.post(['/admin/schema-proposals/:id/reject', '/api/admin/schema-proposals/:id/reject'], authMiddleware, adminOnly, rejectSchemaProposal);
 app.get(['/admin/feedback', '/api/admin/feedback'], authMiddleware, adminOnly, getFeedbackHandler);
 app.patch(['/admin/feedback/:id', '/api/admin/feedback/:id'], authMiddleware, adminOnly, reviewFeedback);
+app.get(['/admin/gmail-forwarding', '/api/admin/gmail-forwarding'], authMiddleware, adminOnly, getGmailForwardingHandler);
+app.post(['/admin/gmail-forwarding/:userId/approve', '/api/admin/gmail-forwarding/:userId/approve'], authMiddleware, adminOnly, approveGmailForwarding);
+app.post(['/admin/gmail-forwarding/:userId/reject', '/api/admin/gmail-forwarding/:userId/reject'], authMiddleware, adminOnly, rejectGmailForwarding);
 
 // ── RESUME DOWNLOAD ────────────────────────────────────────────────────────
 
@@ -654,19 +658,19 @@ app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, 
   }
 });
 
-// ── GMAIL VERIFY ───────────────────────────────────────────────────────────
-// POST /api/gmail/verify — user claims they set up filter, we mark it pending
-app.post(['/gmail/verify', '/api/gmail/verify'], authMiddleware, async (req, res) => {
+// ── GMAIL FORWARDING (job-alert intake) ─────────────────────────────────────
+// POST /api/gmail/request-forwarding — user asks to have their forwarded job
+// alerts processed. Matching is by their verified login email; needs admin
+// approval (Admin > Gmail Forwarding) before it takes effect.
+app.post(['/gmail/request-forwarding', '/api/gmail/request-forwarding'], authMiddleware, async (req, res, next) => {
   try {
-    await pool.query(
-      `UPDATE master_profile SET 
-        profile = jsonb_set(COALESCE(profile, '{}'), '{gmail_filter_pending}', 'true'),
-        updated_at = now()
-       WHERE user_id = $1`,
-      [req.userId]
-    );
-    res.json({ ok: true, message: 'Marked as pending — will verify on next email received' });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
+    const request = await requestGmailForwarding(req.userId, req.userEmail);
+    res.json({ ok: true, request });
+  } catch (e) { next(e); }
+});
+
+app.get(['/gmail/forwarding-status', '/api/gmail/forwarding-status'], authMiddleware, async (req, res, next) => {
+  try {
+    res.json(await getGmailForwardingStatus(req.userId));
+  } catch (e) { next(e); }
 });

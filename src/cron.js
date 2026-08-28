@@ -4,21 +4,29 @@ const cron = require('node-cron');
 const { queueJob } = require('./pipeline');
 const { fetchLinkedInJobs } = require('./gmail');
 const { scrapeLinkedInJob } = require('./scraper');
-const { recoverStaleJobs, insertJobProcessing } = require('./db');
+const { sendAcknowledgmentEmail } = require('./mailer');
+const { recoverStaleJobs, insertJobProcessing, getApprovedForwardingMap } = require('./db');
 
-async function runBatch(userId = 'me') {
-  console.log(`⏱  cron: checking LinkedIn job alert emails for ${userId}...`);
+async function runBatch() {
+  console.log(`⏱  cron: checking forwarded job alert emails...`);
   let emailJobs = [];
 
   try {
-    emailJobs = await fetchLinkedInJobs();
-    console.log(`✓ found ${emailJobs.length} email(s)`);
+    const approvedMap = await getApprovedForwardingMap();
+    emailJobs = await fetchLinkedInJobs(approvedMap);
+    console.log(`✓ found ${emailJobs.length} matched email(s)`);
   } catch (e) {
     console.error('✗ Gmail fetch failed:', e.message);
     return;
   }
 
-  // Flatten: one job per URL
+  // Acknowledge receipt immediately, per email — before scraping/tailoring even starts.
+  for (const email of emailJobs) {
+    sendAcknowledgmentEmail({ to: email.forwarderEmail, jobTitle: email.title, company: email.company })
+      .catch(e => console.error(`⚠ Acknowledgment email failed for ${email.forwarderEmail}: ${e.message}`));
+  }
+
+  // Flatten: one job per URL, carrying the matched userId through
   const jobsToProcess = [];
   for (const email of emailJobs) {
     const urls = email.jobUrls || [];
@@ -29,6 +37,7 @@ async function runBatch(userId = 'me') {
         company: email.company,
         jd_text: email.jd_text,
         url: null,
+        userId: email.userId,
       });
     } else {
       for (const url of urls) {
@@ -39,6 +48,7 @@ async function runBatch(userId = 'me') {
           company: email.company,
           jd_text: '',
           url,
+          userId: email.userId,
         });
       }
     }
@@ -60,7 +70,7 @@ async function runBatch(userId = 'me') {
         }
       }
 
-      const result = await queueJob(job, userId, { source: 'cron' });
+      const result = await queueJob(job, job.userId, { source: 'cron' });
       console.log(result.skipped
         ? `· skipped ${job.job_id}`
         : `✓ ${job.company} — ${job.title} [ATS: ${result.atsScore}/100${result.improved ? ' improved' : ''}]`
@@ -72,7 +82,7 @@ async function runBatch(userId = 'me') {
 }
 
 function startCron() {
-  cron.schedule('0 */2 * * *', () => runBatch('me'));
+  cron.schedule('0 */2 * * *', () => runBatch());
   cron.schedule('*/5 * * * *', async () => {
     const recovered = await recoverStaleJobs(10).catch(() => []);
     if (!recovered.length) return;
