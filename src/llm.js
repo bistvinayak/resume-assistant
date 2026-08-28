@@ -848,8 +848,11 @@ async function askJson(system, user, generationName, trace, langfusePrompt, hist
     });
 
     const raw = res.choices[0].message.content;
+    // response_format: json_object is an OpenAI-model guarantee — Claude (via OpenRouter)
+    // doesn't reliably honor it and sometimes wraps the JSON in a ```json ... ``` fence.
+    const unfenced = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');
     let parsed;
-    try { parsed = JSON.parse(raw); }
+    try { parsed = JSON.parse(unfenced); }
     catch (e) {
       console.error('JSON parse failed:', raw.slice(0, 200));
       throw new Error('LLM returned invalid JSON');
