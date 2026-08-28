@@ -1269,6 +1269,17 @@ export default function Dashboard() {
                     {formatError && <div style={{ fontSize: '11px', color: '#ef4444', marginTop: '8px' }}>{formatError}</div>}
                   </div>
 
+                  <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '10px' }}>ABOUT YOU</div>
+                    {profile?.about_me ? (
+                      <p style={{ fontSize: '13px', color: '#57534e', lineHeight: 1.6 }}>{profile.about_me}</p>
+                    ) : (
+                      <p style={{ fontSize: '12px', color: '#a8a29e' }}>
+                        Not set — add a note about yourself under Edit Profile. Not used on the resume, but gives your cover letters a personal touch beyond your work history.
+                      </p>
+                    )}
+                  </div>
+
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
                     <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px' }}>
                       <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>COMPLETENESS</div>
@@ -1552,6 +1563,21 @@ export default function Dashboard() {
                       onChange={e => setEditProfile(p => ({ ...p, summary: e.target.value }))}
                       placeholder="A brief professional summary..."
                       rows={3}
+                      style={{ width: '100%', background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '13px', padding: '10px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none', resize: 'vertical' }}
+                    />
+                  </div>
+
+                  {/* Edit: About You */}
+                  <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                    <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '6px' }}>ABOUT YOU</div>
+                    <p style={{ fontSize: '11px', color: '#a8a29e', marginBottom: '12px' }}>
+                      Not used on the resume — used to give your cover letters a personal touch. Interests, motivations, what you care about outside work.
+                    </p>
+                    <textarea
+                      value={editProfile.about_me || ''}
+                      onChange={e => setEditProfile(p => ({ ...p, about_me: e.target.value }))}
+                      placeholder="e.g. I got into product management after building a tool to help my university's climbing club coordinate trips. I care most about..."
+                      rows={4}
                       style={{ width: '100%', background: '#fafaf9', border: '1px solid #d6d3d1', borderRadius: '6px', color: '#1c1917', fontSize: '13px', padding: '10px 12px', fontFamily: "'DM Sans', sans-serif", outline: 'none', resize: 'vertical' }}
                     />
                   </div>

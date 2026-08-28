@@ -484,7 +484,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   try {
     console.log(`⏱ [${elapsed()}] Writing cover letter...`);
     const paragraphs = await withRetry(
-      () => coverLetter(resume, job, trace),
+      () => coverLetter(resume, job, trace, profile),
       `cover-letter:${job.company}`,
       1
     );

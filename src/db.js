@@ -11,7 +11,7 @@ const pool = new Pool({
 });
 
 const EMPTY_PROFILE = {
-  contact: {}, summary: '', skills: [],
+  contact: {}, summary: '', skills: [], about_me: '',
   experience: [], projects: [], education: [],
   certifications: [], languages: [], activities: [], interests: [],
   custom_facts: [], custom_sections: [],

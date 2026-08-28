@@ -667,11 +667,14 @@ Return ONLY JSON:
   },
 
   cover_letter: {
-    prompt: `Write a cover letter for this candidate, for this specific job. Use the TAILORED RESUME below as your source of truth for what to emphasize — it already represents the best read of which of the candidate's experiences matter most for this job, so stay consistent with it rather than re-deriving your own angle.
+    prompt: `Write a cover letter for this candidate, for this specific job. It draws on two different sources, and they serve different jobs in the letter:
+
+1. TAILORED RESUME — the skills/experience/achievements already selected and reframed as most relevant to this job. This is your source of truth for what to claim professionally. Stay consistent with it rather than re-deriving your own angle on what matters.
+2. PERSONAL CONTEXT — interests, activities, and other facts from the candidate's full profile that never made it into the resume (resumes are deliberately trimmed to job-relevant content; a cover letter has room for a little more of the person). Use this ONLY where it adds a genuine, specific, non-generic touch — a real interest that plausibly connects to the company/role, a piece of context that explains motivation. If nothing here is actually relevant, ignore this section entirely rather than forcing it in.
 
 STRICT RULES:
-- Only reference experience, skills, and achievements that appear in the tailored resume. Never invent accomplishments, numbers, or experience.
-- 3-4 short paragraphs: opening (role + why this company specifically, using real detail from the job description — not generic flattery), 1-2 body paragraphs connecting specific resume achievements to what the job asks for, closing (enthusiasm + call to action).
+- Only reference facts that appear in one of the two sources below. Never invent accomplishments, numbers, experience, or interests.
+- 3-4 short paragraphs: opening (role + why this company specifically, using real detail from the job description — not generic flattery), 1-2 body paragraphs connecting specific resume achievements to what the job asks for, closing (enthusiasm + call to action). Personal context, if used, belongs in the opening or closing — never displaces the resume-grounded body paragraphs.
 - Concrete over generic. Reference actual company/role details from the JD, actual metrics/achievements from the resume. Avoid empty phrases like "I am a hard worker" or "I am passionate about this opportunity."
 - No greeting/sign-off boilerplate beyond a simple "Dear Hiring Manager," open and "Sincerely, {{candidate_name}}" close — the greeting and sign-off are handled separately by the renderer, just write the body paragraphs.
 
@@ -683,6 +686,9 @@ Description:
 
 TAILORED RESUME:
 {{tailored_resume_json}}
+
+PERSONAL CONTEXT (use only what's genuinely relevant, ignore the rest):
+{{personal_context}}
 
 Return ONLY JSON:
 {
@@ -964,13 +970,26 @@ async function improveResume(resume, job, ats, trace, tailoringNotes = [], jdReq
   return result;
 }
 
-async function coverLetter(resume, job, trace) {
+function buildPersonalContext(profile) {
+  if (!profile) return '(none available)';
+  const parts = [];
+  if (profile.about_me) parts.push(`In the candidate's own words, about themselves: ${profile.about_me}`);
+  if (profile.summary) parts.push(`Full profile summary: ${profile.summary}`);
+  if (Array.isArray(profile.interests) && profile.interests.length) parts.push(`Interests: ${profile.interests.join(', ')}`);
+  if (Array.isArray(profile.activities) && profile.activities.length) parts.push(`Activities: ${profile.activities.join(', ')}`);
+  const customFacts = (profile.custom_facts || []).map(f => typeof f === 'string' ? f : f.text).filter(Boolean);
+  if (customFacts.length) parts.push(`Other facts: ${customFacts.join('; ')}`);
+  return parts.length ? parts.join('\n') : '(none available)';
+}
+
+async function coverLetter(resume, job, trace, profile = null) {
   const { text: system, langfusePrompt } = await getPrompt('cover_letter', {
     job_title: job.title || '',
     job_company: job.company || '',
     job_description: job.jd_text || '',
     tailored_resume_json: JSON.stringify(resume),
     candidate_name: resume.contact?.name || '',
+    personal_context: buildPersonalContext(profile),
   });
 
   const result = await askJson(system, 'Write the cover letter.', 'cover_letter', trace, langfusePrompt, [], WRITING_MODEL);
