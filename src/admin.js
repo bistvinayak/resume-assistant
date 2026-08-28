@@ -19,16 +19,21 @@ function adminOnly(req, res, next) {
 // GET /api/admin/stats
 async function getStats(req, res) {
   try {
-    const [users, jobs, emails] = await Promise.all([
+    const [users, jobs, emails, failures, failureReasons] = await Promise.all([
       pool.query(`SELECT COUNT(DISTINCT user_id) as total, COUNT(DISTINCT user_id) FILTER (WHERE updated_at > now() - interval '7 days') as active_week FROM master_profile`),
       pool.query(`SELECT COUNT(*) as total, AVG(ats_score) as avg_ats, COUNT(*) FILTER (WHERE seen_at > now() - interval '1 day') as today, COUNT(*) FILTER (WHERE seen_at > now() - interval '7 days') as this_week, COUNT(*) FILTER (WHERE seen_at > now() - interval '30 days') as this_month FROM jobs WHERE status = 'delivered'`),
       pool.query(`SELECT missing_keywords FROM jobs WHERE status = 'delivered' AND missing_keywords IS NOT NULL`),
+      pool.query(`SELECT COUNT(*) FILTER (WHERE status = 'failed') as failed, COUNT(*) as attempted FROM jobs WHERE status IN ('delivered', 'failed') AND seen_at > now() - interval '30 days'`),
+      pool.query(`SELECT error_reason, COUNT(*) as count FROM jobs WHERE status = 'failed' AND error_reason IS NOT NULL AND seen_at > now() - interval '30 days' GROUP BY error_reason ORDER BY count DESC LIMIT 5`),
     ]);
 
     // Top missing keywords
     const allMissing = emails.rows.flatMap(r => r.missing_keywords || []);
     const freq = allMissing.reduce((acc, k) => { acc[k] = (acc[k] || 0) + 1; return acc; }, {});
     const topMissing = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+    const failedCount = parseInt(failures.rows[0].failed);
+    const attemptedCount = parseInt(failures.rows[0].attempted);
 
     res.json({
       users: {
@@ -41,6 +46,12 @@ async function getStats(req, res) {
         this_week: parseInt(jobs.rows[0].this_week),
         this_month: parseInt(jobs.rows[0].this_month),
         avg_ats: Math.round(parseFloat(jobs.rows[0].avg_ats) || 0),
+      },
+      failures: {
+        failed_30d: failedCount,
+        attempted_30d: attemptedCount,
+        rate_30d: attemptedCount > 0 ? Math.round(100 * failedCount / attemptedCount) : 0,
+        topReasons: failureReasons.rows.map(r => [r.error_reason, parseInt(r.count)]),
       },
       topMissing,
     });

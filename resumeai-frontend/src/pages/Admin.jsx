@@ -250,12 +250,32 @@ export default function Admin() {
             <div style={{ animation: 'fadeIn 0.3s ease' }}>
               <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '28px' }}>Overview</h2>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '24px' }}>
                 <StatBox label="Total users" value={stats.users.total} sub={`${stats.users.active_week} active this week`} />
                 <StatBox label="Resumes sent" value={stats.jobs.total} sub={`${stats.jobs.today} today`} />
                 <StatBox label="Avg ATS score" value={`${stats.jobs.avg_ats}/100`} color={stats.jobs.avg_ats >= 85 ? '#22c55e' : '#f59e0b'} sub="across all jobs" />
                 <StatBox label="This month" value={stats.jobs.this_month} sub={`${stats.jobs.this_week} this week`} />
+                <StatBox
+                  label="Failure rate"
+                  value={`${stats.failures?.rate_30d ?? 0}%`}
+                  color={(stats.failures?.rate_30d ?? 0) === 0 ? '#22c55e' : (stats.failures?.rate_30d ?? 0) <= 10 ? '#f59e0b' : '#ef4444'}
+                  sub={`${stats.failures?.failed_30d ?? 0}/${stats.failures?.attempted_30d ?? 0} last 30d`}
+                />
               </div>
+
+              {stats.failures?.topReasons?.length > 0 && (
+                <Card style={{ marginBottom: '16px' }}>
+                  <Label>TOP FAILURE REASONS (LAST 30D)</Label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {stats.failures.topReasons.map(([reason, count]) => (
+                      <div key={reason} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                        <span style={{ fontSize: '12px', color: '#57534e' }}>{reason}</span>
+                        <span style={{ fontSize: '11px', color: '#ef4444', fontFamily: "'DM Mono', monospace", flexShrink: 0 }}>{count}×</span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
 
               <Card>
                 <Label>TOP MISSING KEYWORDS (GLOBAL)</Label>
