@@ -840,6 +840,12 @@ async function askJson(system, user, generationName, trace, langfusePrompt, hist
       model,
       temperature: 0.2,
       response_format: { type: 'json_object' },
+      // Without an explicit cap, OpenRouter defaults to the model's full output ceiling
+      // (65536 for Claude Sonnet) and reserves credits against that worst case on every
+      // call — including short ones like the cover letter — which can 402 a call that
+      // would've easily fit in the actual remaining balance. None of these responses
+      // (resume JSON, cover letter, scoring) need anywhere near 65k tokens.
+      max_tokens: 8000,
       messages,
       // Gemini's reasoning models burn hidden "thinking" tokens by default (~100x cost
       // on trivial calls) — these are structured extraction/classification tasks, not
