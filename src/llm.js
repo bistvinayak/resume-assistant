@@ -13,7 +13,7 @@ const client = new OpenAI({
 const MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-3.7-flash';
 // Resume-writing steps (tailor/improve) get a stronger model — the prose quality and
 // strict "select+reframe, never invent" constraint matter more here than in extraction/scoring.
-const WRITING_MODEL = process.env.OPENROUTER_WRITING_MODEL || 'anthropic/claude-sonnet-5';
+const WRITING_MODEL = process.env.OPENROUTER_WRITING_MODEL || 'google/gemini-3.7-flash';
 
 const langfuse = new Langfuse({
   secretKey: process.env.LANGFUSE_SECRET_KEY,
