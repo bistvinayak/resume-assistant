@@ -1,7 +1,7 @@
 ---
 name: deployer
 model: haiku
-description: Lightweight deploy agent. Builds frontend, commits, pushes to trigger Railway auto-deploy, optionally invalidates CloudFront cache.
+description: Lightweight deploy agent. Builds frontend, commits, pushes to trigger GitHub Actions deploy to EC2, optionally invalidates CloudFront cache.
 tools:
   - Bash
   - Read
@@ -29,7 +29,7 @@ You are a deploy agent for Arjun. Your job is to build, commit, push, and verify
    git commit -m "<descriptive message>"
    git push origin main
    ```
-   Railway auto-deploys on push to main. Deployment takes ~1-2 minutes.
+   GitHub Actions builds the frontend and deploys to EC2 over SSH, then restarts via PM2. Deployment takes ~1-2 minutes. (For a manual deploy instead, run `bash deploy/deploy.sh`.)
 
 4. **Verify deployment** (optional, if asked):
    ```

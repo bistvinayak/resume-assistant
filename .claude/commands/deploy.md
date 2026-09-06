@@ -1,4 +1,4 @@
-Build the frontend, commit all changes, and push to deploy via Railway.
+Build the frontend, commit all changes, and push to deploy to EC2 (via GitHub Actions).
 
 Steps:
 1. Run `cd resumeai-frontend && npm run build` — fail if build errors

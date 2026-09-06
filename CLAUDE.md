@@ -4,11 +4,11 @@
 
 ```
 User → CloudFront (vinayakbist.com)
-         ├── /projects/arjun*  → Railway (Express + React SPA)
-         ├── /api/*            → Railway
+         ├── /projects/arjun*  → EC2 Nginx → Express (PM2, port 3000)
+         ├── /api/*            → EC2 Nginx → Express (PM2, port 3000)
          └── default           → S3 (personal site)
 
-Railway runs: Express server (port 3000) serving:
+EC2 (PM2-managed) runs: Express server (port 3000) serving:
   - Static React build from /public
   - SPA catch-all for client-side routes
   - REST API under /api/*
@@ -18,12 +18,12 @@ Railway runs: Express server (port 3000) serving:
 ## Stack
 - **Frontend:** React 18 + Vite, single-page app, inline styles (no CSS framework)
 - **Backend:** Express.js, Node 18+
-- **Database:** PostgreSQL on Railway
+- **Database:** PostgreSQL (local on EC2)
 - **Auth:** Firebase Auth (Google OAuth), JWT verification via firebase-admin
 - **LLM:** OpenRouter API (gpt-4o-mini default), JSON mode
 - **Observability:** Langfuse (traces, sessions, evaluations, prompts, user feedback)
 - **Email:** Nodemailer (SMTP via Gmail) for resume delivery
-- **Deployment:** Railway (auto-deploy on push to main), CloudFront CDN
+- **Deployment:** AWS EC2 via PM2, GitHub Actions auto-deploy on push to main (`deploy/deploy.sh` for manual deploys), CloudFront CDN
 
 ## File Map
 
@@ -122,8 +122,10 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 - `settings` — key-value store for admin settings
 
 ## Deployment
-- Push to `main` → Railway auto-deploys backend + serves frontend
+- Push to `main` → GitHub Actions builds frontend and deploys to EC2 via SSH, then restarts via `pm2 startOrRestart deploy/ecosystem.config.js`
+- Manual deploy: `bash deploy/deploy.sh` (rsyncs repo to EC2, `npm ci --omit=dev`, PM2 restart)
 - Frontend build: `cd resumeai-frontend && npm run build` (outputs to `../public/`)
+- SSH access: `ssh -i ~/.ssh/arjun-ec2.pem ec2-user@<IP>`, app dir `/home/ec2-user/arjun`, logs at `logs/{error,app}.log`
 - CloudFront cache: invalidate after deploy if needed
 - Personal site (S3): separate from Arjun, served via CloudFront default behavior
 

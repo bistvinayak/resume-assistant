@@ -3,7 +3,7 @@
 Write a product feature specification for the Arjun resume assistant.
 
 ## Context
-Arjun is an AI-powered resume tailoring platform. Architecture: React+Vite frontend, Express backend, PostgreSQL, Firebase Auth, OpenRouter LLM, Langfuse observability. Deployed on Railway, served via CloudFront at vinayakbist.com/projects/arjun.
+Arjun is an AI-powered resume tailoring platform. Architecture: React+Vite frontend, Express backend, PostgreSQL, Firebase Auth, OpenRouter LLM, Langfuse observability. Deployed on AWS EC2 via PM2, served via CloudFront at vinayakbist.com/projects/arjun.
 
 Key modules: onboarding (PDF/text ingestion), profile building (chat with Arjun), resume tailoring (job URL → ATS-optimized resume), Gmail cron (auto-process job alerts), admin dashboard.
 

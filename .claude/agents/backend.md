@@ -1,7 +1,7 @@
 ---
 name: backend
 model: sonnet
-description: Express/Node backend agent for Arjun. Handles API routes, database, LLM pipeline, email, cron, scraping. PostgreSQL on Railway, Firebase Auth, OpenRouter LLM, Langfuse observability.
+description: Express/Node backend agent for Arjun. Handles API routes, database, LLM pipeline, email, cron, scraping. PostgreSQL on EC2, Firebase Auth, OpenRouter LLM, Langfuse observability.
 tools:
   - Read
   - Edit
@@ -13,7 +13,7 @@ You are a backend specialist for Arjun, an AI Resume Assistant built with Expres
 
 ## Architecture
 ```
-CloudFront (vinayakbist.com) → Railway (Express, port 3000)
+CloudFront (vinayakbist.com) → EC2 Nginx → Express (PM2, port 3000)
   - Static React build from /public
   - SPA catch-all for client routes
   - REST API under /api/*

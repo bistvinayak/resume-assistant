@@ -2,7 +2,7 @@
 
 Personal backend that keeps a **master profile** of everything about you,
 tailors a resume per job via **OpenRouter**, renders it to **.docx**, and
-**emails** it. Deploys on **Railway**.
+**emails** it. Deploys to **AWS EC2** via PM2.
 
 ## What it does
 
@@ -20,7 +20,7 @@ Node.js + Express · OpenRouter (via `openai` SDK) · PostgreSQL (`pg`) · `docx
 | Integration | What to get | Env vars |
 |---|---|---|
 | OpenRouter | API key | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL` |
-| Postgres | Railway Postgres plugin | `DATABASE_URL`, `PGSSL=true` |
+| Postgres | Local PostgreSQL on the EC2 instance | `DATABASE_URL`, `PGSSL=true` |
 | Email (SMTP) | Gmail App Password | `SMTP_*`, `TO_EMAIL`, `FROM_EMAIL` |
 | API auth | any long random string | `API_KEY` |
 
@@ -37,13 +37,13 @@ npm run init-db             # create tables
 npm start                   # server on :3000
 ```
 
-## Deploy to Railway
+## Deploy to EC2
 
-1. Push this repo to GitHub, create a Railway project from it.
-2. Add the **Postgres** plugin — `DATABASE_URL` is injected automatically.
-3. Add the other env vars (`OPENROUTER_API_KEY`, `SMTP_*`, `API_KEY`, `PGSSL=true`).
-4. Railway builds with Nixpacks and runs `node src/server.js` (see `railway.toml`).
-5. Run the schema once: in the Railway shell, `npm run init-db`.
+1. Provision an EC2 instance with Node 18+, PostgreSQL, and PM2 installed.
+2. Set the env vars (`OPENROUTER_API_KEY`, `SMTP_*`, `API_KEY`, `DATABASE_URL`, `PGSSL=true`) in `.env` on the instance.
+3. Push to `main` — GitHub Actions builds the frontend and deploys over SSH (see `.github/workflows/deploy.yml`), or run `bash deploy/deploy.sh` manually.
+4. PM2 runs the app via `deploy/ecosystem.config.js` (`pm2 startOrRestart deploy/ecosystem.config.js --update-env`).
+5. Run the schema once: SSH into the instance, `npm run init-db`.
 
 ## API
 

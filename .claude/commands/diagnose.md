@@ -16,5 +16,5 @@ Steps:
 
 Architecture reminder:
 - CloudFront has ~30s timeout — LLM endpoints MUST be async
-- Railway auto-deploys on push to main
+- GitHub Actions deploys to EC2 (PM2) on push to main
 - Frontend build: `cd resumeai-frontend && npm run build` → `public/`

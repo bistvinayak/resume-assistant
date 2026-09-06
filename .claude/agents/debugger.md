@@ -1,7 +1,7 @@
 ---
 name: debugger
 model: sonnet
-description: Diagnoses issues in Arjun — checks Railway logs, tests endpoints, traces request flow through CloudFront → Railway → Express. Use when something is broken in production.
+description: Diagnoses issues in Arjun — checks EC2/PM2 logs, tests endpoints, traces request flow through CloudFront → EC2 → Express. Use when something is broken in production.
 tools:
   - Bash
   - Read
@@ -12,8 +12,8 @@ You are a debugger for Arjun, an AI Resume Assistant. Your job is to diagnose pr
 ## Architecture (request flow)
 ```
 Browser → CloudFront (vinayakbist.com)
-  ├── /projects/arjun* → Railway (Express on port 3000)
-  ├── /api/*            → Railway
+  ├── /projects/arjun* → EC2 Nginx → Express (PM2, port 3000)
+  ├── /api/*            → EC2 Nginx → Express (PM2, port 3000)
   └── default           → S3 (personal site)
 ```
 
@@ -25,9 +25,9 @@ Browser → CloudFront (vinayakbist.com)
 - Fix: make the endpoint async (respond fast, process in background)
 
 ### HTML instead of JSON
-- Usually means CloudFront served an error page instead of proxying to Railway
+- Usually means CloudFront served an error page instead of proxying to EC2
 - Check: `curl -s -w "\nHTTP %{http_code}" https://vinayakbist.com/api/health`
-- Check direct Railway: `curl -s https://<railway-domain>/health`
+- Check direct EC2: `curl -s http://<EC2_IP>:3000/health` (find IP via `aws ec2 describe-instances --filters "Name=tag:Name,Values=*arjun*" --query "Reservations[].Instances[].PublicIpAddress" --output text`)
 
 ### Auth failures (401)
 - Firebase JWT expired or invalid
@@ -43,8 +43,10 @@ Browser → CloudFront (vinayakbist.com)
 # Health check through CloudFront
 curl -s https://vinayakbist.com/api/health
 
-# Railway logs (if railway CLI available)
-railway logs --tail 50
+# EC2/PM2 logs (SSH required)
+ssh -i ~/.ssh/arjun-ec2.pem ec2-user@<IP> "pm2 logs arjun --lines 50 --nostream"
+# or tail the log files directly:
+ssh -i ~/.ssh/arjun-ec2.pem ec2-user@<IP> "tail -n 50 /home/ec2-user/arjun/logs/error.log"
 
 # Check if server loads
 node -e "require('./src/server')"
