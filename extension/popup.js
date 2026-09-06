@@ -30,7 +30,10 @@ fillBtn.addEventListener('click', async () => {
   }
 
   try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['content-script.js'] });
+    // allFrames: true — many ATS platforms (Greenhouse especially) embed the actual
+    // application form in an iframe rather than the top-level page, so scanning only
+    // the top frame finds zero fields even on forms that are clearly fillable.
+    await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['content-script.js'] });
     resultEl.textContent = 'Check the page — Arjun shows a summary there.';
   } catch (e) {
     resultEl.textContent = `Couldn't run on this page (${e.message}).`;

@@ -161,6 +161,11 @@ export default function Admin() {
     setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, daily_limit: parseInt(daily_limit) } : u));
   };
 
+  const handleToggleAutoProcess = async (userId, auto_process_paused) => {
+    await api.adminUpdateUser(userId, { auto_process_paused });
+    setUsers(prev => prev.map(u => u.user_id === userId ? { ...u, auto_process_paused } : u));
+  };
+
   const handleDeleteUser = async (userId) => {
     if (!confirm('Delete this user and all their data?')) return;
     await api.adminDeleteUser(userId);
@@ -340,6 +345,13 @@ export default function Admin() {
                       </div>
 
                       <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          onClick={() => handleToggleAutoProcess(u.user_id, !u.auto_process_paused)}
+                          title="Pause automatic resume generation from this user's forwarded Gmail alerts — manual 'Apply to Job' submissions still work"
+                          style={{ background: u.auto_process_paused ? '#fffbeb' : '#ffffff', border: `1px solid ${u.auto_process_paused ? '#f59e0b44' : '#d6d3d1'}`, color: u.auto_process_paused ? '#f59e0b' : '#57534e', padding: '5px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}
+                        >
+                          {u.auto_process_paused ? 'Auto-process paused' : 'Pause auto-process'}
+                        </button>
                         <button
                           onClick={() => handleToggleUser(u.user_id, !u.active)}
                           style={{ background: u.active ? '#fef2f2' : '#ecfdf5', border: `1px solid ${u.active ? '#ef444422' : '#22c55e22'}`, color: u.active ? '#ef4444' : '#22c55e', padding: '5px 10px', borderRadius: '4px', fontSize: '11px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}

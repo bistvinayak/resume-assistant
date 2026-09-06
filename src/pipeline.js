@@ -13,9 +13,24 @@ const ATS_IMPROVEMENT_THRESHOLD = 95;
 
 // ── IN-MEMORY JOB QUEUE ──────────────────────────────────────────────────
 const MAX_CONCURRENT = 3;
+// Hard ceiling so a job can never look endless in the UI — a normal run finishes
+// in well under a minute, so 300s leaves generous headroom for real LLM latency
+// while still guaranteeing every job resolves one way or the other.
+const PROCESS_TIMEOUT_MS = 300 * 1000;
 let running = 0;
 const queue = [];
 const jobStatus = new Map();
+
+function withTimeout(promise, ms, onTimeout) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      onTimeout();
+      reject(new Error(`Processing timed out after ${Math.round(ms / 1000)}s`));
+    }, ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 function queueJob(job, userId, opts = {}) {
   const jobId = job.job_id || `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
@@ -41,7 +56,11 @@ function drainQueue() {
     jobStatus.set(entry.jobId, { status: 'running', startedAt: Date.now() });
     console.log(`🚀 Starting ${entry.job.company || entry.jobId} (${running}/${MAX_CONCURRENT} running, ${queue.length} waiting)`);
 
-    processJob(entry.job, entry.userId, entry.opts)
+    withTimeout(
+      processJob(entry.job, entry.userId, entry.opts),
+      PROCESS_TIMEOUT_MS,
+      () => markJobFailed(entry.jobId, `Processing timed out after ${Math.round(PROCESS_TIMEOUT_MS / 1000)}s`).catch(() => {})
+    )
       .then(result => {
         jobStatus.set(entry.jobId, { status: 'done', result });
         entry.resolve(result);
@@ -248,7 +267,7 @@ async function withRetry(fn, label, retries = MAX_RETRIES) {
   }
 }
 
-async function processJob(job, userId = 'me', { source = 'app', sessionId, userEmail, userName, force = false } = {}) {
+async function processJob(job, userId = 'me', { source = 'app', sessionId, userEmail, userName, force = false, wantCoverLetter = false } = {}) {
   const t0 = Date.now();
   const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
 
@@ -271,7 +290,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   try {
     console.log(`⏱ [${elapsed()}] Starting tailor...`);
     const tailorResult = await withRetry(
-      () => tailorResume(profile, job, trace),
+      () => tailorResume(profile, job, trace, resumeFormat),
       `tailor:${job.company}`
     );
     console.log(`⏱ [${elapsed()}] Tailor complete`);
@@ -344,6 +363,9 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   let layoutOpts = { fontScale: 1.0, lineGap: 1.5, sectionGap: 0.6, roleGap: 0.3 };
   if (resumeFormat?.style_profile?.section_order) layoutOpts.sectionOrder = resumeFormat.style_profile.section_order;
   if (resumeFormat?.style_profile?.heading_case) layoutOpts.headingCase = resumeFormat.style_profile.heading_case;
+  if (resumeFormat?.style_profile?.bullet_indent_pt) layoutOpts.bulletIndent = resumeFormat.style_profile.bullet_indent_pt;
+  if (resumeFormat?.style_profile?.role_header_style) layoutOpts.roleHeaderStyle = resumeFormat.style_profile.role_header_style;
+  if (resumeFormat?.style_profile?.company_case) layoutOpts.companyCase = resumeFormat.style_profile.company_case;
   const targetPages = resumeFormat?.target_pages || null;
 
   try {
@@ -367,6 +389,68 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
         m = await measureResumePdf(resume, layoutOpts);
         iterations++;
         console.log(`📐 [target ${targetPages}pg, iteration ${iterations}] ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
+
+      // Hitting the target page count isn't the finish line by itself — a page
+      // that's only 73-78% full has real, already-vetted content sitting unused
+      // in the profile (bullets the tailoring pass didn't select, fuller project
+      // descriptions) that could occupy that space instead of leaving it blank.
+      // Pull it in a few bullets at a time, only keeping each step if it doesn't
+      // push the page count past the target — this never invents anything, it
+      // only surfaces real profile content expandResume() already knows is there.
+      const TARGET_FILL_FLOOR = 85;
+      const MAX_FILL_ITERATIONS = 3;
+      if (m.pages === targetPages && m.lastPageFill < TARGET_FILL_FLOOR) {
+        let fillIterations = 0;
+        while (m.lastPageFill < TARGET_FILL_FLOOR && fillIterations < MAX_FILL_ITERATIONS) {
+          const snapshot = JSON.parse(JSON.stringify(resume));
+          const changed = expandResume(resume, profile, 'light');
+          if (!changed) {
+            console.log(`↕ Fill-up stopped at ${m.lastPageFill}% — no more unused profile content`);
+            break;
+          }
+          const trial = await measureResumePdf(resume, layoutOpts);
+          if (trial.pages > targetPages) {
+            Object.assign(resume, snapshot); // this step would've pushed past the target page — discard it
+            console.log(`↕ Fill-up stopped at ${m.lastPageFill}% — next addition would overflow to ${trial.pages} pages`);
+            break;
+          }
+          m = trial;
+          fillIterations++;
+          console.log(`📐 [fill-up ${fillIterations}] ${m.pages} page(s), ${m.lastPageFill}% filled`);
+        }
+      }
+
+      // Content-trimming ran out before hitting the target — the remaining lever
+      // is shrinking font/spacing, which nothing in this pipeline ever attempted.
+      // Especially worth it when the overflow is tiny (near-0% on the extra page):
+      // that's a case where a barely-perceptible font reduction is a much better
+      // trade than either cutting more real content or leaving a page that's
+      // almost entirely blank.
+      if (m.pages > targetPages) {
+        // Floor at 0.9x, not lower — base bullet text is 10pt, so 0.9x is the
+        // smallest step that keeps body text at the 9pt ATS/human-readability
+        // floor most resume style guides use. A 0.85x step (8.5pt body, ~7.65pt
+        // on dates/contact) reads as visibly cramped and undersized once printed
+        // or reviewed by a human, even though the underlying text layer — which
+        // is all an ATS parser actually reads — is identical at any scale.
+        const shrinkSteps = [0.95, 0.9];
+        for (const scale of shrinkSteps) {
+          const shrunk = {
+            ...layoutOpts,
+            fontScale: scale,
+            lineGap: 1.5 * scale,
+            sectionGap: 0.6 * scale,
+            roleGap: 0.3 * scale,
+          };
+          const trial = await measureResumePdf(resume, shrunk);
+          console.log(`📐 [shrink-to-fit ${scale}x] ${trial.pages} page(s), ${trial.lastPageFill}% filled`);
+          if (trial.pages <= targetPages) {
+            layoutOpts = shrunk;
+            m = trial;
+            break;
+          }
+        }
       }
     } else {
       // Gap #5: 1-page underuse — if 1 page at <75%, pull more content
@@ -395,12 +479,15 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
       }
     }
 
-    // Gap #4: Pick layout opts — font scale, line spacing, section spacing (spacing polish
-    // either way; preserves sectionOrder/headingCase already set above from the saved format)
-    layoutOpts = { ...layoutOpts, ...pickLayoutOpts(m.pages, m.lastPageFill) };
-    if (layoutOpts.fontScale !== 1.0 || layoutOpts.lineGap !== 1.5) {
-      m = await measureResumePdf(resume, layoutOpts);
-      console.log(`📐 Layout tuned (font ${layoutOpts.fontScale}, lineGap ${layoutOpts.lineGap}): ${m.pages} page(s), ${m.lastPageFill}% filled`);
+    // Gap #4: Pick layout opts — font scale, line spacing, section spacing. Only for
+    // the reactive (no explicit target) path — it's expand-only (fontScale >= 1.0),
+    // which would undo the shrink-to-fit step above if applied after a target was set.
+    if (!targetPages) {
+      layoutOpts = { ...layoutOpts, ...pickLayoutOpts(m.pages, m.lastPageFill) };
+      if (layoutOpts.fontScale !== 1.0 || layoutOpts.lineGap !== 1.5) {
+        m = await measureResumePdf(resume, layoutOpts);
+        console.log(`📐 Layout tuned (font ${layoutOpts.fontScale}, lineGap ${layoutOpts.lineGap}): ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
     }
   } catch (e) {
     console.error(`⚠ Page measurement failed (using defaults): ${e.message}`);
@@ -469,7 +556,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   const filePath = path.join(os.tmpdir(), fileName);
   try {
     await withRetry(
-      () => renderResumeDocx(resume, filePath),
+      () => renderResumeDocx(resume, filePath, layoutOpts),
       `render:${job.company}`,
       1
     );
@@ -478,25 +565,30 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     throw e;
   }
 
-  // Step 4.5: Cover letter — generated every time, alongside the resume
+  // Step 4.5: Cover letter — opt-in only. The user checks "Also generate a
+  // cover letter" at submission time; cron (Gmail-forwarded alerts) never
+  // sets this, since no one's there to ask and it'd be unnecessary LLM spend
+  // on every 2-hour batch.
   let coverLetterText = null;
   let coverLetterFilePath = null;
-  try {
-    console.log(`⏱ [${elapsed()}] Writing cover letter...`);
-    const paragraphs = await withRetry(
-      () => coverLetter(resume, job, trace, profile),
-      `cover-letter:${job.company}`,
-      1
-    );
-    if (paragraphs.length) {
-      coverLetterText = paragraphs.join('\n\n');
-      const coverLetterFileName = `cover_letter_${safe(job.company)}_${safe(job.title)}.docx`;
-      coverLetterFilePath = path.join(os.tmpdir(), coverLetterFileName);
-      await renderCoverLetterDocx(resume, job, paragraphs, coverLetterFilePath);
+  if (wantCoverLetter) {
+    try {
+      console.log(`⏱ [${elapsed()}] Writing cover letter...`);
+      const paragraphs = await withRetry(
+        () => coverLetter(resume, job, trace, profile),
+        `cover-letter:${job.company}`,
+        1
+      );
+      if (paragraphs.length) {
+        coverLetterText = paragraphs.join('\n\n');
+        const coverLetterFileName = `cover_letter_${safe(job.company)}_${safe(job.title)}.docx`;
+        coverLetterFilePath = path.join(os.tmpdir(), coverLetterFileName);
+        await renderCoverLetterDocx(resume, job, paragraphs, coverLetterFilePath);
+      }
+      console.log(`⏱ [${elapsed()}] Cover letter done`);
+    } catch (e) {
+      console.error(`⚠ Cover letter failed (resume still proceeds): ${e.message}`);
     }
-    console.log(`⏱ [${elapsed()}] Cover letter done`);
-  } catch (e) {
-    console.error(`⚠ Cover letter failed (resume still proceeds): ${e.message}`);
   }
 
   // Step 5: Save & deliver

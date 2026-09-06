@@ -113,24 +113,40 @@ async function scrapeGeneric(page) {
 async function scrapeJobPage(url) {
   let browser;
   try {
-    browser = await launchBrowser();
-    const page = await browser.newPage();
-    await page.setUserAgent(
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    );
-
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-    const jobData = isLinkedIn(url)
-      ? await scrapeLinkedIn(page)
-      : await scrapeGeneric(page);
-
-    return { ...jobData, url };
+    // page.goto() has its own 30s timeout, but puppeteer.launch() itself does
+    // not reliably enforce one — under memory/CPU pressure (small instances)
+    // the browser process can spawn but never finish its handshake, hanging
+    // the whole job queue indefinitely. This wraps the ENTIRE scrape in a
+    // hard ceiling so a stuck browser always gets killed and the job fails
+    // fast instead of blocking forever.
+    const result = await Promise.race([
+      (async () => {
+        browser = await launchBrowser();
+        const page = await browser.newPage();
+        await page.setUserAgent(
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        );
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        const jobData = isLinkedIn(url)
+          ? await scrapeLinkedIn(page)
+          : await scrapeGeneric(page);
+        return { ...jobData, url };
+      })(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Scrape hard timeout after 60s')), 60000)),
+    ]);
+    return result;
   } catch (e) {
     console.error(`✗ Scrape failed for ${url}:`, e.message);
     return null;
   } finally {
-    if (browser) await browser.close();
+    if (browser) {
+      try {
+        await Promise.race([browser.close(), new Promise((_, reject) => setTimeout(() => reject(new Error('close timeout')), 5000))]);
+      } catch (_) {
+        // browser.close() can itself hang on a wedged process — force-kill as a last resort.
+        try { browser.process()?.kill('SIGKILL'); } catch (_) {}
+      }
+    }
   }
 }
 

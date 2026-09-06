@@ -103,6 +103,20 @@ export const api = {
     return res.json();
   },
 
+  async confirmIngestion(contactResolutions) {
+    const res = await checkedFetch(`${BASE}/ingest/confirm`, {
+      method: 'POST',
+      headers: { ...(await getHeaders()), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contactResolutions: contactResolutions || {} }),
+    });
+    return res.json();
+  },
+
+  async rejectIngestion() {
+    const res = await checkedFetch(`${BASE}/ingest/reject`, { method: 'POST', headers: await getHeaders() });
+    return res.json();
+  },
+
   async getResumeFormat() {
     const res = await checkedFetch(`${BASE}/resume-format`, { headers: await getHeaders() });
     return res.json();
@@ -190,11 +204,11 @@ export const api = {
     return this.ingestText(`I have experience with ${keyword}`);
   },
 
-  async chat(message, mode = 'profile', history = []) {
+  async chat(message, mode = 'profile', history = [], wantCoverLetter = false) {
     const res = await checkedFetch(`${BASE}/chat`, {
       method: 'POST',
       headers: await getHeaders(),
-      body: JSON.stringify({ message, mode, history }),
+      body: JSON.stringify({ message, mode, history, wantCoverLetter }),
     });
     return res.json();
   },

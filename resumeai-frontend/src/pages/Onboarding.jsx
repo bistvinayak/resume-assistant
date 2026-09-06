@@ -152,8 +152,18 @@ export default function Onboarding() {
                         for (let i = 0; i < 90 && !done; i++) {
                           await new Promise(r => setTimeout(r, 2000));
                           const status = await api.getIngestionStatus();
-                          if (status.stage === 'done') done = true;
-                          else if (status.stage === 'failed') throw new Error(status.error || 'Processing failed');
+                          if (status.stage === 'done') {
+                            done = true;
+                          } else if (status.stage === 'awaiting_confirmation') {
+                            // Onboarding has nothing meaningful yet to protect — auto-apply
+                            // rather than surfacing a confirmation dialog before the user has
+                            // even seen the product. The review gate matters for later re-uploads
+                            // against an established profile, not this first one.
+                            await api.confirmIngestion();
+                            done = true;
+                          } else if (status.stage === 'failed') {
+                            throw new Error(status.error || 'Processing failed');
+                          }
                         }
                         if (!done) throw new Error('Processing timed out. Please try again.');
                       }

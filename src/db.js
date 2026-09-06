@@ -11,10 +11,10 @@ const pool = new Pool({
 });
 
 const EMPTY_PROFILE = {
-  contact: {}, summary: '', skills: [], about_me: '', delivery_email: '',
+  contact: {}, summary: '', skills: [], about_me: '', delivery_email: '', auto_process_paused: false,
   experience: [], projects: [], education: [],
   certifications: [], languages: [], activities: [], interests: [],
-  custom_facts: [], custom_sections: [],
+  custom_facts: [], custom_sections: [], self_identification: {},
 };
 
 async function initSchema() {
@@ -148,8 +148,10 @@ async function initSchema() {
       target_pages    INTEGER,
       style_profile   JSONB,
       source_filename TEXT,
+      template_text   TEXT,
       updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    ALTER TABLE resume_format ADD COLUMN IF NOT EXISTS template_text TEXT;
   `);
 }
 
@@ -285,6 +287,24 @@ async function getJobByJobId(jobId, userId = 'me') {
   return rows.length ? rows[0] : null;
 }
 
+// Powers "why this bullet, not that one" follow-up questions in the Apply-to-
+// Job chat — pulls the actual tailoring reasoning (per-bullet "serves", ATS
+// keyword matches, tailoring notes) for whatever job the user most recently
+// had tailored, so the question-answering step has real context instead of
+// just the general profile.
+async function getMostRecentDeliveredJob(userId = 'me') {
+  const { rows } = await pool.query(
+    `SELECT j.job_id, j.title, j.company, j.ats_score, j.matched_keywords, j.missing_keywords,
+            j.tailoring_notes, j.jd_requirements, j.improved, j.substitutions, t.resume_json
+     FROM jobs j
+     JOIN tailored_resume t ON t.job_id = j.job_id AND t.user_id = j.user_id AND t.delivered = true
+     WHERE j.user_id = $1 AND j.status = 'delivered'
+     ORDER BY t.created_at DESC LIMIT 1`,
+    [userId]
+  );
+  return rows.length ? rows[0] : null;
+}
+
 async function insertJobProcessing(job, userId = 'me') {
   const res = await pool.query(
     `INSERT INTO jobs (job_id, user_id, title, company, url, status)
@@ -328,7 +348,7 @@ async function recoverStaleJobs(minutes = 10) {
 
 async function getJobsForUser(userId = 'me', limit = 50) {
   const { rows } = await pool.query(
-    `SELECT DISTINCT ON (j.job_id) j.*, t.created_at AS resume_created_at, t.file_path
+    `SELECT DISTINCT ON (j.job_id) j.*, t.created_at AS resume_created_at, t.file_path, t.cover_letter_file_path
      FROM jobs j
      LEFT JOIN tailored_resume t ON t.job_id = j.job_id AND t.user_id = j.user_id AND t.delivered = true
      WHERE j.user_id = $1
@@ -543,19 +563,19 @@ async function getApprovedForwardingMap() {
 
 async function getResumeFormat(userId = 'me') {
   const { rows } = await pool.query(
-    'SELECT target_pages, style_profile, source_filename, updated_at FROM resume_format WHERE user_id = $1',
+    'SELECT target_pages, style_profile, source_filename, template_text, updated_at FROM resume_format WHERE user_id = $1',
     [userId]
   );
   return rows[0] || null;
 }
 
-async function saveResumeFormat(userId = 'me', { target_pages, style_profile, source_filename }) {
+async function saveResumeFormat(userId = 'me', { target_pages, style_profile, source_filename, template_text }) {
   await pool.query(
-    `INSERT INTO resume_format (user_id, target_pages, style_profile, source_filename, updated_at)
-     VALUES ($1, $2, $3, $4, now())
+    `INSERT INTO resume_format (user_id, target_pages, style_profile, source_filename, template_text, updated_at)
+     VALUES ($1, $2, $3, $4, $5, now())
      ON CONFLICT (user_id) DO UPDATE SET
-       target_pages = $2, style_profile = $3, source_filename = $4, updated_at = now()`,
-    [userId, target_pages, style_profile, source_filename]
+       target_pages = $2, style_profile = $3, source_filename = $4, template_text = $5, updated_at = now()`,
+    [userId, target_pages, style_profile, source_filename, template_text || null]
   );
   return getResumeFormat(userId);
 }
@@ -568,7 +588,7 @@ module.exports = {
   pool, initSchema, getProfile, saveProfile,
   getProfileVersions, restoreProfileVersion,
   seenJobBefore, saveTailored, markDelivered,
-  getJobsForUser, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, forceRequeueJob,
+  getJobsForUser, getJobByJobId, getMostRecentDeliveredJob, insertJobProcessing, markJobFailed, recoverStaleJobs, forceRequeueJob,
   upsertSchemaProposal, getSchemaProposals, getApprovedCategories, updateSchemaProposalStatus, setBackfillStatus,
   recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched,
   saveChatFeedback, getChatFeedback, updateChatFeedbackStatus,

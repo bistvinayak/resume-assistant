@@ -1,9 +1,15 @@
-// Arjun Autofill — injected on demand (via popup "Fill this page" click) into the active tab.
+// Arjun Autofill — runs two ways:
+//  1. Manual: injected on demand via popup "Fill this page" click (any page).
+//  2. Auto: declared in manifest.json content_scripts, matching known ATS domains only.
+//     Gated by the "autoMode" toggle in the popup (chrome.storage.local, default on).
 // Scrapes visible form fields, asks the backend to map them to profile values by meaning,
-// then fills whatever it's confident about. Runs once per injection, no persistent listener.
+// then fills whatever it's confident about.
 
 (function () {
   const CONFIDENCE_THRESHOLD = 0.6;
+  const MIN_AUTO_FIELDS = 3; // avoid firing auto-fill on ATS listing/search pages with just a search box
+  const AUTO_POLL_MS = 800;
+  const AUTO_MAX_WAIT_MS = 45000; // ATS SPAs (Workday, Greenhouse) render the real form well after document_idle
 
   function labelFor(el) {
     if (el.id) {
@@ -122,7 +128,11 @@
   async function run() {
     const fields = scrapeFields();
     if (!fields.length) {
-      showToast('Arjun: no fillable fields found on this page.');
+      // Runs in every frame on the page now (allFrames — see popup.js), including
+      // ad/tracking iframes that legitimately have no fields. Only the top frame
+      // reports "nothing found" so one genuinely-empty page still gets a signal,
+      // without every subframe spamming its own toast.
+      if (window === window.top) showToast('Arjun: no fillable fields found on this page.');
       return;
     }
 

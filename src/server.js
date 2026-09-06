@@ -294,7 +294,7 @@ app.delete(['/resume-format', '/api/resume-format'], async (req, res, next) => {
 // ── CHAT (INTENT-FIRST) ─────────────────────────────────────────────────
 app.post(['/chat', '/api/chat'], async (req, res, next) => {
   try {
-    const { message, mode, history: rawHistory } = req.body || {};
+    const { message, mode, history: rawHistory, wantCoverLetter } = req.body || {};
     if (!message) return res.status(400).json({ error: 'message required' });
 
     const history = (Array.isArray(rawHistory) ? rawHistory : [])
@@ -356,7 +356,7 @@ app.post(['/chat', '/api/chat'], async (req, res, next) => {
             await markJobFailed(jobId, 'Could not scrape job page — page may require login or URL is invalid');
             return;
           }
-          await queueJob({ job_id: jobId, title: scraped.title || 'Unknown Role', company: scraped.company || 'Unknown Company', jd_text: scraped.jd_text, url }, req.userId, { source: 'app', force: isRerun, ...ctx });
+          await queueJob({ job_id: jobId, title: scraped.title || 'Unknown Role', company: scraped.company || 'Unknown Company', jd_text: scraped.jd_text, url }, req.userId, { source: 'app', force: isRerun, wantCoverLetter: !!wantCoverLetter, ...ctx });
           console.log(`⏱ Total job processing: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
         } catch (e) {
           console.error('Chat job processing error:', e.message);
@@ -649,7 +649,8 @@ app.get(['/jobs/:jobId/download', '/api/jobs/:jobId/download'], authMiddleware, 
     } else {
       const fileName = `arjun_${safe(company)}_${safe(title)}.docx`;
       const filePath = require('path').join(require('os').tmpdir(), fileName);
-      await renderResumeDocx(resume_json, filePath);
+      const layoutOpts = resume_json._layoutOpts || { fontScale: resume_json._fontScale || 1.0 };
+      await renderResumeDocx(resume_json, filePath, layoutOpts);
       res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.sendFile(filePath);

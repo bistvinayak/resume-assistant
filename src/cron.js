@@ -5,7 +5,7 @@ const { queueJob } = require('./pipeline');
 const { fetchLinkedInJobs } = require('./gmail');
 const { scrapeLinkedInJob } = require('./scraper');
 const { sendAcknowledgmentEmail } = require('./mailer');
-const { recoverStaleJobs, insertJobProcessing, getApprovedForwardingMap } = require('./db');
+const { recoverStaleJobs, insertJobProcessing, getApprovedForwardingMap, getProfile } = require('./db');
 
 async function runBatch() {
   console.log(`⏱  cron: checking forwarded job alert emails...`);
@@ -43,7 +43,7 @@ async function runBatch() {
       for (const url of urls) {
         const jobId = url.match(/\/jobs\/view\/(\d+)/)?.[1] || Date.now();
         jobsToProcess.push({
-          job_id: `linkedin_${jobId}`,
+          job_id: `linkedin_${jobId}_${(email.userId || 'me').slice(0, 8)}`,
           title: email.title,
           company: email.company,
           jd_text: '',
@@ -58,6 +58,15 @@ async function runBatch() {
 
   for (const job of jobsToProcess) {
     try {
+      // Per-user kill switch — settable by the user in their Dashboard or by
+      // an admin — for pausing automatic resume generation from forwarded
+      // Gmail alerts without having to revoke forwarding approval entirely.
+      const profile = await getProfile(job.userId).catch(() => null);
+      if (profile?.auto_process_paused) {
+        console.log(`· auto-processing paused for user ${job.userId}, skipping ${job.job_id}`);
+        continue;
+      }
+
       if (job.url) {
         const scraped = await scrapeLinkedInJob(job.url);
         if (scraped && scraped.jd_text) {

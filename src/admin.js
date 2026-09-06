@@ -71,6 +71,7 @@ async function getUsers(req, res) {
         mp.profile->>'gmail_connected' as gmail_connected,
         mp.profile->>'daily_limit' as daily_limit,
         mp.profile->>'active' as active,
+        mp.profile->>'auto_process_paused' as auto_process_paused,
         COUNT(j.job_id) as jobs_count,
         MAX(j.seen_at) as last_job,
         AVG(j.ats_score) as avg_ats
@@ -90,6 +91,7 @@ async function getUsers(req, res) {
         gmail_connected: r.gmail_connected === 'true',
         daily_limit: parseInt(r.daily_limit) || 10,
         active: r.active !== 'false',
+        auto_process_paused: r.auto_process_paused === 'true',
         jobs_count: parseInt(r.jobs_count) || 0,
         last_job: r.last_job,
         avg_ats: Math.round(parseFloat(r.avg_ats) || 0),
@@ -106,12 +108,13 @@ async function getUsers(req, res) {
 // PATCH /api/admin/users/:userId
 async function updateUser(req, res) {
   const { userId } = req.params;
-  const { active, daily_limit } = req.body;
+  const { active, daily_limit, auto_process_paused } = req.body;
 
   try {
     const updates = {};
     if (active !== undefined) updates.active = active;
     if (daily_limit !== undefined) updates.daily_limit = daily_limit;
+    if (auto_process_paused !== undefined) updates.auto_process_paused = auto_process_paused;
 
     for (const [key, val] of Object.entries(updates)) {
       await pool.query(

@@ -14,6 +14,9 @@ const MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-3.7-flash';
 // Resume-writing steps (tailor/improve) get a stronger model — the prose quality and
 // strict "select+reframe, never invent" constraint matter more here than in extraction/scoring.
 const WRITING_MODEL = process.env.OPENROUTER_WRITING_MODEL || 'google/gemini-3.7-flash';
+// Browser-extension form mapping is low-stakes (structured field->value matching, not resume
+// prose) and can run on OpenRouter's free tier without hurting output quality that matters.
+const FORM_FILL_MODEL = process.env.OPENROUTER_FORM_FILL_MODEL || 'z-ai/glm-5.2:free';
 
 const langfuse = new Langfuse({
   secretKey: process.env.LANGFUSE_SECRET_KEY,
@@ -37,7 +40,7 @@ async function formatApprovedCategories() {
 const PROFILE_SCHEMA = `
 Return ONLY JSON matching this shape (omit fields you found nothing for):
 {
-  "contact": { "name": "", "email": "", "phone": "", "location": "", "linkedin": "", "github": "", "portfolio": "" },
+  "contact": { "name": "", "email": "", "phone": "", "location": "", "address_line1": "", "address_line2": "", "city": "", "state": "", "postal_code": "", "country": "", "linkedin": "", "github": "", "portfolio": "" },
   "summary": "",
   "technical_skills": [
     {
@@ -83,7 +86,7 @@ Return ONLY JSON matching this shape (omit fields you found nothing for):
       "outcome": "Measurable result or impact of this project"
     }
   ],
-  "education": [ { "school": "", "degree": "", "dates": "", "gpa": "", "honors": "" } ],
+  "education": [ { "school": "", "degree": "Degree type only, e.g. 'Master of Science', 'Bachelor of Technology' — no major", "major": "Field of study, e.g. 'Artificial Intelligence for Business', 'Computer Science'. If the source lists degree and major together (e.g. 'Master of Science, Artificial Intelligence for Business'), split them into these two separate fields rather than keeping the major inside the degree string.", "dates": "", "gpa": "", "honors": "" } ],
   "certifications": [ { "name": "", "issuer": "", "date": "", "validity": "" } ],
   "languages": [ { "name": "", "proficiency": "", "read": true, "write": true, "speak": true } ],
   "career": {
@@ -95,6 +98,13 @@ Return ONLY JSON matching this shape (omit fields you found nothing for):
     "preferred_locations": [],
     "work_permit": [],
     "desired_job_type": ""
+  },
+  "self_identification": {
+    "gender": "",
+    "hispanic_latino": "",
+    "race_ethnicity": "",
+    "veteran_status": "",
+    "disability_status": ""
   },
   "activities": [],
   "interests": [],
@@ -263,25 +273,26 @@ PROCESS:
 1. EXTRACT JD REQUIREMENTS — Identify 8-15 key requirements from the job description (skills, responsibilities, outcomes, domain knowledge).
 2. SCORE EVERY PROFILE BULLET — For each bullet, ask: "Does this demonstrate experience relevant to any JD requirement?"
 3. SELECT ALL RELEVANT BULLETS — Include every bullet that matches at least one requirement. Be GREEDY — more relevant content is always better. Page fit is handled separately by the system, not by you.
-4. REFRAME — Adjust wording to use JD keywords where the candidate has equivalent experience. Preserve the core fact, metric, and impact.
+4. REFRAME — For each JD requirement a bullet serves, check whether the JD uses specific terminology for it (a tool name, methodology, framework, or phrase — e.g. "Jira", "OKRs", "root cause analysis"). If the candidate's bullet already describes that same underlying work under different wording, use the JD's exact term instead of a generic paraphrase — this is what actually moves ATS matching, not loose rewording. Only do this where the match is genuine: the candidate's real experience must already contain that concept, just phrased differently. Never introduce a JD term the bullet's underlying work doesn't actually support — that's inventing a qualification, not reframing one. Preserve the core fact, metric, and impact either way.
 5. ANNOTATE — For each selected bullet, add a "serves" field naming which JD requirement it addresses.
 
 CONTENT INTEGRITY RULES:
 - Every bullet in the output MUST trace back to a specific bullet in the profile
 - You may rephrase "Spearheaded a centralized Content Management Tool" → "Led development of a centralized Content Management Tool" (same fact, JD-aligned wording)
+- You may adopt the JD's own terminology when it's a genuine match: candidate's "coordinated daily team check-ins" + JD says "Daily Standups" → "Led Daily Standups" (same real activity, JD's exact term)
 - You may NOT rephrase "Built 4 separate analytics products" → "Owned analytics suite" (lost the detail)
+- You may NOT adopt a JD term the bullet doesn't actually support — e.g. do not write "led Kubernetes migration" onto a bullet that never mentions containers or infrastructure work, even if Kubernetes is in the JD
 - Sub-point bullets (e.g. "Price Monitor — ...", "Brand Protector — ...") are distinct achievements. Each one is its own bullet. NEVER collapse them.
 - If the profile says "$0.5M revenue" the resume must say "$0.5M revenue", not "significant revenue"
 - NEVER invent new bullets, combine two bullets into one, or summarize multiple achievements
 - NEVER drop a metric ($, %, number) — metrics are sacred
 
 WHAT TO INCLUDE:
-- ALL experience roles from the profile — never drop a role entirely
-- Be GREEDY — include ALL JD-relevant bullets. Do NOT limit yourself to a page count.
-- For highly relevant roles: include ALL bullets (up to 10)
-- For somewhat relevant roles: include 3-6 bullets, prioritize ones with metrics
-- For roles with minimal JD overlap: include 2-3 bullets minimum
-- Bullets with specific metrics that match JD requirements always get priority
+- ALL experience roles from the profile — never drop a role entirely, regardless of page target.
+- Target page count for this resume: {{target_pages}}.
+  - If the target is 1 page: be SELECTIVE, not greedy. For each role, include only the 2-3 bullets with the strongest concrete impact (a real metric, dollar figure, or standout outcome) that also connect to a JD requirement. If a role has several JD-relevant bullets, pick the ones with numbers over the ones without — a resume that covers fewer JD keywords but reads as dense with real impact beats one that's exhaustive but padded with generic activity. This is a hard constraint, not a preference: content that doesn't fit this selectivity gets left out, not squeezed in with smaller fonts later.
+  - If the target is more than 1 page, or not specified: be GREEDY — include every JD-relevant bullet. For highly relevant roles: up to 10 bullets. For somewhat relevant roles: 3-6 bullets, prioritizing ones with metrics. For roles with minimal JD overlap: 2-3 bullets minimum.
+- Bullets with specific metrics that match JD requirements always get priority.
 - Contact: use exactly what the profile has (name, email, phone, location, links)
 
 SUMMARY: 2-3 sentences. Reuse profile facts. Tune to JD but do not fabricate.
@@ -349,7 +360,7 @@ tailoring_notes: 4-6 sentences. For each note: which profile bullet you reframed
     prompt: `You previously tailored a resume and got an ATS score below target.
 Your task: improve the resume by incorporating missing keywords WHERE semantically equivalent experience already exists in the resume.
 
-You're given MISSING KEYWORD PLACEMENT below — an analysis of exactly which existing bullet (if any) each missing keyword could genuinely attach to. Trust that diagnosis: where it names a bullet, that's your starting point for a rephrase. Where it says no fit exists, leave that keyword alone — do not go looking for a workaround elsewhere in the resume.
+You're given MISSING KEYWORD PLACEMENT below — an analysis of exactly which existing bullet (if any) each missing keyword could genuinely attach to. For process/methodology keywords, trust that diagnosis: where it names a bullet, that's your starting point for a rephrase. Where it says no fit exists, leave that keyword alone — do not go looking for a workaround elsewhere in the resume. For PROPER-NOUN keywords (see rule below), don't just trust the diagnosis — independently re-check it yourself before using it, since this is the category most likely to get fabricated.
 
 You're also given this candidate's TAILORING NOTES and JD REQUIREMENTS from the original tailoring pass — the same read of the job's priorities used to build this resume. Stay consistent with that read rather than re-deriving your own.
 
@@ -357,6 +368,7 @@ STRICT RULES:
 - Only rephrase existing bullets — never add new facts, experiences, or metrics
 - Only use a missing keyword where MISSING KEYWORD PLACEMENT names a genuine fit
 - If a keyword has no fit, leave every bullet touching that topic unchanged
+- A missing keyword that is a PROPER NOUN may ONLY be added if that exact term (or an unambiguous abbreviation) already appears verbatim somewhere else in CURRENT RESUME below. This category includes obvious brand names ("Jira", "AWS", "Azure", "Salesforce") AND named methodologies/frameworks that read as plain lowercase phrases but are actually a specific named approach the candidate would need to have specifically studied or practiced — e.g. "Working Backwards" (Amazon's PM methodology), "Jobs to be Done"/"JTBD", "Design Thinking", "Blue Ocean Strategy", "RICE", "OKRs", "SAFe". The test: would claiming this keyword require the candidate to have specifically named/studied/certified in THIS THING, not just done work that happens to overlap with what it describes? If yes, treat it as a proper noun. Check verbatim presence yourself against the actual resume text; do not take MISSING KEYWORD PLACEMENT's word for it. A bullet describing the same TYPE of work ("cloud microservices" for "AWS", "identifying customer needs" for "Working Backwards", "managing sprint backlogs" for "Jira") is NOT grounds to add the proper noun — that invents a fact the candidate never confirmed, no matter how plausible the connection sounds. Generic process descriptions that aren't a named methodology (e.g. "Go-To-Market", "root cause analysis") can still match on process alone.
 - This is ONE iteration only — return your best attempt
 
 Return ONLY JSON with TWO keys:
@@ -371,6 +383,8 @@ Return ONLY JSON with TWO keys:
     prompt: `You are an ATS analyzer. Compare the resume to the job description.
 
 For each missing keyword, also diagnose WHERE it could plausibly go: scan the resume's existing bullets for one that describes genuinely equivalent experience under different wording. This isn't a guess — only name a bullet if the underlying experience is really there. If nothing in the resume is a genuine fit, say so explicitly rather than forcing a match.
+
+A missing keyword that is a PROPER NOUN needs a hard, mechanical check. This category is broader than it first looks — it's not just tools with obvious brand capitalization ("Jira", "Salesforce", "AWS"), it also includes NAMED METHODOLOGIES/FRAMEWORKS that read as ordinary lowercase phrases but are actually a specific named approach a candidate would need to have specifically studied or practiced — e.g. "Working Backwards" (Amazon's PM methodology), "Jobs to be Done" / "JTBD", "Design Thinking", "Blue Ocean Strategy", "Lean Six Sigma", "RICE", "OKRs", "SAFe" — as well as certifications and cloud providers ("AWS", "Azure", "PMP"). The test: would claiming this keyword require the candidate to have specifically named/studied/certified in THIS THING, as opposed to just having done work that happens to overlap with what it describes? If yes, it's a proper noun for this purpose. Only name a bullet as a genuine fit for a proper-noun keyword if that EXACT term (or an unambiguous abbreviation) already appears verbatim somewhere else in the resume. A bullet merely describing the same TYPE of work — "managing sprint backlogs" for "Jira", "cloud microservices" for "AWS", "identifying customer needs" for "Working Backwards" — is NOT a genuine fit; the candidate never confirmed using that specific named thing, and attaching it anyway is fabrication, not rewording, even though the underlying work sounds related. Generic process descriptions that aren't a named methodology (e.g. "Go-To-Market", "root cause analysis", "sprint planning") can still match on process alone, as before. When genuinely unsure, treat it as a proper noun — the cost of a missed match is lower than the cost of a fabricated qualification.
 
 Return ONLY JSON:
 {
@@ -393,7 +407,10 @@ MERGE RULES (in priority order):
 1. NEVER DROP DATA — this merge is additive. Every fact from both profiles must appear in the output.
 
 2. EXPERIENCE MATCHING:
-   - Match entries by company name + job title (case-insensitive, fuzzy — "Sr. PM" = "Senior Product Manager", "Analyst" ≈ "Business Analyst")
+   - Match entries by company name + job title (case-insensitive, fuzzy):
+     • Titles: "Sr. PM" = "Senior Product Manager", "Analyst" ≈ "Business Analyst"
+     • Company names: treat legal-entity suffixes and shortened/expanded forms as the SAME company — "Zinnia" = "Zinnia Insurance" = "Zinnia Inc." = "Zinnia, LLC". If one name is a prefix/substring of the other, or they differ only by a corporate suffix (Inc, LLC, Ltd, Corp, Group, Insurance, Technologies, etc.), that is the same employer, not two different ones — same rule applies to location differences (e.g. an office/HQ address change) and to dates that are adjacent-but-not-overlapping (a role that continued past what an earlier resume listed, e.g. "Apr 2025–Aug 2025" now shown as "Apr 2025–Present").
+     • Only treat two entries at the same-ish time as genuinely different employers when the names are actually unrelated (e.g. "Zinnia" vs "Tata Digital") — do not invent a distinction from formatting differences.
    - For MATCHED entries, merge their bullets:
      a. If two bullets describe the same achievement, KEEP THE RICHER ONE (more metrics, more detail)
      b. Add genuinely new bullets that don't overlap with existing ones
@@ -449,7 +466,7 @@ WRONG: dropping sub-points because "the parent bullet already covers the suite"
 
 9. PROJECTS: Match by name (fuzzy). Merge descriptions (keep shorter, punchier one-liner), keep richer outcome. Preserve project URLs. MERGE tech_stack arrays (union, dedup). MERGE bullets arrays (dedup by text, keep richer version with metrics/impact).
 
-10. EDUCATION: Match by school+degree. Include secondary education (12th, 10th) if present. Keep entry with GPA/honors.
+10. EDUCATION: Match by school+degree. Include secondary education (12th, 10th) if present. Keep entry with GPA/honors/major — degree and major are separate fields (degree = "Master of Science", major = "Artificial Intelligence for Business", not combined into one string).
 
 11. LANGUAGES: Union by name, keep richer proficiency and read/write/speak flags.
 
@@ -458,6 +475,19 @@ WRONG: dropping sub-points because "the parent bullet already covers the suite"
 13. CAREER: Merge per field, prefer NEW data. Keep notice_period, preferred_locations, work_permit, total_experience, etc.
 
 14. CUSTOM_SECTIONS: Match by category key (exact string match). For matched categories, union items by text (dedup, keep richer metric/impact). For categories only in one source, include as-is. NEVER drop a custom_sections category or item — this is where non-standard resume sections live (Publications, Patents, Awards, etc.) and losing them is as bad as losing an experience bullet.
+
+15. CHANGES SUMMARY: This runs before the user sees the merge, so they can review it before it's applied to their profile. Add a top-level "changes_summary" key (sibling to the profile fields above) using your OWN semantic judgment of what's genuinely new vs. what's the same fact worded differently — not a string comparison. "DIT University, Dehradun" and "DIT University, Dehradun, UK ,India" are the SAME school (a typo, not a new entry); "Zinnia" and "Zinnia Insurance" are the SAME employer. Only list something as new if it's actually new information.
+{
+  "changes_summary": {
+    "new_roles": ["Title at Company — only roles that don't exist in CURRENT PROFILE at all"],
+    "updated_roles": [{ "company": "", "added_bullets": 0 }],
+    "new_education": ["Degree — School — only if this school+degree isn't already represented in CURRENT PROFILE under any wording"],
+    "new_activities": [""],
+    "new_certifications": [""],
+    "new_skills": [""],
+    "contact_changes": [{ "field": "email|phone|location", "from": "value in CURRENT PROFILE", "to": "value in the merged result" }]
+  }
+}
 
 {{profile_schema}}`,
     config: { model: MODEL, temperature: 0.1 },
@@ -556,12 +586,13 @@ If asking a clarifying question, set "needs_clarification": true and "extracted"
   intent_classify: {
     prompt: `You are the intent gate for Arjun, an AI career profile builder. Your job: decide if the user's message is within Arjun's scope, and respond accordingly.
 
-You will receive the user's CURRENT PROFILE as context. Use it to answer profile questions directly and give informed responses.
+You will receive the user's CURRENT PROFILE as context, and — when the user is discussing a resume that was just tailored for a specific job — a MOST RECENT TAILORED RESUME block with the actual bullets used and WHY each was selected. Use whichever is relevant to answer directly and specifically, not generically.
 
 Arjun's scope:
 - Adding/updating career info: experience, skills, education, certifications, projects, contact details, summary, languages, achievements
 - Removing/deleting profile data
 - Questions about their profile, the system, or career-related advice
+- Questions about a just-tailored resume — "why this bullet and not that one", "why is this keyword missing", "why this ATS score" — answer using the MOST RECENT TAILORED RESUME context when it's provided, citing the actual bullet/keyword/score, not a generic explanation
 - Responding to a previous clarifying question
 - Greetings and acknowledgements
 
@@ -615,6 +646,8 @@ If nothing matches, return { "matches": [] }.`,
   map_form_fields: {
     prompt: `You map job-application form fields to a candidate's profile data, using MEANING not keyword matching. A field labeled "Legal first name" must match the same profile value as one labeled "Given name" — do not rely on exact string overlap.
 
+TODAY'S DATE: {{today}}
+
 CANDIDATE PROFILE:
 {{profile_json}}
 
@@ -623,7 +656,16 @@ For each form field below (label, placeholder, name/id attribute, input type, an
 2. For select/radio/checkbox fields, pick the OPTION VALUE (exact string from the options list) that best matches the profile data — do not invent an option that isn't listed.
 3. How confident are you (0-1). Below 0.6, still return your best guess but the caller will not auto-fill it.
 
-Common field meanings to recognize regardless of exact wording: full/first/last name, email, phone, current location/city, LinkedIn URL, GitHub/portfolio URL, current company, current title, years of experience, work authorization / visa sponsorship status, desired salary, availability/start date, highest education level, school/university, degree, graduation year, cover letter, referral source, gender/race/veteran/disability (self-identification — only fill if the profile explicitly has this data, otherwise skip; never guess demographic data).
+Common field meanings to recognize regardless of exact wording: full/first/last name, email, phone, LinkedIn URL, GitHub/portfolio URL, current company, current title, years of experience, work authorization (career.work_permit) / visa sponsorship status, desired salary, availability/start date, highest education level, school/university, degree, graduation year, cover letter, referral source. Voluntary self-identification (gender, Hispanic/Latino, race/ethnicity, veteran status, disability status) maps to the dedicated self_identification.* fields — ONLY fill these if that exact sub-field is explicitly populated in the profile, otherwise skip; never infer or guess demographic data from a name, photo, or anything else.
+
+Mailing address fields are their own category, distinct from the general "location" field — map each to its specific profile.contact sub-field, not to the general location string: "Address line 1" / "Street address" → contact.address_line1, "Address line 2" / "Unit, suite, etc." → contact.address_line2, "City" → contact.city, "Postal/Zip code" → contact.postal_code, "Country/Region" → contact.country, "Province/State" → contact.state. If a form only has a single generic "Location" or "City" field with no separate address-line/postal-code fields, that one can use contact.location instead.
+
+Education fields need derived values, not just copied ones — use the candidate's most recent/highest education entry unless the form clearly asks about a different one:
+- "Education level" (usually a select: High School / Associate's / Bachelor's / Master's / Doctorate, etc.) — derive this from education[].degree text (e.g. "Master of Science" → "Master's", "Bachelor of Technology" → "Bachelor's") and pick the closest matching OPTION from the field's own options list. Don't skip this just because the profile has no field literally called "education level."
+- "Major" / "Field of study" — use education[].major. "First major" → the highest/most recent entry's major. "Second major" or "Minor" — only fill if the profile actually lists more than one concurrent field of study for that entry; otherwise skip, don't force the same major into both fields.
+- "Are you currently a student?" / "Currently enrolled" — derive from whether the highest education entry's dates extend to or past TODAY'S DATE above (an end date in the future, or text like "Present"/"Current"/"Ongoing") → answer yes/true; a dates range fully in the past → no/false. Pick whichever option text the field actually offers (e.g. "Yes"/"No", "true"/"false").
+
+Account-credential fields ("Password", "New Password", "Confirm/Verify Password", "Verify New Password", "PIN") must NEVER be filled — always skip these regardless of confidence, even if a value superficially resembles one in the profile. There is no password in the candidate's profile and none should ever be invented or reused for this purpose. "Email Address" / "Email" on the same account-creation form still maps normally to contact.email.
 
 Skip (do not include in the output) any field that has no reasonable match in the profile — do not force a fill. Never fabricate a value that isn't in the profile.
 
@@ -636,11 +678,13 @@ Return ONLY JSON:
     { "field_id": "the id you were given for this field", "value": "the value to fill", "confidence": 0.0-1.0, "profile_path": "e.g. contact.email" }
   ]
 }`,
-    config: { model: MODEL, temperature: 0.1 },
+    config: { model: FORM_FILL_MODEL, temperature: 0.1 },
   },
 
   analyze_resume_format: {
     prompt: `You analyze a resume that a candidate uploaded as a STYLE REFERENCE — not to extract their career facts (that already happens elsewhere), but to describe its visual/structural presentation so a different candidate's resume can be rendered in a similar style.
+
+If a file is attached, actually look at it — real bold/weight, real spacing, real visual hierarchy — rather than guessing from the text alone. If no file is attached, infer as best you can from the text below.
 
 The candidate also gave a target page count: {{target_pages}}.
 
@@ -648,10 +692,12 @@ Look at:
 - SECTION ORDER: the order sections actually appear in (e.g. does Skills come before or after Experience? Is a Projects section present and where?)
 - HEADING CASE: are section headings ALL CAPS or Title Case?
 - DENSITY: are bullets terse one-liners, or longer/more detailed? Is the resume visually dense or spacious?
+- BULLET STRUCTURE: do bullets start with a bold functional/skill label followed by a colon or dash before the description (e.g. "Root-Cause Analysis: Investigated...")? Or are they plain sentences with no label?
+- ROLE HEADER LAYOUT (for each experience/education entry, look at the first two lines): does the COMPANY/SCHOOL name appear on its own line first (often bold/caps, sometimes with a location), with the job TITLE/DEGREE and dates on the line below it? Or is it a single line like "Title, Company — dates"? Also note whether the company/school name is rendered in ALL CAPS or as normally written.
 
-Only describe what you can actually observe in the text below — do not invent structure that isn't there.
+Only describe what you can actually observe — do not invent structure that isn't there. This analysis runs once and gets reused on every future resume for this candidate, so capture enough concrete detail to be useful without needing to re-look at the file.
 
-RESUME TEXT:
+RESUME TEXT (fallback if no file attached):
 {{template_text}}
 
 Return ONLY JSON:
@@ -659,6 +705,10 @@ Return ONLY JSON:
   "section_order": ["summary", "skills", "experience", "projects", "education", "certifications", "activities", "interests"],
   "heading_case": "upper" | "title",
   "density": "concise" | "detailed",
+  "bold_label_bullets": true | false,
+  "role_header_style": "company_first_two_line" | "title_first_one_line",
+  "company_case": "upper" | "as_is",
+  "example_bullets": ["1-3 short bullets copied VERBATIM from the resume that best demonstrate its bullet structure/pattern — empty array if bullets are plain sentences with no notable pattern"],
   "notes": "one or two sentences on anything else notable about the presentation — not directly rendered, just useful context"
 }
 
@@ -821,11 +871,22 @@ function evalSmartMerge(trace, current, incoming, result) {
 }
 
 // ── ASK JSON ────────────────────────────────────────────────────────────
-async function askJson(system, user, generationName, trace, langfusePrompt, history = [], model = MODEL) {
+// fileAttachment: optional { filename, base64, mimeType } — sends the raw
+// file as multimodal input (Gemini can genuinely see PDF layout/bold/etc.,
+// not just inferred text). Only use for one-time analysis calls, not calls
+// that run per-job, since re-sending file bytes on every call burns tokens.
+async function askJson(system, user, generationName, trace, langfusePrompt, history = [], model = MODEL, fileAttachment = null) {
+  const userContent = fileAttachment
+    ? [
+        { type: 'text', text: user },
+        { type: 'file', file: { filename: fileAttachment.filename, file_data: `data:${fileAttachment.mimeType};base64,${fileAttachment.base64}` } },
+      ]
+    : user;
+
   const messages = [
     { role: 'system', content: system },
     ...history,
-    { role: 'user', content: user },
+    { role: 'user', content: userContent },
   ];
 
   const generation = trace.generation({
@@ -943,13 +1004,28 @@ async function extractFacts(rawText, ctx = {}) {
   return result;
 }
 
-async function tailorResume(profile, job, trace) {
-  const { text: system, langfusePrompt } = await getPrompt('tailor_resume');
+async function tailorResume(profile, job, trace, resumeFormat) {
+  const { text: system, langfusePrompt } = await getPrompt('tailor_resume', {
+    target_pages: resumeFormat?.target_pages || 'not specified',
+  });
+
+  // Reuses the compact style_profile distilled once at upload time (from a
+  // multimodal read of the actual uploaded file, when available) — never the
+  // raw document itself, which would burn tokens resending it on every job.
+  const sp = resumeFormat?.style_profile;
+  const styleBlock = sp
+    ? `\n\nSTYLE REFERENCE (distilled from the candidate's own uploaded resume template — match wherever it fits the actual facts; never fabricate detail just to match the pattern; every fact must still trace to CANDIDATE PROFILE above):\n` +
+      (sp.notes ? `${sp.notes}\n` : '') +
+      (sp.density === 'detailed' ? 'Bullets should be multi-line and detailed, not terse one-liners.\n' : 'Bullets should be terse and concise.\n') +
+      (sp.bold_label_bullets && sp.example_bullets?.length
+        ? `Bullets use a bold functional/skill label prefix before a colon or dash. Examples from the reference:\n${sp.example_bullets.map(b => `- ${b}`).join('\n')}\nMatch this exact structural pattern in your own bullets.\n`
+        : '')
+    : '';
 
   const user =
     `TARGET JOB:\nTitle: ${job.title}\nCompany: ${job.company}\nURL: ${job.url || 'N/A'}\n` +
     `Description:\n${job.jd_text}\n\n` +
-    `CANDIDATE PROFILE:\n${JSON.stringify(profile)}`;
+    `CANDIDATE PROFILE:\n${JSON.stringify(profile)}${styleBlock}`;
 
   const result = await askJson(system, user, 'tailor_resume', trace, langfusePrompt, [], WRITING_MODEL);
   evalTailoring(trace, result);
@@ -1022,7 +1098,7 @@ async function calculateAtsScore(resume, job, trace) {
 
 // ── INTENT GATE ───────────────────────────────────────────────────────
 
-async function classifyIntent(message, profile, ctx = {}, history = []) {
+async function classifyIntent(message, profile, ctx = {}, history = [], jobContext = null) {
   // URL detection is structural — the only thing safe to handle without LLM
   const urlMatch = message.trim().match(/https?:\/\/[^\s]+/);
   if (urlMatch) {
@@ -1049,7 +1125,20 @@ async function classifyIntent(message, profile, ctx = {}, history = []) {
   const trace = makeTrace('intent_classify', ctx);
   const { text: system, langfusePrompt } = await getPrompt('intent_classify');
 
-  const userContent = `CURRENT PROFILE:\n${JSON.stringify(profile)}\n\nUSER MESSAGE:\n${message}`;
+  const jobContextBlock = jobContext
+    ? `\n\nMOST RECENT TAILORED RESUME (for "why this bullet / why not that" style questions about a specific job application — answer using this, not just the general profile):\n` +
+      `Job: ${jobContext.title} at ${jobContext.company}\n` +
+      `ATS score: ${jobContext.ats_score}/100${jobContext.improved ? ' (after an improvement pass)' : ''}\n` +
+      `Matched keywords: ${(jobContext.matched_keywords || []).join(', ') || 'none'}\n` +
+      `Missing keywords: ${(jobContext.missing_keywords || []).join(', ') || 'none'}\n` +
+      `Tailoring notes: ${(jobContext.tailoring_notes || []).join('; ') || 'none'}\n` +
+      `Resume bullets actually used, each with WHY it was selected ("serves" = the JD requirement it addresses):\n` +
+      (jobContext.resume_json?.experience || []).map(e =>
+        `${e.company}:\n` + (e.bullets || []).map(b => `  - "${b.text}" — serves: ${b.serves || 'general relevance'}`).join('\n')
+      ).join('\n')
+    : '';
+
+  const userContent = `CURRENT PROFILE:\n${JSON.stringify(profile)}\n\nUSER MESSAGE:\n${message}${jobContextBlock}`;
   const result = await askJson(system, userContent, 'intent_classify', trace, langfusePrompt, history);
 
   langfuse.score({ traceId: trace.id, name: 'intent', value: result.in_scope ? 1 : 0, comment: result.intent });
@@ -1110,9 +1199,10 @@ async function mapFormFields(fields, profile, ctx = {}) {
   const { text: system, langfusePrompt } = await getPrompt('map_form_fields', {
     profile_json: JSON.stringify(profile),
     form_fields_json: JSON.stringify(fields),
+    today: new Date().toISOString().slice(0, 10),
   });
 
-  const result = await askJson(system, 'Map the fields.', 'map_form_fields', trace, langfusePrompt);
+  const result = await askJson(system, 'Map the fields.', 'map_form_fields', trace, langfusePrompt, [], FORM_FILL_MODEL);
   const mappings = result.mappings || [];
   langfuse.score({ traceId: trace.id, name: 'fields-mapped', value: mappings.length, comment: `${mappings.length}/${fields.length} fields mapped` });
   return mappings;
@@ -1122,19 +1212,27 @@ const VALID_SECTIONS = ['summary', 'skills', 'experience', 'projects', 'educatio
 
 // Analyzes an uploaded resume as a STYLE reference (section order/heading case/density) —
 // not fact extraction. Used to render future tailored resumes in a similar presentation.
-async function analyzeResumeFormat(templateText, targetPages, ctx = {}) {
+// fileAttachment: optional { filename, base64, mimeType } — when given (PDF
+// uploads), Gemini sees the actual document layout instead of just extracted
+// text. One-time call at upload; the resulting styleProfile is what gets
+// reused cheaply on every future tailoring call, not the file itself.
+async function analyzeResumeFormat(templateText, targetPages, ctx = {}, fileAttachment = null) {
   const trace = makeTrace('analyze_resume_format', ctx);
   const { text: system, langfusePrompt } = await getPrompt('analyze_resume_format', {
     template_text: templateText,
     target_pages: targetPages || 'not specified',
   });
 
-  const result = await askJson(system, 'Analyze the format.', 'analyze_resume_format', trace, langfusePrompt);
+  const result = await askJson(system, 'Analyze the format.', 'analyze_resume_format', trace, langfusePrompt, [], MODEL, fileAttachment);
   const sectionOrder = (result.section_order || []).filter(s => VALID_SECTIONS.includes(s));
   const styleProfile = {
     section_order: sectionOrder.length ? sectionOrder : VALID_SECTIONS,
     heading_case: result.heading_case === 'title' ? 'title' : 'upper',
     density: result.density === 'detailed' ? 'detailed' : 'concise',
+    bold_label_bullets: !!result.bold_label_bullets,
+    role_header_style: result.role_header_style === 'company_first_two_line' ? 'company_first_two_line' : 'title_first_one_line',
+    company_case: result.company_case === 'upper' ? 'upper' : 'as_is',
+    example_bullets: Array.isArray(result.example_bullets) ? result.example_bullets.slice(0, 3) : [],
     notes: result.notes || '',
   };
   langfuse.score({ traceId: trace.id, name: 'sections-detected', value: sectionOrder.length });

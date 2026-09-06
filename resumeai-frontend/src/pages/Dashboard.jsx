@@ -172,7 +172,7 @@ const FeedbackButtons = ({ traceId, feedback, onFeedback, userMessage, arjunRepl
   );
 };
 
-const DownloadButtons = ({ jobId, downloading, onDownload }) => (
+const DownloadButtons = ({ jobId, downloading, onDownload, hasCoverLetter }) => (
   <div style={{ display: 'flex', gap: '8px' }}>
     <button
       onClick={(e) => onDownload(e, jobId, 'docx')}
@@ -188,13 +188,15 @@ const DownloadButtons = ({ jobId, downloading, onDownload }) => (
     >
       {downloading === `${jobId}_pdf` ? 'Downloading...' : '↓ Download .pdf'}
     </button>
-    <button
-      onClick={(e) => onDownload(e, jobId, 'cover_letter')}
-      disabled={downloading === `${jobId}_cover_letter`}
-      style={{ flex: 1, background: '#ffffff', color: '#1c1917', border: '1px solid #d6d3d1', padding: '10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === `${jobId}_cover_letter` ? 0.7 : 1 }}
-    >
-      {downloading === `${jobId}_cover_letter` ? 'Downloading...' : '↓ Cover Letter'}
-    </button>
+    {hasCoverLetter && (
+      <button
+        onClick={(e) => onDownload(e, jobId, 'cover_letter')}
+        disabled={downloading === `${jobId}_cover_letter`}
+        style={{ flex: 1, background: '#ffffff', color: '#1c1917', border: '1px solid #d6d3d1', padding: '10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: downloading === `${jobId}_cover_letter` ? 0.7 : 1 }}
+      >
+        {downloading === `${jobId}_cover_letter` ? 'Downloading...' : '↓ Cover Letter'}
+      </button>
+    )}
   </div>
 );
 
@@ -215,6 +217,7 @@ export default function Dashboard() {
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
   const [filesUploading, setFilesUploading] = useState(false);
+  const [ingestDeciding, setIngestDeciding] = useState(null);
   const [editing, setEditing] = useState(false);
   const [editProfile, setEditProfile] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -222,6 +225,7 @@ export default function Dashboard() {
   const [tailorMessages, setTailorMessages] = useState([]);
   const [tailorInput, setTailorInput] = useState('');
   const [tailorSending, setTailorSending] = useState(false);
+  const [wantCoverLetter, setWantCoverLetter] = useState(false);
   const [feedbackMap, setFeedbackMap] = useState({});
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState([]);
@@ -740,7 +744,7 @@ export default function Dashboard() {
             try {
               const status = await api.getIngestionStatus();
               attempts++;
-              if (status.stage === 'done') {
+              if (status.stage === 'done' || status.stage === 'awaiting_confirmation') {
                 clearInterval(iv);
                 resolve(status);
               } else if (status.stage === 'failed') {
@@ -760,20 +764,28 @@ export default function Dashboard() {
         const result = await poll();
         clearInterval(stageTimer);
 
-        const updated = await api.getProfile();
-        setProfile(updated);
-        const changes = diffProfiles(beforeProfile, updated);
-        const ingestion = { filesProcessed: result.filesExtracted, filesSkipped: result.filesSkipped, errors: result.errors };
-        const conflicts = result.conflicts || [];
-        const ambiguities = result.ambiguities || [];
-        const extracted = result.extracted || '';
-        const drops = result.drops || null;
+        if (result.stage === 'awaiting_confirmation') {
+          // Nothing's saved yet — show what would change and wait for explicit confirm/reject.
+          setChatMessages(prev => [
+            ...prev.filter(m => m.id !== progressId),
+            { role: 'arjun', type: 'ingestPending', diff: result.diff, fileCount: files.length },
+          ]);
+        } else {
+          const updated = await api.getProfile();
+          setProfile(updated);
+          const changes = diffProfiles(beforeProfile, updated);
+          const ingestion = { filesProcessed: result.filesExtracted, filesSkipped: result.filesSkipped, errors: result.errors };
+          const conflicts = result.conflicts || [];
+          const ambiguities = result.ambiguities || [];
+          const extracted = result.extracted || '';
+          const drops = result.drops || null;
 
-        const summaryText = buildIngestionSummary(changes, files.length, conflicts, ambiguities, extracted, drops);
-        setChatMessages(prev => [
-          ...prev.filter(m => m.id !== progressId),
-          { role: 'arjun', type: 'ingestResult', text: summaryText, changes, ingestion, fileCount: files.length, conflicts, ambiguities, drops },
-        ]);
+          const summaryText = buildIngestionSummary(changes, files.length, conflicts, ambiguities, extracted, drops);
+          setChatMessages(prev => [
+            ...prev.filter(m => m.id !== progressId),
+            { role: 'arjun', type: 'ingestResult', text: summaryText, changes, ingestion, fileCount: files.length, conflicts, ambiguities, drops },
+          ]);
+        }
       } else {
         clearInterval(stageTimer);
         const conflicts = uploadResult._conflicts || [];
@@ -801,6 +813,52 @@ export default function Dashboard() {
       ]);
     }
     setFilesUploading(false);
+  };
+
+  const handleContactResolution = (msgIdx, field, choice) => {
+    setChatMessages(prev => prev.map((m, mi) => {
+      if (mi !== msgIdx) return m;
+      return { ...m, contactResolutions: { ...(m.contactResolutions || {}), [field]: choice } };
+    }));
+  };
+
+  const handleIngestDecision = async (msgIdx, decision) => {
+    setIngestDeciding(msgIdx);
+    try {
+      if (decision === 'confirm') {
+        const msg = chatMessages[msgIdx];
+        const res = await api.confirmIngestion(msg?.contactResolutions);
+        if (res.error === 'contact_resolution_required') {
+          // Shouldn't normally happen — the Apply button is disabled until every
+          // field has a choice — but if it does, surface it rather than silently fail.
+          setChatMessages(prev => [...prev, { role: 'arjun', text: 'Please choose keep-existing or use-new for every contact field above before applying.' }]);
+          setIngestDeciding(null);
+          return;
+        }
+        if (res.error || !res.profile) {
+          // Any other failure (most likely: the pending review expired — it only
+          // lives in memory for a limited window) — never claim success when the
+          // server didn't actually confirm anything.
+          setChatMessages(prev => prev.map((m, mi) => mi === msgIdx
+            ? { role: 'arjun', text: `⚠ Could not apply: ${res.error || 'unknown error'}. This usually means the review expired — please re-upload the file and try again promptly.` }
+            : m));
+          setIngestDeciding(null);
+          return;
+        }
+        setProfile(res.profile);
+        setChatMessages(prev => prev.map((m, mi) => mi === msgIdx
+          ? { role: 'arjun', text: '✓ Applied to your profile.' }
+          : m));
+      } else {
+        await api.rejectIngestion();
+        setChatMessages(prev => prev.map((m, mi) => mi === msgIdx
+          ? { role: 'arjun', text: 'Discarded — your profile is unchanged.' }
+          : m));
+      }
+    } catch (e) {
+      setChatMessages(prev => [...prev, { role: 'arjun', text: `Something went wrong: ${e.message}` }]);
+    }
+    setIngestDeciding(null);
   };
 
   const handleResolveConflict = async (msgIdx, conflictIdx, choice) => {
@@ -867,7 +925,7 @@ export default function Dashboard() {
     setTailorMessages(prev => [...prev, { role: 'user', text: msg }]);
     setTailorSending(true);
     try {
-      const res = await api.chat(msg, 'tailor');
+      const res = await api.chat(msg, 'tailor', [], wantCoverLetter);
 
       if (res.reply) {
         setTailorMessages(prev => [...prev, { role: 'arjun', text: res.reply, traceId: res.traceId }]);
@@ -884,7 +942,7 @@ export default function Dashboard() {
       if (res.scraping) {
         const progressId = Date.now();
         const deliveredCountAtStart = jobs.filter(j => j.status === 'delivered').length;
-        setTailorMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, startTime: Date.now(), stage: 0 }]);
+        setTailorMessages(prev => [...prev, { role: 'arjun', type: 'progress', id: progressId, startTime: Date.now(), stage: 0, wantCoverLetter }]);
 
         let stageIdx = 0;
         const elapsedTimer = setInterval(() => {
@@ -980,6 +1038,15 @@ export default function Dashboard() {
       console.error(e);
     } finally {
       setSavingDeliveryEmail(false);
+    }
+  };
+
+  const toggleAutoProcess = async () => {
+    try {
+      const updated = await api.updateProfile({ ...profile, auto_process_paused: !profile.auto_process_paused });
+      setProfile(updated);
+    } catch (e) {
+      console.error(e);
     }
   };
 
@@ -1218,6 +1285,23 @@ export default function Dashboard() {
               <div style={{ fontSize: '10px', color: '#a8a29e', marginTop: '5px' }}>
                 Can be different from the account you forward alerts from — e.g. a school email you actually apply with.
               </div>
+            </div>
+
+            <div style={{ marginTop: '14px', paddingTop: '12px', borderTop: '1px solid #f5f5f4' }}>
+              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={!!profile?.auto_process_paused}
+                  onChange={toggleAutoProcess}
+                  style={{ cursor: 'pointer', marginTop: '2px' }}
+                />
+                <span style={{ fontSize: '11px', color: '#57534e', lineHeight: 1.5 }}>
+                  Pause automatic resume generation from forwarded emails
+                  <span style={{ display: 'block', fontSize: '10px', color: '#a8a29e', marginTop: '2px' }}>
+                    Manually submitting a job via "Apply to Job" still works — this only stops the every-2-hour cron from auto-tailoring your forwarded LinkedIn alerts.
+                  </span>
+                </span>
+              </label>
             </div>
           </div>
         </aside>
@@ -1779,7 +1863,6 @@ export default function Dashboard() {
                       'Tailoring resume with AI...',
                       'Calculating ATS match score...',
                       'Improving resume if needed...',
-                      'Writing cover letter...',
                     ];
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
@@ -2075,6 +2158,95 @@ export default function Dashboard() {
                     );
                   }
 
+                  if (msg.type === 'ingestPending') {
+                    const d = msg.diff || {};
+                    const meaningfulUpdatedRoles = (d.updated_roles || []).filter(r => r.added_bullets > 0);
+                    const hasChanges = (d.new_roles?.length || 0) + meaningfulUpdatedRoles.length + (d.new_education?.length || 0) +
+                      (d.new_activities?.length || 0) + (d.new_skills?.length || 0) + (d.new_certifications?.length || 0) + (d.contact_changes?.length || 0) > 0;
+                    const busy = ingestDeciding === i;
+                    const contactChanges = d.contact_changes || [];
+                    const resolutions = msg.contactResolutions || {};
+                    const allContactResolved = contactChanges.every(c => resolutions[c.field]);
+                    return (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
+                        <div style={{ maxWidth: '90%', padding: '16px', borderRadius: '12px', background: '#ffffff', border: '1px solid #f59e0b55', fontSize: '13px' }}>
+                          <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", marginBottom: '10px' }}>
+                            ARJUN — REVIEW BEFORE APPLYING
+                          </div>
+
+                          {!hasChanges && (
+                            <div style={{ fontSize: '12px', color: '#78716c', marginBottom: '12px' }}>
+                              No new or changed information found — your profile already has this data.
+                            </div>
+                          )}
+
+                          {contactChanges.length > 0 && (
+                            <div style={{ background: '#fef2f2', border: '1px solid #ef444433', borderRadius: '8px', padding: '12px', marginBottom: '10px' }}>
+                              <div style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '8px' }}>⚠ CONTACT INFO CONFLICTS — CHOOSE FOR EACH</div>
+                              {contactChanges.map((c, ci) => {
+                                const choice = resolutions[c.field];
+                                return (
+                                  <div key={ci} style={{ marginBottom: ci < contactChanges.length - 1 ? '10px' : 0, paddingBottom: ci < contactChanges.length - 1 ? '10px' : 0, borderBottom: ci < contactChanges.length - 1 ? '1px solid #ef444422' : 'none' }}>
+                                    <div style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#a8a29e', marginBottom: '6px' }}>{c.field}</div>
+                                    <div style={{ display: 'flex', gap: '6px' }}>
+                                      <button
+                                        onClick={() => handleContactResolution(i, c.field, 'keep')}
+                                        style={{ flex: 1, textAlign: 'left', background: choice === 'keep' ? '#ecfdf5' : '#ffffff', border: `1px solid ${choice === 'keep' ? '#22c55e' : '#d6d3d1'}`, color: '#1c1917', padding: '8px 10px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}
+                                      >
+                                        {choice === 'keep' ? '✓ ' : ''}Keep: {c.from}
+                                      </button>
+                                      <button
+                                        onClick={() => handleContactResolution(i, c.field, 'use_new')}
+                                        style={{ flex: 1, textAlign: 'left', background: choice === 'use_new' ? '#ecfdf5' : '#ffffff', border: `1px solid ${choice === 'use_new' ? '#22c55e' : '#d6d3d1'}`, color: '#1c1917', padding: '8px 10px', borderRadius: '6px', fontSize: '11px', cursor: 'pointer' }}
+                                      >
+                                        {choice === 'use_new' ? '✓ ' : ''}Use: {c.to}
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {(d.new_roles?.length > 0 || meaningfulUpdatedRoles.length > 0 || d.new_education?.length > 0 || d.new_activities?.length > 0 || d.new_skills?.length > 0 || d.new_certifications?.length > 0) && (
+                            <div style={{ background: '#fafaf9', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                              <div style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", letterSpacing: '0.05em', marginBottom: '8px' }}>WOULD BE ADDED</div>
+                              {d.new_roles?.map((r, ri) => <div key={'r'+ri} style={{ fontSize: '12px', color: '#1c1917', marginBottom: '3px' }}>• New role: {r}</div>)}
+                              {d.updated_roles?.filter(r => r.added_bullets > 0).map((r, ri) => <div key={'u'+ri} style={{ fontSize: '12px', color: '#1c1917', marginBottom: '3px' }}>• {r.company}: +{r.added_bullets} bullet{r.added_bullets !== 1 ? 's' : ''}</div>)}
+                              {d.new_education?.map((e, ei) => <div key={'e'+ei} style={{ fontSize: '12px', color: '#1c1917', marginBottom: '3px' }}>• Education: {e}</div>)}
+                              {d.new_activities?.map((a, ai) => <div key={'a'+ai} style={{ fontSize: '12px', color: '#1c1917', marginBottom: '3px' }}>• Activity: {a}</div>)}
+                              {d.new_certifications?.map((c, ci) => <div key={'c'+ci} style={{ fontSize: '12px', color: '#1c1917', marginBottom: '3px' }}>• Certification: {c}</div>)}
+                              {d.new_skills?.length > 0 && <div style={{ fontSize: '12px', color: '#1c1917' }}>• Skills: {d.new_skills.join(', ')}</div>}
+                            </div>
+                          )}
+
+                          {contactChanges.length > 0 && !allContactResolved && (
+                            <div style={{ fontSize: '11px', color: '#ef4444', marginBottom: '8px' }}>
+                              Choose keep or use-new for every contact field above to continue.
+                            </div>
+                          )}
+
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              disabled={busy || !allContactResolved}
+                              onClick={() => handleIngestDecision(i, 'confirm')}
+                              style={{ flex: 1, background: '#22c55e', color: '#ffffff', border: 'none', padding: '10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: (busy || !allContactResolved) ? 'not-allowed' : 'pointer', opacity: (busy || !allContactResolved) ? 0.5 : 1 }}
+                            >
+                              {busy ? 'Applying...' : 'Apply to profile'}
+                            </button>
+                            <button
+                              disabled={busy}
+                              onClick={() => handleIngestDecision(i, 'reject')}
+                              style={{ flex: 1, background: '#ffffff', color: '#57534e', border: '1px solid #d6d3d1', padding: '10px', borderRadius: '6px', fontSize: '12px', fontWeight: 600, cursor: 'pointer', opacity: busy ? 0.6 : 1 }}
+                            >
+                              Discard
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   if (msg.type === 'ingestError') {
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
@@ -2128,7 +2300,7 @@ export default function Dashboard() {
 
                           <ThinkingSection job={j} />
 
-                          <DownloadButtons jobId={j.job_id} downloading={downloading} onDownload={handleDownload} />
+                          <DownloadButtons jobId={j.job_id} downloading={downloading} onDownload={handleDownload} hasCoverLetter={!!j.cover_letter_file_path} />
                         </div>
                       </div>
                     );
@@ -2397,7 +2569,7 @@ export default function Dashboard() {
                       'Tailoring resume with AI...',
                       'Calculating ATS match score...',
                       'Improving resume if needed...',
-                      'Writing cover letter...',
+                      ...(msg.wantCoverLetter ? ['Writing cover letter...'] : []),
                     ];
                     return (
                       <div key={i} style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '12px' }}>
@@ -2473,7 +2645,7 @@ export default function Dashboard() {
 
                           <ThinkingSection job={j} />
 
-                          <DownloadButtons jobId={j.job_id} downloading={downloading} onDownload={handleDownload} />
+                          <DownloadButtons jobId={j.job_id} downloading={downloading} onDownload={handleDownload} hasCoverLetter={!!j.cover_letter_file_path} />
                         </div>
                       </div>
                     );
@@ -2512,6 +2684,15 @@ export default function Dashboard() {
                 <div ref={tailorEndRef} />
               </div>
 
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontSize: '12px', color: '#57534e', cursor: 'pointer', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={wantCoverLetter}
+                  onChange={e => setWantCoverLetter(e.target.checked)}
+                  style={{ cursor: 'pointer' }}
+                />
+                Also generate a cover letter
+              </label>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input
                   value={tailorInput}
