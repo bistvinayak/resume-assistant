@@ -39,6 +39,26 @@
     button:disabled { background: #d6d3d1; cursor: not-allowed; }
     a { color: #f59e0b; }
     #result { font-size: 12px; margin-top: 10px; color: #78716c; min-height: 14px; }
+    .divider { border: none; border-top: 1px solid #e7e5e4; margin: 16px 0; }
+    .field-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+      color: #78716c; margin-bottom: 6px;
+    }
+    .pw-row { display: flex; gap: 6px; margin-bottom: 6px; }
+    .pw-row input {
+      flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid #d6d3d1; border-radius: 6px;
+      font-size: 13px; font-family: inherit;
+    }
+    .pw-row button {
+      width: auto; padding: 8px 12px; font-size: 12px; flex-shrink: 0;
+    }
+    .pw-note { font-size: 10.5px; color: #a8a29e; line-height: 1.4; }
+    #pwStatus { font-size: 11.5px; margin-top: 4px; min-height: 14px; }
+    #pwStatus.ok { color: #16a34a; }
+    #clearPwBtn {
+      background: none; color: #a8a29e; font-weight: 400; padding: 4px; margin-top: 2px;
+      text-decoration: underline; font-size: 11px;
+    }
   </style>
 </head>
 <body>
@@ -46,6 +66,18 @@
   <div id="status" class="status">Checking login…</div>
   <button id="fillBtn" disabled>Fill this page</button>
   <div id="result"></div>
+
+  <hr class="divider" />
+
+  <div class="field-label">Account-creation password</div>
+  <div class="pw-row">
+    <input type="password" id="pwInput" placeholder="Set a password to autofill" autocomplete="new-password" />
+    <button id="savePwBtn">Save</button>
+  </div>
+  <div id="pwStatus"></div>
+  <button id="clearPwBtn">Clear saved password</button>
+  <p class="pw-note">Stored only in this browser (<code>chrome.storage.local</code>). Never sent to Arjun's backend, never seen by the mapping model — filled directly into password fields on the page.</p>
+
   <script src="popup.js"></script>
 </body>
 </html>

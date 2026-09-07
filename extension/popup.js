@@ -1,6 +1,35 @@
 const statusEl = document.getElementById('status');
 const fillBtn = document.getElementById('fillBtn');
 const resultEl = document.getElementById('result');
+const pwInput = document.getElementById('pwInput');
+const savePwBtn = document.getElementById('savePwBtn');
+const clearPwBtn = document.getElementById('clearPwBtn');
+const pwStatusEl = document.getElementById('pwStatus');
+
+// Password never leaves this browser — stored in chrome.storage.local only,
+// read directly by content-script.js to fill password fields locally. It is
+// never included in the MAP_FIELDS payload sent to the backend/LLM.
+function refreshPwStatus() {
+  chrome.storage.local.get(['autofillPassword'], ({ autofillPassword }) => {
+    pwStatusEl.textContent = autofillPassword ? 'Saved for this browser.' : 'Not set.';
+    pwStatusEl.className = autofillPassword ? 'ok' : '';
+    clearPwBtn.style.display = autofillPassword ? 'block' : 'none';
+  });
+}
+refreshPwStatus();
+
+savePwBtn.addEventListener('click', () => {
+  const value = pwInput.value;
+  if (!value) return;
+  chrome.storage.local.set({ autofillPassword: value }, () => {
+    pwInput.value = '';
+    refreshPwStatus();
+  });
+});
+
+clearPwBtn.addEventListener('click', () => {
+  chrome.storage.local.remove(['autofillPassword'], refreshPwStatus);
+});
 
 function setStatus(text, cls) {
   statusEl.textContent = text;
