@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile } = require('./profile');
 const { queueJob, getQueueStats } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
@@ -549,9 +549,20 @@ app.post('/api/extension/map-fields', async (req, res, next) => {
     const { fields, url } = req.body;
     if (!Array.isArray(fields) || !fields.length) return res.json({ mappings: [] });
 
-    const profile = await getProfile(req.userId);
-    const mappings = await mapFormFields(fields, profile, { ...langfuseCtx(req), url });
-    res.json({ mappings });
+    const t0 = Date.now();
+    const event = { userId: req.userId, userEmail: req.userEmail, url, fieldsCount: fields.length };
+    try {
+      const profile = await getProfile(req.userId);
+      const { mappings, model, primaryError } = await mapFormFields(fields, profile, { ...langfuseCtx(req), url });
+      // A fallback success still counts as success, but keep the primary's error visible to the admin.
+      logExtensionEvent({ ...event, mappedCount: mappings.length, status: 'success', model, error: primaryError, durationMs: Date.now() - t0 })
+        .catch(le => console.error('extension event log failed:', le.message));
+      res.json({ mappings });
+    } catch (e) {
+      logExtensionEvent({ ...event, status: 'failed', model: e.model, error: e.message, durationMs: Date.now() - t0 })
+        .catch(le => console.error('extension event log failed:', le.message));
+      throw e;
+    }
   } catch (e) { next(e); }
 });
 
@@ -585,6 +596,7 @@ const {
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
   getFeedbackHandler, reviewFeedback,
   getGmailForwardingHandler, approveGmailForwarding, rejectGmailForwarding,
+  getExtensionEventsHandler,
 } = require('./admin');
 
 app.get(['/admin/stats', '/api/admin/stats'], authMiddleware, adminOnly, getStats);
@@ -604,6 +616,7 @@ app.patch(['/admin/feedback/:id', '/api/admin/feedback/:id'], authMiddleware, ad
 app.get(['/admin/gmail-forwarding', '/api/admin/gmail-forwarding'], authMiddleware, adminOnly, getGmailForwardingHandler);
 app.post(['/admin/gmail-forwarding/:userId/approve', '/api/admin/gmail-forwarding/:userId/approve'], authMiddleware, adminOnly, approveGmailForwarding);
 app.post(['/admin/gmail-forwarding/:userId/reject', '/api/admin/gmail-forwarding/:userId/reject'], authMiddleware, adminOnly, rejectGmailForwarding);
+app.get(['/admin/extension-events', '/api/admin/extension-events'], authMiddleware, adminOnly, getExtensionEventsHandler);
 
 // ── RESUME DOWNLOAD ────────────────────────────────────────────────────────
 

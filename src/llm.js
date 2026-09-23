@@ -16,13 +16,13 @@ const MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-3.7-flash';
 const WRITING_MODEL = process.env.OPENROUTER_WRITING_MODEL || 'google/gemini-3.7-flash';
 // Browser-extension form mapping is low-stakes (structured field->value matching, not resume
 // prose) and can run on OpenRouter's free tier without hurting output quality that matters.
-// z-ai/glm-5.2:free was retired from the free tier (OpenRouter now 404s it, paid-only) —
-// minimax-m3 verified reliable in its place.
-const FORM_FILL_MODEL = process.env.OPENROUTER_FORM_FILL_MODEL || 'minimax/minimax-m3:free';
-// Free-tier models share a rate-limited upstream pool and can 429, or get retired like
-// glm-5.2 did. Fall back to a second free model on any failure rather than surfacing a
-// 500 to the extension for what's usually transient.
-const FORM_FILL_FALLBACK_MODEL = process.env.OPENROUTER_FORM_FILL_FALLBACK_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
+// Free models keep getting retired (z-ai/glm-5.2:free, then minimax/minimax-m3:free) —
+// nemotron-3-super is the current free pick.
+const FORM_FILL_MODEL = process.env.OPENROUTER_FORM_FILL_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
+// Free-tier models share a rate-limited upstream pool and can 429 or disappear, so the
+// fallback is the paid main MODEL (stable, never retired) rather than a second free model.
+// One form-fill call costs a fraction of a cent there.
+const FORM_FILL_FALLBACK_MODEL = process.env.OPENROUTER_FORM_FILL_FALLBACK_MODEL || MODEL;
 
 const langfuse = new Langfuse({
   secretKey: process.env.LANGFUSE_SECRET_KEY,
@@ -1209,15 +1209,27 @@ async function mapFormFields(fields, profile, ctx = {}) {
   });
 
   let result;
+  let model = FORM_FILL_MODEL;
+  let primaryError = null;
   try {
     result = await askJson(system, 'Map the fields.', 'map_form_fields', trace, langfusePrompt, [], FORM_FILL_MODEL);
   } catch (e) {
+    primaryError = e.message;
     console.error(`map_form_fields: primary model ${FORM_FILL_MODEL} failed (${e.message}), retrying with ${FORM_FILL_FALLBACK_MODEL}`);
-    result = await askJson(system, 'Map the fields.', 'map_form_fields', trace, langfusePrompt, [], FORM_FILL_FALLBACK_MODEL);
+    model = FORM_FILL_FALLBACK_MODEL;
+    try {
+      result = await askJson(system, 'Map the fields.', 'map_form_fields', trace, langfusePrompt, [], FORM_FILL_FALLBACK_MODEL);
+    } catch (e2) {
+      // Surface both failures — the admin Extension tab shows this message, and "401 User
+      // not found" on both means the OpenRouter key is bad, not the models.
+      const err = new Error(`${FORM_FILL_MODEL}: ${primaryError} | ${FORM_FILL_FALLBACK_MODEL}: ${e2.message}`);
+      err.model = FORM_FILL_FALLBACK_MODEL;
+      throw err;
+    }
   }
   const mappings = result.mappings || [];
   langfuse.score({ traceId: trace.id, name: 'fields-mapped', value: mappings.length, comment: `${mappings.length}/${fields.length} fields mapped` });
-  return mappings;
+  return { mappings, model, primaryError };
 }
 
 const VALID_SECTIONS = ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'activities', 'interests'];

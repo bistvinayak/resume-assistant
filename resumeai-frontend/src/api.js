@@ -321,6 +321,11 @@ export const api = {
     return res.json();
   },
 
+  async adminGetExtensionEvents() {
+    const res = await checkedFetch(`${BASE}/admin/extension-events`, { headers: await getHeaders() });
+    return res.json();
+  },
+
   async adminGetSchemaProposals() {
     const res = await checkedFetch(`${BASE}/admin/schema-proposals`, { headers: await getHeaders() });
     return res.json();

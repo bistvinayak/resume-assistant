@@ -152,6 +152,24 @@ async function initSchema() {
       updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     ALTER TABLE resume_format ADD COLUMN IF NOT EXISTS template_text TEXT;
+
+    -- One row per browser-extension field-mapping request, success or failure, so the
+    -- admin Extension tab can show the latest retrievals and why any of them failed.
+    CREATE TABLE IF NOT EXISTS extension_events (
+      id            SERIAL PRIMARY KEY,
+      user_id       TEXT NOT NULL,
+      user_email    TEXT,
+      url           TEXT,
+      host          TEXT,
+      fields_count  INTEGER NOT NULL DEFAULT 0,
+      mapped_count  INTEGER NOT NULL DEFAULT 0,
+      status        TEXT NOT NULL,
+      model         TEXT,
+      error         TEXT,
+      duration_ms   INTEGER,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_extension_events_created ON extension_events(created_at DESC);
   `);
 }
 
@@ -584,6 +602,38 @@ async function deleteResumeFormat(userId = 'me') {
   await pool.query('DELETE FROM resume_format WHERE user_id = $1', [userId]);
 }
 
+async function logExtensionEvent({ userId, userEmail, url, fieldsCount, mappedCount, status, model, error, durationMs }) {
+  let host = null;
+  try { host = url ? new URL(url).hostname : null; } catch { /* malformed page URL */ }
+  await pool.query(
+    `INSERT INTO extension_events (user_id, user_email, url, host, fields_count, mapped_count, status, model, error, duration_ms)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+    [userId, userEmail || null, url || null, host, fieldsCount || 0, mappedCount || 0, status, model || null, error || null, durationMs ?? null]
+  );
+}
+
+async function getExtensionEvents(limit = 100) {
+  const [{ rows: events }, { rows: [summary] }] = await Promise.all([
+    pool.query('SELECT * FROM extension_events ORDER BY created_at DESC LIMIT $1', [limit]),
+    pool.query(`
+      SELECT
+        SUM(CASE WHEN created_at > now() - interval '24 hours' THEN 1 ELSE 0 END)                       AS total_24h,
+        SUM(CASE WHEN created_at > now() - interval '24 hours' AND status = 'failed' THEN 1 ELSE 0 END) AS failed_24h,
+        MAX(CASE WHEN status = 'success' THEN created_at END)                                           AS last_success_at,
+        MAX(CASE WHEN status = 'failed' THEN created_at END)                                            AS last_failure_at
+      FROM extension_events`),
+  ]);
+  return {
+    events,
+    summary: {
+      total_24h: Number(summary.total_24h) || 0,
+      failed_24h: Number(summary.failed_24h) || 0,
+      last_success_at: summary.last_success_at,
+      last_failure_at: summary.last_failure_at,
+    },
+  };
+}
+
 module.exports = {
   pool, initSchema, getProfile, saveProfile,
   getProfileVersions, restoreProfileVersion,
@@ -593,6 +643,7 @@ module.exports = {
   recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched,
   saveChatFeedback, getChatFeedback, updateChatFeedbackStatus,
   getResumeFormat, saveResumeFormat, deleteResumeFormat,
+  logExtensionEvent, getExtensionEvents,
   requestGmailForwarding, getGmailForwardingStatus, getGmailForwardingRequests, reviewGmailForwarding, getApprovedForwardingMap,
   EMPTY_PROFILE,
 };

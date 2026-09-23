@@ -1,6 +1,6 @@
 'use strict';
 
-const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob } = require('./db');
+const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob, getExtensionEvents } = require('./db');
 const { runBatch } = require('./cron');
 const { queueJob } = require('./pipeline');
 const { scrapeLinkedInJob } = require('./scraper');
@@ -340,9 +340,19 @@ async function rejectGmailForwarding(req, res) {
   }
 }
 
+// GET /api/admin/extension-events
+async function getExtensionEventsHandler(req, res) {
+  try {
+    res.json(await getExtensionEvents(Math.min(Number(req.query.limit) || 100, 500)));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
 module.exports = {
   adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs, retryJob, triggerCron, getSettings, updateSettings,
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
   getFeedbackHandler, reviewFeedback,
   getGmailForwardingHandler, approveGmailForwarding, rejectGmailForwarding,
+  getExtensionEventsHandler,
 };

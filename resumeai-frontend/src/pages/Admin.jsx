@@ -36,6 +36,7 @@ export default function Admin() {
   const [schemaProposals, setSchemaProposals] = useState([]);
   const [feedback, setFeedback] = useState([]);
   const [gmailForwarding, setGmailForwarding] = useState([]);
+  const [extension, setExtension] = useState({ events: [], summary: null });
   const [loading, setLoading] = useState(true);
   const [cronMsg, setCronMsg] = useState('');
   const [reviewingId, setReviewingId] = useState(null);
@@ -52,7 +53,7 @@ export default function Admin() {
   const loadAll = async () => {
     setLoading(true);
     try {
-      const [s, u, j, cfg, sp, fb, gf] = await Promise.all([
+      const [s, u, j, cfg, sp, fb, gf, ext] = await Promise.all([
         api.adminGetStats(),
         api.adminGetUsers(),
         api.adminGetJobs(),
@@ -60,6 +61,7 @@ export default function Admin() {
         api.adminGetSchemaProposals(),
         api.adminGetFeedback(),
         api.adminGetGmailForwarding(),
+        api.adminGetExtensionEvents(),
       ]);
       setStats(s);
       setUsers(u.users || []);
@@ -68,6 +70,7 @@ export default function Admin() {
       setSchemaProposals(sp.proposals || []);
       setFeedback(fb.feedback || []);
       setGmailForwarding(gf.requests || []);
+      setExtension({ events: ext.events || [], summary: ext.summary || null });
     } catch (e) {
       console.error(e);
     }
@@ -97,6 +100,11 @@ export default function Admin() {
     } finally {
       setReviewingId(null);
     }
+  };
+
+  const refreshExtension = async () => {
+    const ext = await api.adminGetExtensionEvents();
+    setExtension({ events: ext.events || [], summary: ext.summary || null });
   };
 
   const refreshGmailForwarding = async () => {
@@ -220,6 +228,7 @@ export default function Admin() {
             { id: 'schema', label: 'Schema Proposals', badge: schemaProposals.filter(p => p.status === 'pending').length },
             { id: 'feedback', label: 'Feedback', badge: feedback.filter(f => f.status === 'open' && f.score === 0).length },
             { id: 'gmail', label: 'Gmail Forwarding', badge: gmailForwarding.filter(g => g.status === 'pending').length },
+            { id: 'extension', label: 'Extension', badge: extension.summary?.failed_24h || 0 },
             { id: 'settings', label: 'Settings' },
           ].map(({ id, label, badge }) => (
             <button key={id} onClick={() => setTab(id)} style={{
@@ -408,6 +417,58 @@ export default function Admin() {
                         {retryingId === job.job_id ? 'Retrying...' : 'Retry'}
                       </button>
                     )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* EXTENSION */}
+          {tab === 'extension' && (
+            <div style={{ animation: 'fadeIn 0.3s ease' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                <div>
+                  <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '4px' }}>Extension</h2>
+                  <p style={{ fontSize: '13px', color: '#78716c' }}>Latest autofill field-mapping requests from the browser extension</p>
+                </div>
+                <button onClick={refreshExtension} style={{ background: 'none', border: '1px solid #d6d3d1', color: '#57534e', padding: '5px 12px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                  Refresh
+                </button>
+              </div>
+
+              {extension.summary && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '24px' }}>
+                  <StatBox label="Requests (24h)" value={extension.summary.total_24h} />
+                  <StatBox label="Failed (24h)" value={extension.summary.failed_24h} color={extension.summary.failed_24h ? '#ef4444' : '#22c55e'} />
+                  <StatBox label="Last success" value={extension.summary.last_success_at ? new Date(extension.summary.last_success_at).toLocaleDateString() : '—'} sub={extension.summary.last_success_at ? new Date(extension.summary.last_success_at).toLocaleTimeString() : 'never'} />
+                  <StatBox label="Last failure" value={extension.summary.last_failure_at ? new Date(extension.summary.last_failure_at).toLocaleDateString() : '—'} sub={extension.summary.last_failure_at ? new Date(extension.summary.last_failure_at).toLocaleTimeString() : 'none'} color={extension.summary.last_failure_at ? '#ef4444' : undefined} />
+                </div>
+              )}
+
+              {extension.events.length === 0 && (
+                <Card><p style={{ fontSize: '13px', color: '#78716c' }}>No extension requests recorded yet.</p></Card>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                {extension.events.map(ev => (
+                  <div key={ev.id} style={{ background: '#ffffff', border: `1px solid ${ev.status === 'failed' ? '#fecaca' : '#e7e5e4'}`, borderRadius: '8px', padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr auto auto auto', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>{ev.host || 'unknown page'}</div>
+                      <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{ev.user_email || ev.user_id}{ev.model ? ` · ${ev.model}` : ''}{ev.duration_ms != null ? ` · ${(ev.duration_ms / 1000).toFixed(1)}s` : ''}</div>
+                      {ev.error && (
+                        <div style={{ fontSize: '11px', color: ev.status === 'failed' ? '#ef4444' : '#f59e0b', marginTop: '4px', wordBreak: 'break-word' }}>
+                          ⚠ {ev.status === 'success' ? 'Primary model failed, fallback used: ' : ''}{ev.error}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{ fontSize: '12px', fontFamily: "'DM Mono', monospace", color: '#57534e' }}>{ev.mapped_count}/{ev.fields_count} fields</span>
+                    <span style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{new Date(ev.created_at).toLocaleString()}</span>
+                    <span style={{
+                      fontSize: '10px', fontFamily: "'DM Mono', monospace", borderRadius: '4px', padding: '2px 8px', textAlign: 'center',
+                      color: ev.status === 'success' ? '#22c55e' : '#ef4444',
+                      background: ev.status === 'success' ? '#ecfdf5' : '#fef2f2',
+                      border: `1px solid ${ev.status === 'success' ? '#22c55e33' : '#ef444422'}`,
+                    }}>{ev.status}</span>
                   </div>
                 ))}
               </div>
