@@ -384,7 +384,7 @@ async function computeMergeProposal(partial, userId = 'me', ctx = {}) {
   if (changesSummary && !isEmptyProfile(current)) {
     const llmFlagged = new Set((changesSummary.contact_changes || []).map(c => c.field));
     const actual = [];
-    for (const field of ['email', 'phone', 'location', 'address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country', 'linkedin', 'github', 'portfolio']) {
+    for (const field of ['email', 'phone', 'location', 'address_line1', 'address_line2', 'city', 'county', 'state', 'postal_code', 'country', 'linkedin', 'github', 'portfolio']) {
       const from = current.contact?.[field];
       const to = merged.contact?.[field];
       if (from && to && from.trim() !== to.trim() && !llmFlagged.has(field)) {
@@ -467,7 +467,7 @@ function summarizeIngestionDiff(current, merged) {
   // from an older resume. Always surfaced explicitly, never auto-applied.
   const cc = current.contact || {};
   const mc = merged.contact || {};
-  for (const field of ['email', 'phone', 'location', 'address_line1', 'address_line2', 'city', 'state', 'postal_code', 'country']) {
+  for (const field of ['email', 'phone', 'location', 'address_line1', 'address_line2', 'city', 'county', 'state', 'postal_code', 'country']) {
     if (cc[field] && mc[field] && normForDiff(cc[field]) !== normForDiff(mc[field])) {
       summary.contact_changes.push({ field, from: cc[field], to: mc[field] });
     }

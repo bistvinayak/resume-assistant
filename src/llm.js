@@ -46,7 +46,7 @@ async function formatApprovedCategories() {
 const PROFILE_SCHEMA = `
 Return ONLY JSON matching this shape (omit fields you found nothing for):
 {
-  "contact": { "name": "", "email": "", "phone": "", "location": "", "address_line1": "", "address_line2": "", "city": "", "state": "", "postal_code": "", "country": "", "linkedin": "", "github": "", "portfolio": "" },
+  "contact": { "name": "", "email": "", "phone": "", "location": "", "address_line1": "", "address_line2": "", "city": "", "county": "", "state": "", "postal_code": "", "country": "", "linkedin": "", "github": "", "portfolio": "" },
   "summary": "",
   "technical_skills": [
     {
@@ -664,12 +664,16 @@ For each form field below (label, placeholder, name/id attribute, input type, an
 
 Common field meanings to recognize regardless of exact wording: full/first/last name, email, phone, LinkedIn URL, GitHub/portfolio URL, current company, current title, years of experience, work authorization (career.work_permit) / visa sponsorship status, desired salary, availability/start date, highest education level, school/university, degree, graduation year, cover letter, referral source. Voluntary self-identification (gender, Hispanic/Latino, race/ethnicity, veteran status, disability status) maps to the dedicated self_identification.* fields — ONLY fill these if that exact sub-field is explicitly populated in the profile, otherwise skip; never infer or guess demographic data from a name, photo, or anything else.
 
-Mailing address fields are their own category, distinct from the general "location" field — map each to its specific profile.contact sub-field, not to the general location string: "Address line 1" / "Street address" → contact.address_line1, "Address line 2" / "Unit, suite, etc." → contact.address_line2, "City" → contact.city, "Postal/Zip code" → contact.postal_code, "Country/Region" → contact.country, "Province/State" → contact.state. If a form only has a single generic "Location" or "City" field with no separate address-line/postal-code fields, that one can use contact.location instead.
+Mailing address fields are their own category, distinct from the general "location" field — map each to its specific profile.contact sub-field, not to the general location string: "Address line 1" / "Street address" → contact.address_line1, "Address line 2" / "Unit, suite, etc." → contact.address_line2, "City" → contact.city, "County" → contact.county, "Postal/Zip code" → contact.postal_code, "Country/Region" → contact.country, "Province/State" → contact.state. If a form only has a single generic "Location" or "City" field with no separate address-line/postal-code fields, that one can use contact.location instead.
 
 Education fields need derived values, not just copied ones — use the candidate's most recent/highest education entry unless the form clearly asks about a different one:
 - "Education level" (usually a select: High School / Associate's / Bachelor's / Master's / Doctorate, etc.) — derive this from education[].degree text (e.g. "Master of Science" → "Master's", "Bachelor of Technology" → "Bachelor's") and pick the closest matching OPTION from the field's own options list. Don't skip this just because the profile has no field literally called "education level."
 - "Major" / "Field of study" — use education[].major. "First major" → the highest/most recent entry's major. "Second major" or "Minor" — only fill if the profile actually lists more than one concurrent field of study for that entry; otherwise skip, don't force the same major into both fields.
 - "Are you currently a student?" / "Currently enrolled" — derive from whether the highest education entry's dates extend to or past TODAY'S DATE above (an end date in the future, or text like "Present"/"Current"/"Ongoing") → answer yes/true; a dates range fully in the past → no/false. Pick whichever option text the field actually offers (e.g. "Yes"/"No", "true"/"false").
+
+Repeated sections (Workday, iCIMS, etc. show several "Work Experience" / "Education" / "Website" blocks with identical labels): the block number is in the field's id/name (e.g. "workExperience-3--jobTitle", "education-2--school"), or, when ids carry no number, it is the order in which that group of fields appears in FORM FIELDS. Fill block N with the Nth entry of the matching profile list in the order the profile stores them (block 1 = first entry), keep every field of one block on the same entry, and never reuse one profile entry for two blocks. If the profile has fewer entries than blocks, skip the extra blocks. For website/URL blocks, use distinct links in order: portfolio, linkedin, github, then any other links.
+
+Dates: match the format the field expects from its label or placeholder ("MM/YYYY" → "03/2021", "YYYY" → "2021", "MM/DD/YYYY" → "03/01/2021"). For an end date of a current role ("Present"), skip the field; the "I currently work here" checkbox covers it.
 
 Account-credential fields ("Password", "New Password", "Confirm/Verify Password", "Verify New Password", "PIN") must NEVER be filled — always skip these regardless of confidence, even if a value superficially resembles one in the profile. There is no password in the candidate's profile and none should ever be invented or reused for this purpose. "Email Address" / "Email" on the same account-creation form still maps normally to contact.email.
 
@@ -918,8 +922,16 @@ async function askJson(system, user, generationName, trace, langfusePrompt, hist
       // on trivial calls) — these are structured extraction/classification tasks, not
       // reasoning tasks, so keep it off. Ignored by providers that don't support it.
       ...(model.startsWith('google/') ? { reasoning: { effort: 'minimal' } } : {}),
+      // Nemotron (extension form-fill) reasons by default: ~40s on a 40-field Workday page
+      // vs ~24s with it off, and CloudFront cuts requests at ~30s.
+      ...(model.startsWith('nvidia/') ? { reasoning: { enabled: false } } : {}),
     });
 
+    // Free-tier providers sometimes return 200 with an error body and no choices —
+    // surface their message instead of crashing on choices[0].
+    if (!res.choices?.length) {
+      throw new Error(`No response from ${model}: ${res.error?.message || JSON.stringify(res.error || res).slice(0, 200)}`);
+    }
     const raw = res.choices[0].message.content;
     // response_format: json_object is an OpenAI-model guarantee — Claude (via OpenRouter)
     // doesn't reliably honor it and sometimes wraps the JSON in a ```json ... ``` fence.
@@ -1200,35 +1212,77 @@ async function classifyCustomFacts(customFacts, category, ctx = {}) {
 }
 
 // Browser extension: map scraped job-application form fields to profile values by meaning
-async function mapFormFields(fields, profile, ctx = {}) {
-  const trace = makeTrace('map_form_fields', ctx, { url: ctx.url });
+// One call is the most accurate (batches occasionally misread a row that straddles a batch
+// edge), but a 33-field Oracle page takes ~26s even with reasoning off, near CloudFront's
+// origin timeout. Only forms bigger than this are split into parallel batches: every batch
+// sees the WHOLE form (so row order stays unambiguous) but answers only its own slice.
+const FORM_FILL_BATCH_SIZE = 35;
+
+async function mapFormFieldsBatch(allFields, batchIds, profile, trace) {
   const { text: system, langfusePrompt } = await getPrompt('map_form_fields', {
     profile_json: JSON.stringify(profile),
-    form_fields_json: JSON.stringify(fields),
+    form_fields_json: JSON.stringify(allFields),
     today: new Date().toISOString().slice(0, 10),
   });
+  const instruction = allFields.length === batchIds.length
+    ? 'Map the fields.'
+    : `Map ONLY these field_ids (the other fields are shown for context, e.g. row order): ${batchIds.join(', ')}`;
+  const ask = (model) => askJson(system, instruction, 'map_form_fields', trace, langfusePrompt, [], model);
 
-  let result;
-  let model = FORM_FILL_MODEL;
+  // Free-tier failures are usually transient (rate limit, provider overload), so retry the
+  // free model once before paying for the fallback.
   let primaryError = null;
-  try {
-    result = await askJson(system, 'Map the fields.', 'map_form_fields', trace, langfusePrompt, [], FORM_FILL_MODEL);
-  } catch (e) {
-    primaryError = e.message;
-    console.error(`map_form_fields: primary model ${FORM_FILL_MODEL} failed (${e.message}), retrying with ${FORM_FILL_FALLBACK_MODEL}`);
-    model = FORM_FILL_FALLBACK_MODEL;
+  for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      result = await askJson(system, 'Map the fields.', 'map_form_fields', trace, langfusePrompt, [], FORM_FILL_FALLBACK_MODEL);
-    } catch (e2) {
-      // Surface both failures — the admin Extension tab shows this message, and "401 User
-      // not found" on both means the OpenRouter key is bad, not the models.
-      const err = new Error(`${FORM_FILL_MODEL}: ${primaryError} | ${FORM_FILL_FALLBACK_MODEL}: ${e2.message}`);
-      err.model = FORM_FILL_FALLBACK_MODEL;
-      throw err;
+      return { result: await ask(FORM_FILL_MODEL), model: FORM_FILL_MODEL, primaryError };
+    } catch (e) {
+      primaryError = e.message;
+      console.error(`map_form_fields: ${FORM_FILL_MODEL} attempt ${attempt + 1} failed (${e.message})`);
     }
   }
-  const mappings = result.mappings || [];
-  langfuse.score({ traceId: trace.id, name: 'fields-mapped', value: mappings.length, comment: `${mappings.length}/${fields.length} fields mapped` });
+  try {
+    return { result: await ask(FORM_FILL_FALLBACK_MODEL), model: FORM_FILL_FALLBACK_MODEL, primaryError };
+  } catch (e2) {
+    // Surface both failures — the admin Extension tab shows this message.
+    const err = new Error(`${FORM_FILL_MODEL}: ${primaryError} | ${FORM_FILL_FALLBACK_MODEL}: ${e2.message}`);
+    err.model = FORM_FILL_FALLBACK_MODEL;
+    throw err;
+  }
+}
+
+async function mapFormFields(fields, profile, ctx = {}) {
+  const trace = makeTrace('map_form_fields', ctx, { url: ctx.url, fields: fields.length });
+  // Each batch also answers the few fields just before its slice (discarded below): a slice
+  // that starts mid-row otherwise loses track of which row it's in (seen: a row's End Date
+  // taking the previous row's date when it was the first field of a batch).
+  const OVERLAP = 4;
+  const batches = [];
+  for (let i = 0; i < fields.length; i += FORM_FILL_BATCH_SIZE) {
+    batches.push({
+      own: fields.slice(i, i + FORM_FILL_BATCH_SIZE).map(f => f.field_id),
+      ask: fields.slice(Math.max(0, i - OVERLAP), i + FORM_FILL_BATCH_SIZE).map(f => f.field_id),
+    });
+  }
+
+  // allSettled: one failed batch shouldn't throw away the fields the others mapped.
+  const results = await Promise.allSettled(batches.map(b => mapFormFieldsBatch(fields, b.ask, profile, trace)));
+  const ok = results.filter(r => r.status === 'fulfilled').map(r => r.value);
+  if (!ok.length) throw results[0].reason;
+
+  // A batch may still answer for fields outside its slice; keep only its own.
+  const mappings = results.flatMap((r, i) => {
+    if (r.status !== 'fulfilled') return [];
+    const own = new Set(batches[i].own);
+    return (r.value.result.mappings || []).filter(m => own.has(m.field_id));
+  });
+  const failed = results.filter(r => r.status === 'rejected');
+  const model = [...new Set(ok.map(r => r.model))].join(', ');
+  const primaryError = [
+    ...ok.map(r => r.primaryError).filter(Boolean),
+    ...failed.map(r => `batch failed: ${r.reason.message}`),
+  ].join(' | ') || null;
+
+  langfuse.score({ traceId: trace.id, name: 'fields-mapped', value: mappings.length, comment: `${mappings.length}/${fields.length} fields mapped in ${batches.length} batch(es)` });
   return { mappings, model, primaryError };
 }
 

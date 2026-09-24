@@ -1687,9 +1687,9 @@ export default function Dashboard() {
                   {/* Edit: Contact */}
                   <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
                     <div style={{ fontSize: '10px', color: '#f59e0b', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '16px' }}>CONTACT</div>
-                    {['name', 'email', 'phone', 'location', 'linkedin', 'github', 'portfolio'].map(field => (
+                    {['name', 'email', 'phone', 'location', 'linkedin', 'github', 'portfolio', 'address_line1', 'address_line2', 'city', 'county', 'state', 'postal_code', 'country'].map(field => (
                       <div key={field} style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-                        <span style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", minWidth: 70, textTransform: 'capitalize' }}>{field}</span>
+                        <span style={{ fontSize: '10px', color: '#78716c', fontFamily: "'DM Mono', monospace", minWidth: 90, textTransform: 'capitalize' }}>{field.replace(/_/g, ' ')}</span>
                         <input
                           value={(field === 'linkedin'
                             ? (editProfile.contact?.linkedin || editProfile.contact?.linkedIn || editProfile.contact?.LinkedIn)
