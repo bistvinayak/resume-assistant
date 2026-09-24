@@ -1,5 +1,6 @@
-// Pushes the current Firebase ID token to the Arjun Autofill extension (if installed),
-// so it can make authenticated calls without its own login flow.
+// Pushes the current Firebase ID token + refresh token to the Arjun Autofill extension
+// (if installed), so it can make authenticated calls without its own login flow and
+// renew the hourly ID token itself after this tab is closed.
 const EXTENSION_ID = 'ljeplebcfpakamlgehpfmemkbmnalfdc';
 
 let refreshTimer = null;
@@ -24,7 +25,7 @@ export function syncExtensionAuth(user) {
 
   const pushToken = async () => {
     const token = await user.getIdToken().catch(() => null);
-    if (token) send({ type: 'ARJUN_AUTH', token, email: user.email });
+    if (token) send({ type: 'ARJUN_AUTH', token, refreshToken: user.refreshToken, email: user.email });
   };
 
   pushToken();
