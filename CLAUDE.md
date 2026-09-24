@@ -44,6 +44,7 @@ EC2 (PM2-managed) runs: Express server (port 3000) serving:
 | `renderPdf.js` | Generates .pdf resume from tailored JSON |
 | `mailer.js` | Sends resume emails via SMTP |
 | `admin.js` | Admin endpoints: stats, user management, settings |
+| `jev.js` | Job-fit + visa-sponsorship check via TypeSafe Jev (typed score/choice/noul answers) |
 
 ### Frontend (`resumeai-frontend/src/`)
 | File | Purpose |
@@ -112,6 +113,8 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 | GET | /api/jobs/:id/download | JWT | Download tailored resume (.docx/.pdf) |
 | POST | /api/gmail/connect | JWT | Start Gmail OAuth |
 | POST | /api/gmail/verify | JWT | Verify Gmail filter |
+| POST | /api/extension/map-fields | JWT | Extension: map form fields to profile values |
+| POST | /api/extension/job-fit | JWT | Extension: job fit + sponsorship via Jev (needs TYPESAFE_API_KEY) |
 | GET | /api/admin/* | JWT+admin | Admin endpoints |
 | GET | /health | none | Health check |
 

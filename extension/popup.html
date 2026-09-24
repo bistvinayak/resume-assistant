@@ -59,6 +59,22 @@
       background: none; color: #a8a29e; font-weight: 400; padding: 4px; margin-top: 2px;
       text-decoration: underline; font-size: 11px;
     }
+    #fitBtn { background: #1c1917; }
+    #fitResult { font-size: 12px; margin-top: 10px; color: #78716c; }
+    .fit-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+    .fit-pct { font-size: 26px; font-weight: 700; color: #1c1917; }
+    .fit-label { font-size: 12px; color: #57534e; text-align: right; max-width: 150px; }
+    .row { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-top: 1px solid #f5f5f4; }
+    .row span:first-child { color: #78716c; }
+    .row span:last-child { color: #1c1917; font-weight: 600; text-align: right; }
+    .bar { height: 5px; background: #f5f5f4; border-radius: 3px; overflow: hidden; margin-bottom: 10px; }
+    .bar > div { height: 100%; background: #f59e0b; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .pill.good { background: #dcfce7; color: #166534; }
+    .pill.bad { background: #fee2e2; color: #991b1b; }
+    .pill.meh { background: #f5f5f4; color: #57534e; }
+    .conf { font-weight: 400; color: #a8a29e; font-size: 10.5px; }
+    .fit-note { font-size: 10.5px; color: #a8a29e; margin-top: 6px; line-height: 1.4; }
   </style>
 </head>
 <body>
@@ -66,6 +82,12 @@
   <div id="status" class="status">Checking login…</div>
   <button id="fillBtn" disabled>Fill this page</button>
   <div id="result"></div>
+
+  <hr class="divider" />
+
+  <div class="field-label">Job fit &amp; sponsorship</div>
+  <button id="fitBtn" disabled>Check this job</button>
+  <div id="fitResult"></div>
 
   <hr class="divider" />
 

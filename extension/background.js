@@ -42,6 +42,27 @@ async function mapFields(fields, url) {
   return data.mappings || [];
 }
 
+async function checkJobFit(job) {
+  const { authToken } = await chrome.storage.local.get(['authToken']);
+  if (!authToken) throw new Error('not_logged_in');
+
+  const res = await fetch(`${API_BASE}/extension/job-fit`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${authToken}`,
+    },
+    body: JSON.stringify(job),
+  });
+
+  if (res.status === 401) throw new Error('not_logged_in');
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `api_error_${res.status}`);
+  }
+  return res.json();
+}
+
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'GET_AUTH_STATE') {
     getAuthState().then(sendResponse);
@@ -50,6 +71,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'MAP_FIELDS') {
     mapFields(message.fields, message.url)
       .then((mappings) => sendResponse({ ok: true, mappings }))
+      .catch((e) => sendResponse({ ok: false, error: e.message }));
+    return true;
+  }
+  if (message.type === 'JOB_FIT') {
+    checkJobFit(message.job)
+      .then((result) => sendResponse({ ok: true, result }))
       .catch((e) => sendResponse({ ok: false, error: e.message }));
     return true;
   }

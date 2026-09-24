@@ -14,6 +14,7 @@ const { startCron, runBatch } = require('./cron');
 const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
+const { assessJobFit } = require('./jev');
 const { renderResumeDocx } = require('./renderDocx');
 const { classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts } = require('./llm');
 const { mergeProfile, applyDeletions, resolveConflicts } = require('./profile');
@@ -563,6 +564,20 @@ app.post('/api/extension/map-fields', async (req, res, next) => {
         .catch(le => console.error('extension event log failed:', le.message));
       throw e;
     }
+  } catch (e) { next(e); }
+});
+
+// Scores the job posting on the current tab against the user's profile, and reads its
+// visa-sponsorship stance — via TypeSafe Jev (typed answers + confidence, see src/jev.js).
+app.post('/api/extension/job-fit', async (req, res, next) => {
+  try {
+    const { url, title, company, text } = req.body;
+    if (!text || String(text).trim().length < 200) {
+      return res.status(400).json({ error: 'no_job_text' });
+    }
+    const profile = await getProfile(req.userId);
+    if (!profile._onboarded) return res.status(400).json({ error: 'no_profile' });
+    res.json(await assessJobFit(profile, { url, title, company, text }));
   } catch (e) { next(e); }
 });
 
