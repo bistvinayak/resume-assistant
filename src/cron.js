@@ -118,6 +118,14 @@ async function processPendingIngestions() {
 
 function startCron() {
   cron.schedule('0 */2 * * *', () => runBatch());
+  // Nightly database backup (scripts/backup-db.sh, 7 days kept in ~/backups).
+  cron.schedule('30 3 * * *', () => {
+    require('child_process').execFile('bash', [require('path').join(__dirname, '..', 'scripts', 'backup-db.sh')], (err, stdout, stderr) => {
+      if (err) console.error(`✗ nightly backup failed: ${(stderr || err.message).trim()}`);
+      else console.log(`✓ nightly ${stdout.trim()}`);
+    });
+  });
+
   // Finish uploads that failed while the AI provider was down (see pending_ingestions).
   cron.schedule('*/5 * * * *', () => processPendingIngestions().catch(e => console.error('pending ingestion run failed:', e.message)));
 
