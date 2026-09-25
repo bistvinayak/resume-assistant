@@ -234,7 +234,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1011] — 
 | saveResumeFormat | 701 |  |
 | deleteResumeFormat | 712 |  |
 | logExtensionEvent | 716 |  |
-| getExtensionEvents | 726 |  |
+| getExtensionEvents | 728 |  |
 
 ## Frontend Pages
 
@@ -287,7 +287,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1011] — 
 | api.sendFeedback() | /api/feedback | server.js:451 |
 | api.adminGetFeedback() | /api/admin/feedback | — |
 | api.adminReviewFeedback() | /api/admin/feedback/:id | — |
-| api.adminGetExtensionEvents() | /api/admin/extension-events | — |
+| api.adminGetExtensionEvents() | /api/admin/extension-events${qs  | — |
 | api.adminGetSchemaProposals() | /api/admin/schema-proposals | — |
 | api.adminApproveSchemaProposal() | /api/admin/schema-proposals/:id/approve | — |
 | api.adminRejectSchemaProposal() | /api/admin/schema-proposals/:id/reject | — |
@@ -385,7 +385,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1011] — 
 | saveResumeFormat | 701 | yes |
 | deleteResumeFormat | 712 | yes |
 | logExtensionEvent | 716 | yes |
-| getExtensionEvents | 726 | yes |
+| getExtensionEvents | 728 | yes |
 
 ### gmail-connect.js
 

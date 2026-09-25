@@ -376,7 +376,8 @@ async function rejectGmailForwarding(req, res) {
 // GET /api/admin/extension-events
 async function getExtensionEventsHandler(req, res) {
   try {
-    res.json(await getExtensionEvents(Math.min(Number(req.query.limit) || 100, 500)));
+    const { range, status, user, host, model, q, problems, limit } = req.query;
+    res.json(await getExtensionEvents({ range, status, user, host, model, q, problems, limit }));
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

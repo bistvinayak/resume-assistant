@@ -723,25 +723,75 @@ async function logExtensionEvent({ userId, userEmail, url, fieldsCount, mappedCo
   );
 }
 
-async function getExtensionEvents(limit = 100) {
-  const [{ rows: events }, { rows: [summary] }] = await Promise.all([
-    pool.query('SELECT * FROM extension_events ORDER BY created_at DESC LIMIT $1', [limit]),
+// Admin Extension observability. Every filter is optional; the summary, breakdowns and daily
+// series are computed over the same filtered set as the event list.
+async function getExtensionEvents(filters = {}) {
+  const where = [];
+  const params = [];
+  const p = (value) => { params.push(value); return `$${params.length}`; };
+  const RANGES = { '24h': '24 hours', '7d': '7 days', '30d': '30 days' };
+  if (RANGES[filters.range]) where.push(`created_at > now() - interval '${RANGES[filters.range]}'`);
+  if (filters.status === 'failed') where.push(`status = 'failed'`);
+  if (filters.status === 'success') where.push(`status = 'success' AND error IS NULL`);
+  if (filters.status === 'fallback') where.push(`status = 'success' AND error IS NOT NULL`);
+  if (filters.user) { const v = p(filters.user); where.push(`(user_email = ${v} OR user_id = ${v})`); }
+  if (filters.host) where.push(`host = ${p(filters.host)}`);
+  if (filters.model) where.push(`model = ${p(filters.model)}`);
+  if (filters.q) { const v = p(`%${filters.q}%`); where.push(`(error ILIKE ${v} OR url ILIKE ${v} OR host ILIKE ${v})`); }
+  if (filters.problems === 'true' || filters.problems === true) {
+    where.push(`(status = 'failed' OR duration_ms > 30000 OR (fields_count > 0 AND mapped_count::float / fields_count < 0.5))`);
+  }
+  const W = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const limit = Math.min(Number(filters.limit) || 200, 1000);
+
+  const [events, summary, byHost, byUser, byModel, daily, facets] = await Promise.all([
+    pool.query(`SELECT * FROM extension_events ${W} ORDER BY created_at DESC LIMIT ${limit}`, params),
+    pool.query(`
+      SELECT COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+        COUNT(*) FILTER (WHERE status = 'success' AND error IS NOT NULL)::int AS fallback,
+        COUNT(*) FILTER (WHERE duration_ms > 30000)::int AS over_30s,
+        ROUND(AVG(CASE WHEN fields_count > 0 THEN mapped_count::numeric / fields_count END) * 100)::int AS fill_pct,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS p50_ms,
+        percentile_cont(0.9) WITHIN GROUP (ORDER BY duration_ms)::int AS p90_ms,
+        COUNT(DISTINCT user_id)::int AS users,
+        MAX(created_at) FILTER (WHERE status = 'success') AS last_success_at,
+        MAX(created_at) FILTER (WHERE status = 'failed') AS last_failure_at
+      FROM extension_events ${W}`, params),
+    pool.query(`
+      SELECT host, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+        ROUND(AVG(CASE WHEN fields_count > 0 THEN mapped_count::numeric / fields_count END) * 100)::int AS fill_pct,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS p50_ms
+      FROM extension_events ${W} GROUP BY host ORDER BY total DESC LIMIT 15`, params),
+    pool.query(`
+      SELECT COALESCE(user_email, user_id) AS user, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+        MAX(created_at) AS last_seen
+      FROM extension_events ${W} GROUP BY 1 ORDER BY total DESC LIMIT 15`, params),
+    pool.query(`
+      SELECT COALESCE(model, 'unknown') AS model, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+        percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms)::int AS p50_ms
+      FROM extension_events ${W} GROUP BY 1 ORDER BY total DESC`, params),
+    pool.query(`
+      SELECT date_trunc('day', created_at)::date AS day, COUNT(*)::int AS total, COUNT(*) FILTER (WHERE status = 'failed')::int AS failed
+      FROM extension_events ${W} GROUP BY 1 ORDER BY 1 DESC LIMIT 30`, params),
     pool.query(`
       SELECT
-        SUM(CASE WHEN created_at > now() - interval '24 hours' THEN 1 ELSE 0 END)                       AS total_24h,
-        SUM(CASE WHEN created_at > now() - interval '24 hours' AND status = 'failed' THEN 1 ELSE 0 END) AS failed_24h,
-        MAX(CASE WHEN status = 'success' THEN created_at END)                                           AS last_success_at,
-        MAX(CASE WHEN status = 'failed' THEN created_at END)                                            AS last_failure_at
-      FROM extension_events`),
+        ARRAY(SELECT DISTINCT COALESCE(user_email, user_id) FROM extension_events ORDER BY 1) AS users,
+        ARRAY(SELECT DISTINCT host FROM extension_events WHERE host IS NOT NULL ORDER BY 1) AS hosts,
+        ARRAY(SELECT DISTINCT model FROM extension_events WHERE model IS NOT NULL ORDER BY 1) AS models`),
   ]);
+  const sm = summary.rows[0];
   return {
-    events,
+    events: events.rows,
     summary: {
-      total_24h: Number(summary.total_24h) || 0,
-      failed_24h: Number(summary.failed_24h) || 0,
-      last_success_at: summary.last_success_at,
-      last_failure_at: summary.last_failure_at,
+      ...sm,
+      success_rate: sm.total ? Math.round(((sm.total - sm.failed) / sm.total) * 100) : null,
+      // kept for the tab badge
+      total_24h: sm.total, failed_24h: sm.failed,
     },
+    by_host: byHost.rows, by_user: byUser.rows, by_model: byModel.rows,
+    daily: daily.rows.reverse(),
+    facets: facets.rows[0],
   };
 }
 

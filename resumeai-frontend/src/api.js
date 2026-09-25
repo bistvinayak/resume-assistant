@@ -357,9 +357,12 @@ export const api = {
     return res.json();
   },
 
-  async adminGetExtensionEvents() {
-    const res = await checkedFetch(`${BASE}/admin/extension-events`, { headers: await getHeaders() });
-    return res.json();
+  async adminGetExtensionEvents(filters = {}) {
+    const qs = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== '' && v != null && v !== false)).toString();
+    const res = await checkedFetch(`${BASE}/admin/extension-events${qs ? `?${qs}` : ''}`, { headers: await getHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not load extension data');
+    return data;
   },
 
   async adminGetSchemaProposals() {
