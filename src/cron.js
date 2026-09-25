@@ -90,8 +90,37 @@ async function runBatch() {
   }
 }
 
+// Retries queued uploads for about an hour (12 × 5 min), applying them with the same merge +
+// dedupe path as a live upload. The user was told it would appear automatically.
+const MAX_PENDING_ATTEMPTS = 12;
+let pendingRunning = false;
+async function processPendingIngestions() {
+  if (pendingRunning) return;
+  pendingRunning = true;
+  try {
+    const { getDuePendingIngestions, markPendingIngestion } = require('./db');
+    const { ingestText } = require('./profile');
+    for (const item of await getDuePendingIngestions(5)) {
+      try {
+        await ingestText(item.text, item.user_id, { userId: item.user_id, source: 'queued_upload' });
+        await markPendingIngestion(item.id, { status: 'done', incrementAttempts: true });
+        console.log(`✓ queued upload ${item.id} for ${item.user_id} added to profile`);
+      } catch (e) {
+        const status = item.attempts + 1 >= MAX_PENDING_ATTEMPTS ? 'failed' : 'pending';
+        await markPendingIngestion(item.id, { status, error: e.message, incrementAttempts: true });
+        console.error(`✗ queued upload ${item.id} attempt ${item.attempts + 1} failed${status === 'failed' ? ' (giving up)' : ''}: ${e.message.slice(0, 160)}`);
+      }
+    }
+  } finally {
+    pendingRunning = false;
+  }
+}
+
 function startCron() {
   cron.schedule('0 */2 * * *', () => runBatch());
+  // Finish uploads that failed while the AI provider was down (see pending_ingestions).
+  cron.schedule('*/5 * * * *', () => processPendingIngestions().catch(e => console.error('pending ingestion run failed:', e.message)));
+
   cron.schedule('*/5 * * * *', async () => {
     const recovered = await recoverStaleJobs(10).catch(() => []);
     if (!recovered.length) return;
@@ -123,4 +152,4 @@ function startCron() {
   console.log('✓ cron scheduled (jobs every 2h, stale recovery every 5min)');
 }
 
-module.exports = { startCron, runBatch };
+module.exports = { processPendingIngestions, startCron, runBatch };

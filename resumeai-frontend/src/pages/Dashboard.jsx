@@ -745,13 +745,13 @@ export default function Dashboard() {
             try {
               const status = await api.getIngestionStatus();
               attempts++;
-              if (status.stage === 'done' || status.stage === 'awaiting_confirmation') {
+              if (status.stage === 'done' || status.stage === 'awaiting_confirmation' || status.stage === 'queued') {
                 clearInterval(iv);
                 resolve(status);
               } else if (status.stage === 'failed') {
                 clearInterval(iv);
                 reject(new Error(status.error || 'Processing failed'));
-              } else if (attempts > 90) {
+              } else if (attempts > 300) { // 10 min: the server waits out AI outages before queueing
                 clearInterval(iv);
                 reject(new Error('Processing timed out. Check the My Applications tab or try again.'));
               }
@@ -765,7 +765,13 @@ export default function Dashboard() {
         const result = await poll();
         clearInterval(stageTimer);
 
-        if (result.stage === 'awaiting_confirmation') {
+        if (result.stage === 'queued') {
+          // The AI provider was down; the server kept the upload and will apply it from its queue.
+          setChatMessages(prev => [
+            ...prev.filter(m => m.id !== progressId),
+            { role: 'arjun', text: result.message || "Arjun's AI is busy right now. Your resume is saved and will be added to your profile automatically, usually within 15 minutes." },
+          ]);
+        } else if (result.stage === 'awaiting_confirmation') {
           // Nothing's saved yet — show what would change and wait for explicit confirm/reject.
           setChatMessages(prev => [
             ...prev.filter(m => m.id !== progressId),

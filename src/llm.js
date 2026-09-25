@@ -10,23 +10,20 @@ const client = new OpenAI({
   timeout: 60_000,
   maxRetries: 0,
 });
-const MODEL = process.env.OPENROUTER_MODEL || 'google/gemini-3.7-flash';
-// Resume-writing steps (tailor/improve) get a stronger model — the prose quality and
-// strict "select+reframe, never invent" constraint matter more here than in extraction/scoring.
-const WRITING_MODEL = process.env.OPENROUTER_WRITING_MODEL || 'google/gemini-3.7-flash';
-// Browser-extension form mapping is low-stakes (structured field->value matching, not resume
-// prose) and can run on OpenRouter's free tier without hurting output quality that matters.
-// Free models keep getting retired (z-ai/glm-5.2:free, then minimax/minimax-m3:free) —
-// nemotron-3-super is the current free pick.
-const FORM_FILL_MODEL = process.env.OPENROUTER_FORM_FILL_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
-// Free-tier models share a rate-limited upstream pool and can 429 or disappear, so the
-// fallback is the paid main MODEL (stable, never retired) rather than a second free model.
-// One form-fill call costs a fraction of a cent there.
-const FORM_FILL_FALLBACK_MODEL = process.env.OPENROUTER_FORM_FILL_FALLBACK_MODEL || MODEL;
-// Per-user skill generation runs in the background on free models only (owner decision):
-// nemotron-3-super scored 11/11 on profile extraction in a Sep 2026 eval; ultra is the backup.
-const SKILLS_MODEL = process.env.OPENROUTER_SKILLS_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
-const SKILLS_FALLBACK_MODEL = process.env.OPENROUTER_SKILLS_FALLBACK_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
+// All AI runs on OpenRouter's free models (owner decision, Sep 2026: no paid Gemini).
+// nemotron-3-super scored 11/11 on profile extraction and 100% on tailoring in the eval;
+// nemotron-3-ultra is the second free model every call falls back to (see askJson).
+// Free models get retired now and then (z-ai/glm-5.2:free, minimax/minimax-m3:free), so
+// each is overridable by env var without a code change.
+const FREE_PRIMARY = 'nvidia/nemotron-3-super-120b-a12b:free';
+const FREE_SECONDARY = 'nvidia/nemotron-3-ultra-550b-a55b:free';
+const MODEL = process.env.OPENROUTER_MODEL || FREE_PRIMARY;
+const WRITING_MODEL = process.env.OPENROUTER_WRITING_MODEL || FREE_PRIMARY;
+// Extension form-fill must answer inside CloudFront's ~30 s, so it runs its own short chain.
+const FORM_FILL_MODEL = process.env.OPENROUTER_FORM_FILL_MODEL || FREE_PRIMARY;
+const FORM_FILL_FALLBACK_MODEL = process.env.OPENROUTER_FORM_FILL_FALLBACK_MODEL || FREE_SECONDARY;
+const SKILLS_MODEL = process.env.OPENROUTER_SKILLS_MODEL || FREE_PRIMARY;
+const SKILLS_FALLBACK_MODEL = process.env.OPENROUTER_SKILLS_FALLBACK_MODEL || FREE_SECONDARY;
 
 const langfuse = new Langfuse({
   secretKey: process.env.LANGFUSE_SECRET_KEY,
@@ -1006,7 +1003,7 @@ function evalSmartMerge(trace, current, incoming, result) {
 // models return "Service temporarily overloaded" often enough that a single attempt failed
 // 2 of 5 real resume uploads in testing; a paid model out of credits (402) also falls through
 // to the free backup instead of failing the user's request.
-const FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
+const FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL || FREE_SECONDARY;
 // Callers that run their own model chain under a latency budget (extension form-fill must
 // finish inside CloudFront's ~30 s) opt out.
 const OWN_FALLBACK_CHAIN = new Set(['map_form_fields']);
@@ -1015,10 +1012,14 @@ async function askJson(system, user, generationName, trace, langfusePrompt, hist
   const once = (m) => askJsonOnce(system, user, generationName, trace, langfusePrompt, history, m, fileAttachment, maxTokens);
   if (OWN_FALLBACK_CHAIN.has(generationName)) return once(model);
 
-  const backup = FALLBACK_MODEL === model ? 'nvidia/nemotron-3-super-120b-a12b:free' : FALLBACK_MODEL;
+  // Two different free models after the primary: a single free backup failed a real upload
+  // ("Upstream idle timeout") when the paid primary was out of credits.
+  const FREE_CHAIN = [FALLBACK_MODEL, FREE_PRIMARY, FREE_SECONDARY];
+  const backups = [...new Set(FREE_CHAIN)].filter(m => m !== model).slice(0, 2);
+  const backup = backups[0];
   const errors = [];
   let skipRetry = false;
-  for (const [i, m] of [model, model, backup].entries()) {
+  for (const [i, m] of [model, model, ...backups].entries()) {
     if (i === 1 && skipRetry) continue;
     try {
       return await once(m);
@@ -1070,10 +1071,6 @@ async function askJsonOnce(system, user, generationName, trace, langfusePrompt, 
       // (resume JSON, cover letter, scoring) need anywhere near 65k tokens.
       max_tokens: maxTokens,
       messages,
-      // Gemini's reasoning models burn hidden "thinking" tokens by default (~100x cost
-      // on trivial calls) — these are structured extraction/classification tasks, not
-      // reasoning tasks, so keep it off. Ignored by providers that don't support it.
-      ...(model.startsWith('google/') ? { reasoning: { effort: 'minimal' } } : {}),
       // Nemotron (extension form-fill) reasons by default: ~40s on a 40-field Workday page
       // vs ~24s with it off, and CloudFront cuts requests at ~30s.
       ...(model.startsWith('nvidia/') ? { reasoning: { enabled: false } } : {}),

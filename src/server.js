@@ -7,8 +7,8 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent } = require('./db');
-const { ingestText, ingestPdf, ingestFiles, extractTextFromFile } = require('./profile');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent, addPendingIngestion, getPendingIngestionCount } = require('./db');
+const { ingestText, ingestPdf, ingestFiles, extractTextFromFile, combineTexts } = require('./profile');
 const { queueJob, getQueueStats } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
 const { authMiddleware } = require('./auth');
@@ -239,8 +239,21 @@ app.post(['/ingest/files', '/api/ingest/files'], (req, res, next) => {
         ingestionStatus.set(userId, { stage: 'done', profile: result, conflicts, ambiguities, extracted, drops, filesExtracted: texts.length, filesSkipped: errors.length, errors });
         console.log(`✓ ingest/files background: done for ${userId}, ${conflicts.length} conflict(s), ${drops?.items?.length || 0} drop(s)`);
       } catch (e) {
+        // The text is already extracted, so a failure here is the AI provider (down/overloaded
+        // after the patient retries). Keep the upload and finish it from the cron queue.
         console.error(`✗ ingest/files background error: ${e.message}`);
-        ingestionStatus.set(userId, { stage: 'failed', error: e.message, filesExtracted: texts.length, filesSkipped: errors.length, errors });
+        try {
+          await addPendingIngestion(userId, combineTexts(texts), e.message);
+          ingestionStatus.set(userId, {
+            stage: 'queued',
+            message: "Arjun's AI is busy right now. Your resume is saved and will be added to your profile automatically, usually within 15 minutes.",
+            filesExtracted: texts.length, filesSkipped: errors.length, errors,
+          });
+          console.log(`↻ ingest/files: queued upload for ${userId} to retry in background`);
+        } catch (qe) {
+          console.error(`✗ could not queue failed upload: ${qe.message}`);
+          ingestionStatus.set(userId, { stage: 'failed', error: e.message, filesExtracted: texts.length, filesSkipped: errors.length, errors });
+        }
       }
       setTimeout(() => ingestionStatus.delete(userId), 5 * 60 * 1000);
     })();
@@ -251,7 +264,8 @@ app.post(['/ingest/files', '/api/ingest/files'], (req, res, next) => {
 app.get(['/ingest/status', '/api/ingest/status'], async (req, res) => {
   const status = ingestionStatus.get(req.userId);
   if (!status) {
-    return res.json({ stage: 'idle' });
+    const pending = await getPendingIngestionCount(req.userId).catch(() => 0);
+    return res.json(pending ? { stage: 'queued', pending } : { stage: 'idle' });
   }
   if (status.stage === 'done') {
     ingestionStatus.delete(req.userId);

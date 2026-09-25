@@ -20,7 +20,7 @@ EC2 (PM2-managed) runs: Express server (port 3000) serving:
 - **Backend:** Express.js, Node 18+
 - **Database:** PostgreSQL (local on EC2)
 - **Auth:** Firebase Auth (Google OAuth), JWT verification via firebase-admin
-- **LLM:** OpenRouter API (gpt-4o-mini default), JSON mode
+- **LLM:** OpenRouter free models only (nvidia/nemotron-3-super:free, backup nemotron-3-ultra:free), JSON mode
 - **Observability:** Langfuse (traces, sessions, evaluations, prompts, user feedback)
 - **Email:** Nodemailer (SMTP via Gmail) for resume delivery
 - **Deployment:** AWS EC2 via PM2, GitHub Actions auto-deploy on push to main (`deploy/deploy.sh` for manual deploys), CloudFront CDN
@@ -79,6 +79,12 @@ PDF/text → extractFacts (LLM) → is profile empty?
 
 ### Resume Tailoring (job URL submitted)
 `scrapeJob → tailorResume (LLM) → atsScore (LLM) → [if <95: improveResume → atsScore] → renderDocx → save → email (if cron)`
+
+### Upload reliability
+- Uploads (`/ingest/files`, also used for onboarding pasted text as `about-me.txt`) run in the background; the page polls `/ingest/status` for up to 10 min.
+- `extractFactsPatient` (profile.js) runs up to 3 rounds of the full model chain (`EXTRACT_ROUND_WAITS_MS`, default 20 s, 60 s). Each `askJson` call already retries once and falls back to two free models (Nemotron Super, then Ultra); a 402 (no credits) skips straight to the free models.
+- If extraction still fails, the text goes to `pending_ingestions` and the page shows `stage: 'queued'`. A cron job every 5 min applies queued uploads (same merge + dedupe path), retrying for ~1 hour (12 attempts).
+- Merging is programmatic by default (`SMART_MERGE_MAX_PROFILE_CHARS=0`); `dedupeProfile` runs after every merge.
 
 ### User Skills (My Skills tab)
 `saveProfile → profileEvents 'saved' → 45s debounce → 3 parallel generateSkill calls (skill_career_profile / skill_cover_letter / skill_writing_voice) → user_skills table`

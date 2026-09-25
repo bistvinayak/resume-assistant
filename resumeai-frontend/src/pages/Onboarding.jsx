@@ -144,15 +144,21 @@ export default function Onboarding() {
                   setLoading(true);
                   setError('');
                   try {
-                    if (bio.trim().length >= 50) await api.ingestText(bio);
-                    if (files.length) {
-                      const result = await api.ingestFiles(files);
+                    // Pasted text rides the background upload path as a .txt file: the direct
+                    // text endpoint waits on the AI inside CloudFront's ~30 s limit and fails when
+                    // the model is slow.
+                    const uploads = bio.trim().length >= 50
+                      ? [...files, new File([bio], 'about-me.txt', { type: 'text/plain' })]
+                      : files;
+                    if (uploads.length) {
+                      const result = await api.ingestFiles(uploads);
                       if (result.processing) {
                         let done = false;
-                        for (let i = 0; i < 90 && !done; i++) {
+                        for (let i = 0; i < 300 && !done; i++) { // up to 10 min while the AI is busy
                           await new Promise(r => setTimeout(r, 2000));
                           const status = await api.getIngestionStatus();
-                          if (status.stage === 'done') {
+                          if (status.stage === 'done' || status.stage === 'queued') {
+                            // queued = AI down; the server finishes it in the background, so continue.
                             done = true;
                           } else if (status.stage === 'awaiting_confirmation') {
                             // Onboarding has nothing meaningful yet to protect — auto-apply

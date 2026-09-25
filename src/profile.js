@@ -154,8 +154,32 @@ async function extractBulletIndent(filePath, ext) {
 // bio and for small low-risk quick-actions like "add this keyword as a skill" that
 // can't plausibly touch contact fields; gating those behind a confirmation dialog
 // would be a real UX regression for something with nothing risky to confirm.
+// Uploads run in the background while the page polls, so extraction can wait out a provider
+// outage instead of failing on the first bad minute. Each round is the full model chain
+// (primary → retry → two free backups); rounds are spaced so a transient overload can clear.
+const EXTRACT_ROUND_WAITS_MS = (process.env.EXTRACT_ROUND_WAITS_MS || '20000,60000').split(',').map(Number);
+async function extractFactsPatient(text, ctx = {}) {
+  let lastErr;
+  for (let round = 0; round <= EXTRACT_ROUND_WAITS_MS.length; round++) {
+    if (round > 0) {
+      console.warn(`extract_facts: round ${round} failed, retrying in ${EXTRACT_ROUND_WAITS_MS[round - 1] / 1000}s (${lastErr.message.slice(0, 120)})`);
+      await new Promise(r => setTimeout(r, EXTRACT_ROUND_WAITS_MS[round - 1]));
+    }
+    try { return await extractFacts(text, ctx); }
+    catch (e) {
+      lastErr = e;
+      if ((e.status || e.response?.status) === 401) break;
+    }
+  }
+  throw lastErr;
+}
+
+function combineTexts(texts) {
+  return texts.length === 1 ? texts[0] : texts.map((t, i) => `--- Document ${i + 1} ---\n${t}`).join('\n\n');
+}
+
 async function ingestText(text, userId = 'me', ctx = {}) {
-  const partial = await extractFacts(text, { userId, ...ctx });
+  const partial = await extractFactsPatient(text, { userId, ...ctx });
   return applyPartial(partial, userId, ctx);
 }
 
@@ -192,11 +216,9 @@ async function ingestFiles(files, userId = 'me', ctx = {}) {
     throw new Error(`Could not extract text from any file. ${detail}`);
   }
 
-  const combined = texts.length === 1
-    ? texts[0]
-    : texts.map((t, i) => `--- Document ${i + 1} ---\n${t}`).join('\n\n');
+  const combined = combineTexts(texts);
 
-  const partial = await extractFacts(combined, { userId, ...ctx });
+  const partial = await extractFactsPatient(combined, { userId, ...ctx });
   const extractedSummary = summarizeExtraction(partial);
   const proposal = await computeMergeProposal(partial, userId, ctx);
   let profile;
@@ -629,8 +651,16 @@ function longer(a, b) { return (b || '').length > (a || '').length ? b : a; }
 function dedupeProfile(profile) {
   const p = profile;
   const exp = [];
-  for (const e of p.experience || []) {
-    const i = exp.findIndex(x => sameCompany(x.company, e.company) && sameStint(x.dates, e.dates));
+  const all = p.experience || [];
+  // An undated entry (older resumes often omit dates) is the same role when it's the only
+  // entry at that company on each side; with several roles there (promotions) dates decide.
+  const companyCount = (c) => all.filter(x => sameCompany(x.company, c)).length;
+  const undated = (d) => !dateRange(d);
+  for (const e of all) {
+    const i = exp.findIndex(x => sameCompany(x.company, e.company) && (
+      sameStint(x.dates, e.dates) ||
+      ((undated(x.dates) || undated(e.dates)) && companyCount(e.company) <= 2 && exp.filter(y => sameCompany(y.company, e.company)).length === 1)
+    ));
     if (i === -1) { exp.push({ ...e, bullets: dedupeBullets(e.bullets || []) }); continue; }
     const x = exp[i];
     const altTitles = [...new Set([...(x.alt_titles || []), ...(e.alt_titles || []), x.title, e.title].filter(Boolean))];
@@ -643,7 +673,8 @@ function dedupeProfile(profile) {
       company_description: longer(x.company_description, e.company_description),
       location: x.location || e.location,
       // The more precise date string (has months) wins.
-      dates: (String(e.dates || '').match(/[a-z]{3}/gi) || []).length > (String(x.dates || '').match(/[a-z]{3}/gi) || []).length ? e.dates : x.dates,
+      dates: !dateRange(x.dates) ? e.dates : !dateRange(e.dates) ? x.dates
+        : (String(e.dates || '').match(/[a-z]{3}/gi) || []).length > (String(x.dates || '').match(/[a-z]{3}/gi) || []).length ? e.dates : x.dates,
       bullets: dedupeBullets([...(x.bullets || []), ...(e.bullets || [])]),
     };
     if (!exp[i].alt_titles) delete exp[i].alt_titles;
@@ -1158,4 +1189,4 @@ async function backfillApprovedCategory(category) {
   return { profilesScanned: groups.length, profilesUpdated, factsReclassified };
 }
 
-module.exports = { dedupeProfile, ingestText, ingestPdf, ingestFiles, extractTextFromFile, extractBulletIndent, mergeProfile, applyDeletions, resolveConflicts, backfillApprovedCategory, ALLOWED_EXTENSIONS };
+module.exports = { dedupeProfile, combineTexts, ingestText, ingestPdf, ingestFiles, extractTextFromFile, extractBulletIndent, mergeProfile, applyDeletions, resolveConflicts, backfillApprovedCategory, ALLOWED_EXTENSIONS };

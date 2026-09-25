@@ -180,6 +180,20 @@ async function initSchema() {
     -- cover-letter story, writing voice) that steer resume/cover-letter writing, and can be
     -- exported as Claude skills. user_notes are the user's own corrections — they survive
     -- regeneration and take priority over generated text.
+    -- Uploads whose AI extraction failed (provider down/overloaded). The text is kept and a
+    -- cron job finishes them when the AI recovers, so an upload is never lost.
+    CREATE TABLE IF NOT EXISTS pending_ingestions (
+      id          SERIAL PRIMARY KEY,
+      user_id     TEXT NOT NULL,
+      text        TEXT NOT NULL,
+      attempts    INTEGER NOT NULL DEFAULT 0,
+      status      TEXT NOT NULL DEFAULT 'pending',
+      last_error  TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS idx_pending_ingestions_status ON pending_ingestions(status);
+
     CREATE TABLE IF NOT EXISTS user_skills (
       user_id          TEXT NOT NULL,
       skill            TEXT NOT NULL,
@@ -244,6 +258,37 @@ async function saveProfile(profile, userId = 'me', source = 'unknown') {
 async function getProfileVersion(userId = 'me') {
   const { rows } = await pool.query('SELECT COALESCE(MAX(version), 0) AS v FROM master_profile WHERE user_id = $1', [userId]);
   return rows[0]?.v || 0;
+}
+
+// ── PENDING INGESTIONS ────────────────────────────────────────────────────
+async function addPendingIngestion(userId, text, error) {
+  const { rows } = await pool.query(
+    `INSERT INTO pending_ingestions (user_id, text, last_error) VALUES ($1, $2, $3) RETURNING id`,
+    [userId, text, String(error || '').slice(0, 1000)]
+  );
+  return rows[0].id;
+}
+
+async function getDuePendingIngestions(limit = 5) {
+  const { rows } = await pool.query(
+    `SELECT id, user_id, text, attempts FROM pending_ingestions
+     WHERE status = 'pending' ORDER BY updated_at ASC LIMIT $1`,
+    [limit]
+  );
+  return rows;
+}
+
+async function getPendingIngestionCount(userId) {
+  const { rows } = await pool.query(`SELECT COUNT(*)::int AS n FROM pending_ingestions WHERE user_id = $1 AND status = 'pending'`, [userId]);
+  return rows[0]?.n || 0;
+}
+
+async function markPendingIngestion(id, { status, error = null, incrementAttempts = false }) {
+  await pool.query(
+    `UPDATE pending_ingestions SET status = $2, last_error = COALESCE($3, last_error),
+       attempts = attempts + $4, updated_at = now() WHERE id = $1`,
+    [id, status, error ? String(error).slice(0, 1000) : null, incrementAttempts ? 1 : 0]
+  );
 }
 
 // ── USER SKILLS ───────────────────────────────────────────────────────────
@@ -703,6 +748,7 @@ async function getExtensionEvents(limit = 100) {
 module.exports = {
   pool, initSchema, getProfile, saveProfile, getProfileVersion, profileEvents,
   getUserSkills, setUserSkillStatus, saveUserSkill, saveUserSkillNotes,
+  addPendingIngestion, getDuePendingIngestions, getPendingIngestionCount, markPendingIngestion,
   getProfileVersions, restoreProfileVersion,
   seenJobBefore, saveTailored, markDelivered,
   getJobsForUser, getJobByJobId, getMostRecentDeliveredJob, insertJobProcessing, markJobFailed, recoverStaleJobs, forceRequeueJob,
