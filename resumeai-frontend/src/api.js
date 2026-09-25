@@ -365,6 +365,38 @@ export const api = {
     return data;
   },
 
+  // ── Self-healing proposals ──
+  async adminGetProposals() {
+    const res = await checkedFetch(`${BASE}/admin/proposals`, { headers: await getHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not load proposals');
+    return data;
+  },
+  async adminRunSelfHealing() {
+    const res = await checkedFetch(`${BASE}/admin/proposals/run`, { method: 'POST', headers: await getHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Run failed');
+    return data;
+  },
+  async adminAcceptProposal(id, rule) {
+    const res = await checkedFetch(`${BASE}/admin/proposals/${id}/accept`, { method: 'POST', headers: await getHeaders(), body: JSON.stringify({ rule }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Accept failed');
+    return data;
+  },
+  async adminRejectProposal(id) {
+    const res = await checkedFetch(`${BASE}/admin/proposals/${id}/reject`, { method: 'POST', headers: await getHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Reject failed');
+    return data;
+  },
+  async adminTogglePromptRule(id, active) {
+    const res = await checkedFetch(`${BASE}/admin/prompt-rules/${id}`, { method: 'PATCH', headers: await getHeaders(), body: JSON.stringify({ active }) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Update failed');
+    return data;
+  },
+
   async adminGetSchemaProposals() {
     const res = await checkedFetch(`${BASE}/admin/schema-proposals`, { headers: await getHeaders() });
     return res.json();

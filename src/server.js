@@ -570,8 +570,14 @@ app.post('/api/extension/map-fields', async (req, res, next) => {
     try {
       const profile = await getProfile(req.userId);
       const { mappings, model, primaryError } = await mapFormFields(fields, profile, { ...langfuseCtx(req), url });
+      // Which fields went unfilled (no mapping, or below the extension's 0.6 fill threshold):
+      // labels and types only, never values. Feeds the self-healing extension analyzer.
+      const confident = new Set(mappings.filter(m => (m.confidence ?? 1) >= 0.6 && m.value !== '' && m.value != null).map(m => m.field_id));
+      const unmapped = fields.filter(f => !confident.has(f.field_id))
+        .map(f => ({ label: String(f.label || f.name || f.placeholder || '').slice(0, 80), type: f.type || '' }))
+        .filter(f => f.label).slice(0, 40);
       // A fallback success still counts as success, but keep the primary's error visible to the admin.
-      logExtensionEvent({ ...event, mappedCount: mappings.length, status: 'success', model, error: primaryError, durationMs: Date.now() - t0 })
+      logExtensionEvent({ ...event, mappedCount: mappings.length, status: 'success', model, error: primaryError, durationMs: Date.now() - t0, unmapped })
         .catch(le => console.error('extension event log failed:', le.message));
       res.json({ mappings });
     } catch (e) {
@@ -661,6 +667,7 @@ const {
   getFeedbackHandler, reviewFeedback,
   getGmailForwardingHandler, approveGmailForwarding, rejectGmailForwarding,
   getExtensionEventsHandler,
+  getProposalsHandler, acceptProposal, rejectProposal, togglePromptRule, runSelfHealingHandler,
 } = require('./admin');
 
 app.get(['/admin/stats', '/api/admin/stats'], authMiddleware, adminOnly, getStats);
@@ -681,6 +688,11 @@ app.get(['/admin/gmail-forwarding', '/api/admin/gmail-forwarding'], authMiddlewa
 app.post(['/admin/gmail-forwarding/:userId/approve', '/api/admin/gmail-forwarding/:userId/approve'], authMiddleware, adminOnly, approveGmailForwarding);
 app.post(['/admin/gmail-forwarding/:userId/reject', '/api/admin/gmail-forwarding/:userId/reject'], authMiddleware, adminOnly, rejectGmailForwarding);
 app.get(['/admin/extension-events', '/api/admin/extension-events'], authMiddleware, adminOnly, getExtensionEventsHandler);
+app.get(['/admin/proposals', '/api/admin/proposals'], authMiddleware, adminOnly, getProposalsHandler);
+app.post(['/admin/proposals/run', '/api/admin/proposals/run'], authMiddleware, adminOnly, runSelfHealingHandler);
+app.post(['/admin/proposals/:id/accept', '/api/admin/proposals/:id/accept'], authMiddleware, adminOnly, acceptProposal);
+app.post(['/admin/proposals/:id/reject', '/api/admin/proposals/:id/reject'], authMiddleware, adminOnly, rejectProposal);
+app.patch(['/admin/prompt-rules/:id', '/api/admin/prompt-rules/:id'], authMiddleware, adminOnly, togglePromptRule);
 
 // ── RESUME DOWNLOAD ────────────────────────────────────────────────────────
 

@@ -194,6 +194,37 @@ async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_pending_ingestions_status ON pending_ingestions(status);
 
+    -- Self-healing: agents turn failure signals (disliked chats, extension failures) into
+    -- proposals an admin accepts or rejects. Accepted prompt rules live in prompt_rules and are
+    -- appended to that prompt at runtime (reversible: toggle active off).
+    ALTER TABLE extension_events ADD COLUMN IF NOT EXISTS unmapped JSONB;
+    ALTER TABLE chat_feedback ADD COLUMN IF NOT EXISTS analyzed_at TIMESTAMPTZ;
+    CREATE TABLE IF NOT EXISTS improvement_proposals (
+      id              SERIAL PRIMARY KEY,
+      source          TEXT NOT NULL,
+      kind            TEXT NOT NULL,
+      fingerprint     TEXT UNIQUE,
+      title           TEXT NOT NULL,
+      diagnosis       TEXT,
+      evidence        JSONB DEFAULT '{}',
+      target_prompt   TEXT,
+      proposed_rule   TEXT,
+      status          TEXT NOT NULL DEFAULT 'pending',
+      model           TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+      reviewed_at     TIMESTAMPTZ,
+      reviewed_by     TEXT
+    );
+    CREATE TABLE IF NOT EXISTS prompt_rules (
+      id           SERIAL PRIMARY KEY,
+      prompt_name  TEXT NOT NULL,
+      rule         TEXT NOT NULL,
+      active       BOOLEAN NOT NULL DEFAULT true,
+      proposal_id  INTEGER,
+      created_by   TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
     CREATE TABLE IF NOT EXISTS user_skills (
       user_id          TEXT NOT NULL,
       skill            TEXT NOT NULL,
@@ -289,6 +320,95 @@ async function markPendingIngestion(id, { status, error = null, incrementAttempt
        attempts = attempts + $4, updated_at = now() WHERE id = $1`,
     [id, status, error ? String(error).slice(0, 1000) : null, incrementAttempts ? 1 : 0]
   );
+}
+
+// ── SELF-HEALING PROPOSALS ────────────────────────────────────────────────
+async function insertProposal(p) {
+  const { rows } = await pool.query(
+    `INSERT INTO improvement_proposals (source, kind, fingerprint, title, diagnosis, evidence, target_prompt, proposed_rule, model)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (fingerprint) DO NOTHING RETURNING id`,
+    [p.source, p.kind, p.fingerprint, p.title, p.diagnosis, JSON.stringify(p.evidence || {}), p.target_prompt || null, p.proposed_rule || null, p.model || null]
+  );
+  return rows[0]?.id || null;
+}
+
+async function listProposals({ status, source } = {}) {
+  const where = [];
+  const params = [];
+  if (status) { params.push(status); where.push(`status = $${params.length}`); }
+  if (source) { params.push(source); where.push(`source = $${params.length}`); }
+  const { rows } = await pool.query(`SELECT * FROM improvement_proposals ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY (status = 'pending') DESC, created_at DESC LIMIT 200`, params);
+  return rows;
+}
+
+async function getProposal(id) {
+  const { rows } = await pool.query('SELECT * FROM improvement_proposals WHERE id = $1', [id]);
+  return rows[0] || null;
+}
+
+async function setProposalStatus(id, status, reviewer, proposedRule) {
+  const { rows } = await pool.query(
+    `UPDATE improvement_proposals SET status = $2, reviewed_at = now(), reviewed_by = $3,
+       proposed_rule = COALESCE($4, proposed_rule) WHERE id = $1 RETURNING *`,
+    [id, status, reviewer || null, proposedRule || null]
+  );
+  return rows[0] || null;
+}
+
+async function addPromptRule(promptName, rule, proposalId, createdBy) {
+  const { rows } = await pool.query(
+    `INSERT INTO prompt_rules (prompt_name, rule, proposal_id, created_by) VALUES ($1, $2, $3, $4) RETURNING *`,
+    [promptName, rule, proposalId || null, createdBy || null]
+  );
+  return rows[0];
+}
+
+async function listPromptRules() {
+  const { rows } = await pool.query('SELECT * FROM prompt_rules ORDER BY created_at DESC');
+  return rows;
+}
+
+async function getActivePromptRules() {
+  const { rows } = await pool.query('SELECT prompt_name, rule FROM prompt_rules WHERE active ORDER BY created_at');
+  return rows;
+}
+
+async function setPromptRuleActive(id, active) {
+  const { rows } = await pool.query('UPDATE prompt_rules SET active = $2 WHERE id = $1 RETURNING *', [id, !!active]);
+  return rows[0] || null;
+}
+
+async function getUnanalyzedNegativeFeedback(limit = 10) {
+  const { rows } = await pool.query(
+    `SELECT id, user_message, arjun_reply, comment, chat_mode, created_at FROM chat_feedback
+     WHERE score = 0 AND analyzed_at IS NULL ORDER BY created_at ASC LIMIT $1`, [limit]);
+  return rows;
+}
+
+async function markFeedbackAnalyzed(id) {
+  await pool.query('UPDATE chat_feedback SET analyzed_at = now() WHERE id = $1', [id]);
+}
+
+// Per-site problem summary for the extension analyzer: failed, slow (>30 s) or <50% filled,
+// with the field labels the mapper left unfilled.
+async function getExtensionProblemsBySite(days = 14) {
+  const { rows } = await pool.query(`
+    SELECT host,
+      COUNT(*)::int AS total,
+      COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+      COUNT(*) FILTER (WHERE duration_ms > 30000)::int AS slow,
+      COUNT(*) FILTER (WHERE fields_count > 0 AND mapped_count::float / fields_count < 0.5)::int AS low_fill,
+      ROUND(AVG(CASE WHEN fields_count > 0 THEN mapped_count::numeric / fields_count END) * 100)::int AS fill_pct,
+      MAX(fields_count)::int AS max_fields,
+      ARRAY_REMOVE(ARRAY_AGG(DISTINCT LEFT(error, 200)), NULL) AS errors,
+      COALESCE(jsonb_agg(unmapped) FILTER (WHERE unmapped IS NOT NULL), '[]') AS unmapped_lists
+    FROM extension_events
+    WHERE created_at > now() - ($1 || ' days')::interval AND host IS NOT NULL
+    GROUP BY host
+    HAVING COUNT(*) FILTER (WHERE status = 'failed' OR duration_ms > 30000 OR (fields_count > 0 AND mapped_count::float / fields_count < 0.5)) > 0
+    ORDER BY COUNT(*) DESC`, [String(days)]);
+  return rows;
 }
 
 // ── USER SKILLS ───────────────────────────────────────────────────────────
@@ -713,13 +833,13 @@ async function deleteResumeFormat(userId = 'me') {
   await pool.query('DELETE FROM resume_format WHERE user_id = $1', [userId]);
 }
 
-async function logExtensionEvent({ userId, userEmail, url, fieldsCount, mappedCount, status, model, error, durationMs }) {
+async function logExtensionEvent({ userId, userEmail, url, fieldsCount, mappedCount, status, model, error, durationMs, unmapped }) {
   let host = null;
   try { host = url ? new URL(url).hostname : null; } catch { /* malformed page URL */ }
   await pool.query(
-    `INSERT INTO extension_events (user_id, user_email, url, host, fields_count, mapped_count, status, model, error, duration_ms)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-    [userId, userEmail || null, url || null, host, fieldsCount || 0, mappedCount || 0, status, model || null, error || null, durationMs ?? null]
+    `INSERT INTO extension_events (user_id, user_email, url, host, fields_count, mapped_count, status, model, error, duration_ms, unmapped)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+    [userId, userEmail || null, url || null, host, fieldsCount || 0, mappedCount || 0, status, model || null, error || null, durationMs ?? null, unmapped ? JSON.stringify(unmapped) : null]
   );
 }
 
@@ -799,6 +919,8 @@ module.exports = {
   pool, initSchema, getProfile, saveProfile, getProfileVersion, profileEvents,
   getUserSkills, setUserSkillStatus, saveUserSkill, saveUserSkillNotes,
   addPendingIngestion, getDuePendingIngestions, getPendingIngestionCount, markPendingIngestion,
+  insertProposal, listProposals, getProposal, setProposalStatus, addPromptRule, listPromptRules, getActivePromptRules, setPromptRuleActive,
+  getUnanalyzedNegativeFeedback, markFeedbackAnalyzed, getExtensionProblemsBySite,
   getProfileVersions, restoreProfileVersion,
   seenJobBefore, saveTailored, markDelivered,
   getJobsForUser, getJobByJobId, getMostRecentDeliveredJob, insertJobProcessing, markJobFailed, recoverStaleJobs, forceRequeueJob,

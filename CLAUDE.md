@@ -80,6 +80,16 @@ PDF/text → extractFacts (LLM) → is profile empty?
 ### Resume Tailoring (job URL submitted)
 `scrapeJob → tailorResume (LLM) → atsScore (LLM) → [if <95: improveResume → atsScore] → renderDocx → save → email (if cron)`
 
+### Self-healing (Admin → Self-healing tab)
+`src/healing.js`, hourly (cron :17) or "Run analysis now". Agents turn failure signals into `improvement_proposals`; nothing changes until an admin accepts.
+- Disliked chats (`chat_feedback` score 0, `analyzed_at` null) → `diagnose_chat_feedback` → rule for `intent_classify` or `chat_enrich`.
+- Extension problems per site (failed, >30 s, <50% filled; `extension_events.unmapped` = labels of unfilled fields, never values) → `diagnose_extension_site` → `prompt_rule` for `map_form_fields`, `schema_field`, or `ops`. Errors are labeled `ai_provider` vs `site_or_app` in code so the agent can't blame a site for model failures. One proposal per site per ISO week.
+- Accepting a `prompt_rule` inserts into `prompt_rules`; `getPrompt` appends active rules as "LEARNED RULES" (60 s cache). Switching a rule off removes it; Langfuse prompts are never modified.
+- Ingestion schema gaps stay in the existing `schema_proposals` flow.
+
+### Backups
+Nightly `scripts/backup-db.sh` (node-cron 03:30; the host has no crontab) → `~/backups/arjun-*.sql.gz`, 7 days kept. On-instance only.
+
 ### Upload reliability
 - Uploads (`/ingest/files`, also used for onboarding pasted text as `about-me.txt`) run in the background; the page polls `/ingest/status` for up to 10 min.
 - `extractFactsPatient` (profile.js) runs up to 3 rounds of the full model chain (`EXTRACT_ROUND_WAITS_MS`, default 20 s, 60 s). Each `askJson` call already retries once and falls back to two free models (Nemotron Super, then Ultra); a 402 (no credits) skips straight to the free models.

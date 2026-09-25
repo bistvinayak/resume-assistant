@@ -383,7 +383,64 @@ async function getExtensionEventsHandler(req, res) {
   }
 }
 
+// ── SELF-HEALING PROPOSALS ────────────────────────────────────────────────
+async function getProposalsHandler(req, res) {
+  try {
+    const { listProposals, listPromptRules } = require('./db');
+    const [proposals, rules] = await Promise.all([listProposals({ status: req.query.status, source: req.query.source }), listPromptRules()]);
+    res.json({ proposals, rules });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+}
+
+async function acceptProposal(req, res) {
+  try {
+    const { getProposal, setProposalStatus, addPromptRule } = require('./db');
+    const { invalidateRulesCache } = require('./llm');
+    const p = await getProposal(req.params.id);
+    if (!p) return res.status(404).json({ error: 'proposal not found' });
+    if (p.status !== 'pending') return res.status(409).json({ error: `already ${p.status}` });
+    const rule = String(req.body?.rule || p.proposed_rule || '').trim();
+    if (!rule) return res.status(400).json({ error: 'rule required' });
+    let applied = null;
+    if (p.kind === 'prompt_rule' && p.target_prompt) {
+      applied = await addPromptRule(p.target_prompt, rule, p.id, req.userEmail);
+      invalidateRulesCache();
+    }
+    const updated = await setProposalStatus(p.id, 'accepted', req.userEmail, rule);
+    console.log(`✓ self-healing: proposal ${p.id} accepted by ${req.userEmail}${applied ? ` → rule ${applied.id} on ${p.target_prompt}` : ''}`);
+    res.json({ ok: true, proposal: updated, rule: applied });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+}
+
+async function rejectProposal(req, res) {
+  try {
+    const { setProposalStatus } = require('./db');
+    const updated = await setProposalStatus(req.params.id, 'rejected', req.userEmail);
+    if (!updated) return res.status(404).json({ error: 'proposal not found' });
+    res.json({ ok: true, proposal: updated });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+}
+
+async function togglePromptRule(req, res) {
+  try {
+    const { setPromptRuleActive } = require('./db');
+    const { invalidateRulesCache } = require('./llm');
+    const rule = await setPromptRuleActive(req.params.id, req.body?.active);
+    if (!rule) return res.status(404).json({ error: 'rule not found' });
+    invalidateRulesCache();
+    res.json({ ok: true, rule });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+}
+
+async function runSelfHealingHandler(req, res) {
+  try {
+    const { runSelfHealing } = require('./healing');
+    res.json(await runSelfHealing());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+}
+
 module.exports = {
+  getProposalsHandler, acceptProposal, rejectProposal, togglePromptRule, runSelfHealingHandler,
   adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs, retryJob, triggerCron, getSettings, updateSettings,
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
   getFeedbackHandler, reviewFeedback,

@@ -31,7 +31,7 @@ const langfuse = new Langfuse({
   baseUrl: process.env.LANGFUSE_BASE_URL || 'https://us.cloud.langfuse.com',
 });
 
-const { getApprovedCategories, upsertSchemaProposal } = require('./db');
+const { getApprovedCategories, upsertSchemaProposal, getActivePromptRules } = require('./db');
 
 async function formatApprovedCategories() {
   const categories = await getApprovedCategories().catch(() => []);
@@ -871,6 +871,60 @@ Three examples. Each: a bland generic sentence about one of their real achieveme
     config: { model: SKILLS_MODEL, temperature: 0.4 },
   },
 
+  // ── SELF-HEALING ANALYZERS ─────────────────────────────────────────────
+  diagnose_chat_feedback: {
+    prompt: `You review a chat exchange in Arjun (an AI resume assistant) that the user rated thumbs-down. Work out why the reply failed the user and propose ONE fix a human admin can approve.
+
+The chat has two prompts you may target:
+- intent_classify: decides what the user wants (question, profile update, job URL, etc.) and may answer simple questions
+- chat_enrich: extracts profile facts from the conversation and writes Arjun's reply
+
+Rules for your proposal:
+- The fix is a single, general rule appended to one prompt. It must help future users in similar situations, not just this one message.
+- Be specific and testable ("When the user asks X, do Y"). No vague advice like "be more helpful".
+- If the failure is not fixable by a prompt rule (the user is wrong, a missing product feature, an outage), set should_propose to false and explain in diagnosis.
+- Never include the user's personal data in the rule.
+
+Return ONLY JSON:
+{
+  "should_propose": true,
+  "title": "short name of the problem (max 80 chars)",
+  "diagnosis": "2-4 sentences: what the user wanted, what Arjun did instead, and why",
+  "target_prompt": "intent_classify or chat_enrich",
+  "rule": "the rule to append, one or two sentences"
+}`,
+    config: { model: MODEL, temperature: 0.2 },
+  },
+
+  diagnose_extension_site: {
+    prompt: `You review how Arjun's browser extension performed on one job-application website. The extension scrapes form fields and the map_form_fields prompt maps each field to the candidate's profile. Diagnose the main problem on this site and propose ONE fix a human admin can approve.
+
+You get per-site stats: requests, failures, slow requests (>30 s, which the CDN cuts off), low-fill requests, average fill rate, error messages, and the labels of fields that were left unfilled (with how often).
+
+Choose the fix kind:
+- "prompt_rule": a general rule appended to the map_form_fields prompt that would let the mapper fill fields it currently misses (e.g. how to recognise a field wording, or which profile path to use). Only when unfilled labels show a pattern the profile can actually answer.
+- "schema_field": the site keeps asking for information the profile schema has no place for (e.g. "desired salary", "notice period"); describe the field to add.
+- "ops": the problem is speed, timeouts or provider errors, not mapping quality; describe the operational change.
+
+Rules:
+- Ground every claim in the data you were given. Name only causes that appear in the stats, error messages or labels. Never guess at causes that are not in the data (bot protection, CAPTCHAs, site outages, network issues, page structure) unless an error message says so.
+- Each error comes labeled with its source. "ai_provider" errors (timeouts, empty or malformed model responses, overloaded) are failures of the AI model service, not of the website. They call for an "ops" proposal about model reliability; a retry-and-backup-model chain was added on 2026-09-25, so older ai_provider errors may already be resolved: say so rather than proposing a site-specific fix.
+- Unfilled fields that should stay empty are NOT a problem: demographic/self-identification questions, passwords, file uploads, free-text essays, "how did you hear about us", legal attestations.
+- Errors mentioning credits, 402 or billing are already resolved (the app moved to free models); ignore them.
+- With only a handful of requests and no unfilled-field labels, prefer should_propose false.
+- If there is no real, fixable pattern, set should_propose to false.
+
+Return ONLY JSON:
+{
+  "should_propose": true,
+  "kind": "prompt_rule | schema_field | ops",
+  "title": "short name of the problem (max 80 chars)",
+  "diagnosis": "2-4 sentences grounded in the stats and labels you were given",
+  "rule": "for prompt_rule: the rule to append. For schema_field: field name, type and what it holds. For ops: the recommended change."
+}`,
+    config: { model: MODEL, temperature: 0.2 },
+  },
+
 };
 
 // ── SYNC PROMPTS TO LANGFUSE ────────────────────────────────────────────
@@ -895,17 +949,35 @@ async function syncPrompts() {
   }
 }
 
+// Self-healing: rules an admin accepted from improvement proposals are appended to their prompt.
+// Cached briefly so a toggle in the admin takes effect within a minute without a DB hit per call.
+let rulesCache = { at: 0, byPrompt: {} };
+async function learnedRules(name) {
+  if (Date.now() - rulesCache.at > 60_000) {
+    try {
+      const rows = await getActivePromptRules();
+      const byPrompt = {};
+      for (const r of rows) (byPrompt[r.prompt_name] ??= []).push(r.rule);
+      rulesCache = { at: Date.now(), byPrompt };
+    } catch { rulesCache.at = Date.now(); }
+  }
+  const rules = rulesCache.byPrompt[name] || [];
+  return rules.length ? `\n\nLEARNED RULES (approved by an admin after real failures; follow them):\n${rules.map(r => `- ${r}`).join('\n')}` : '';
+}
+function invalidateRulesCache() { rulesCache.at = 0; }
+
 async function getPrompt(name, variables = {}) {
+  const extra = await learnedRules(name);
   try {
     const prompt = await langfuse.getPrompt(name, undefined, { label: 'production' });
     const compiled = prompt.compile(variables);
-    return { text: compiled, langfusePrompt: prompt };
+    return { text: compiled + extra, langfusePrompt: prompt };
   } catch {
     let text = PROMPT_DEFS[name]?.prompt || '';
     for (const [k, v] of Object.entries(variables)) {
       text = text.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v);
     }
-    return { text, langfusePrompt: null };
+    return { text: text + extra, langfusePrompt: null };
   }
 }
 
@@ -1501,6 +1573,20 @@ async function analyzeResumeFormat(templateText, targetPages, ctx = {}, fileAtta
   return styleProfile;
 }
 
+// ── SELF-HEALING ANALYZERS ──────────────────────────────────────────────
+async function diagnoseChatFeedback(fb) {
+  const trace = makeTrace('diagnose_chat_feedback', { userId: 'self-healing' }, { feedback_id: fb.id });
+  const { text: system, langfusePrompt } = await getPrompt('diagnose_chat_feedback');
+  const user = `CHAT MODE: ${fb.chat_mode || 'unknown'}\n\nUSER MESSAGE:\n${fb.user_message || '(not recorded)'}\n\nARJUN'S REPLY:\n${fb.arjun_reply || '(not recorded)'}\n\nUSER'S COMMENT ON THE REPLY:\n${fb.comment || '(none)'}`;
+  return askJson(system, user, 'diagnose_chat_feedback', trace, langfusePrompt);
+}
+
+async function diagnoseExtensionSite(site) {
+  const trace = makeTrace('diagnose_extension_site', { userId: 'self-healing' }, { host: site.host });
+  const { text: system, langfusePrompt } = await getPrompt('diagnose_extension_site');
+  return askJson(system, `SITE STATS:\n${JSON.stringify(site, null, 2)}`, 'diagnose_extension_site', trace, langfusePrompt);
+}
+
 // Generates one per-user skill as markdown. Free models only: primary, one retry, then the
 // free fallback. Plain markdown (no JSON mode) because long free-model JSON strings break easily.
 async function generateSkill(skillName, profileForSkill, userNotes, ctx = {}) {
@@ -1564,4 +1650,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { generateSkill, extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { diagnoseChatFeedback, diagnoseExtensionSite, invalidateRulesCache, generateSkill, extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };

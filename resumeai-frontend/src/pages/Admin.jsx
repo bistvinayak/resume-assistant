@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, signOutUser } from '../firebase';
 import { api } from '../api';
 import ExtensionObservability from '../components/ExtensionObservability';
+import SelfHealing from '../components/SelfHealing';
 
 const ADMIN_EMAIL = 'arjun.resumeai@gmail.com';
 
@@ -231,6 +232,7 @@ export default function Admin() {
             { id: 'overview', label: 'Overview' },
             { id: 'users', label: 'Users' },
             { id: 'jobs', label: 'Jobs' },
+            { id: 'healing', label: 'Self-healing' },
             { id: 'schema', label: 'Schema Proposals', badge: schemaProposals.filter(p => p.status === 'pending').length },
             { id: 'feedback', label: 'Feedback', badge: feedback.filter(f => f.status === 'open' && f.score === 0).length },
             { id: 'gmail', label: 'Gmail Forwarding', badge: gmailForwarding.filter(g => g.status === 'pending').length },
@@ -431,6 +433,9 @@ export default function Admin() {
 
           {/* EXTENSION */}
           {tab === 'extension' && <ExtensionObservability />}
+
+          {/* SELF-HEALING */}
+          {tab === 'healing' && <SelfHealing schemaPending={schemaProposals.filter(p => p.status === 'pending').length} onOpenSchema={() => setTab('schema')} />}
 
           {/* SCHEMA PROPOSALS */}
           {tab === 'schema' && (

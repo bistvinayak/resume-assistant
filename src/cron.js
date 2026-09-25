@@ -118,6 +118,9 @@ async function processPendingIngestions() {
 
 function startCron() {
   cron.schedule('0 */2 * * *', () => runBatch());
+  // Self-healing agents: turn disliked chats and extension problems into proposals (hourly).
+  cron.schedule('17 * * * *', () => require('./healing').runSelfHealing().catch(e => console.error('self-healing run failed:', e.message)));
+
   // Nightly database backup (scripts/backup-db.sh, 7 days kept in ~/backups).
   cron.schedule('30 3 * * *', () => {
     require('child_process').execFile('bash', [require('path').join(__dirname, '..', 'scripts', 'backup-db.sh')], (err, stdout, stderr) => {
