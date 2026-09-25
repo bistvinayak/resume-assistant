@@ -23,6 +23,10 @@ const FORM_FILL_MODEL = process.env.OPENROUTER_FORM_FILL_MODEL || 'nvidia/nemotr
 // fallback is the paid main MODEL (stable, never retired) rather than a second free model.
 // One form-fill call costs a fraction of a cent there.
 const FORM_FILL_FALLBACK_MODEL = process.env.OPENROUTER_FORM_FILL_FALLBACK_MODEL || MODEL;
+// Per-user skill generation runs in the background on free models only (owner decision):
+// nemotron-3-super scored 11/11 on profile extraction in a Sep 2026 eval; ultra is the backup.
+const SKILLS_MODEL = process.env.OPENROUTER_SKILLS_MODEL || 'nvidia/nemotron-3-super-120b-a12b:free';
+const SKILLS_FALLBACK_MODEL = process.env.OPENROUTER_SKILLS_FALLBACK_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
 
 const langfuse = new Langfuse({
   secretKey: process.env.LANGFUSE_SECRET_KEY,
@@ -757,6 +761,119 @@ Return ONLY JSON:
     config: { model: WRITING_MODEL, temperature: 0.4 },
   },
 
+  // ── PER-USER SKILLS (markdown playbooks generated from the profile) ─────
+  // Each returns markdown only. Shared methodology (scoring engine, ATS rules, cover-letter
+  // structure, writing rules) is appended by src/skills.js, not generated, so it never drifts.
+  skill_career_profile: {
+    prompt: `You write a "career profile" playbook for ONE candidate, built only from their profile JSON. A resume writer will use it to pick and phrase content for each job application, so it must be precise, complete and strictly factual.
+
+HARD RULES
+- Use ONLY facts present in the profile. Never invent roles, metrics, skills, dates or employers.
+- Copy bullet text and metrics exactly as written. Never round numbers or make them vaguer.
+- Do not include email, phone, street address or demographic/self-identification data.
+- If something is unknown, say "Not in profile" rather than guessing. Anything you infer must be labeled "(inferred)".
+- Never embellish. Do not add causes, methods, tools, team sizes or results that are not written in the profile, even if they seem likely.
+- Never use em dashes.
+- Output markdown only. No preamble, no code fences.
+
+OUTPUT EXACTLY THESE SECTIONS, IN THIS ORDER:
+
+# Career Profile: <candidate name>
+
+## Positioning
+2-3 sentences on who this candidate is professionally and what makes them distinctive. Note it is for orientation, not to be copied verbatim.
+
+## Target roles
+The roles they are aiming for (from career preferences or current role). If none are stated, list 2-4 natural next-step roles, each marked (inferred).
+
+## Work experience
+Reverse chronological. One line per role: **Title | Company | Location | Dates**, then one line of company context if available.
+
+## Bullet bank
+Every experience bullet from the profile, grouped by company. Give each a stable ID: a short company prefix plus a number (e.g. ACME1, ACME2). Format each as:
+- **ID** **<short skill label>**: <exact bullet text> (metric: <metric or "none">)
+
+## Projects
+Each project with an ID (P1, P2, ...): name, one-line description, tech stack, outcome.
+
+## Skills and tools
+Grouped as they naturally fall (e.g. Technical, Product, Tools, Soft skills), with durations where the profile gives them.
+
+## Verified metrics
+A flat list of every number in the profile, each with its bullet ID. Header note: use exactly as written; never invent or inflate.
+
+## Keyword evidence map
+A markdown table with columns: Canonical term | Equivalent phrasings (safe to swap to the job posting's wording) | Related but not identical (never auto-swap; ask first) | Evidence IDs.
+Include 12-25 terms relevant to the target roles. Only include a term if at least one bullet or project genuinely evidences it, and list those IDs. A skill that appears only in the skills list may be included with evidence "Skills list only" (weaker: fine for a skills line, not for claims inside bullets).
+
+## Default requirement lists
+For each target role type, the 5 requirements (R1-R5) a typical posting for that role emphasizes, for use when no job posting is given.
+
+## Lead-with guidance
+For each target role type: which bullet and project IDs to lead with, and one line on why.
+
+## Known gaps
+Requirements common for the target roles that nothing in the profile evidences. These must never be claimed on a resume.`,
+    config: { model: SKILLS_MODEL, temperature: 0.3 },
+  },
+
+  skill_cover_letter: {
+    prompt: `You write a "cover letter story" playbook for ONE candidate, built only from their profile JSON. A cover letter writer will use it to give letters a genuine personal voice and strong evidence.
+
+HARD RULES
+- Use ONLY facts present in the profile (including about_me, summary, custom_facts, activities, interests and experience). Never invent life events, motivations or achievements.
+- If the profile has no personal story material, say so plainly under that heading and suggest what the candidate could add in Arjun's chat (e.g. why they chose this field, a turning point). Do not make one up.
+- Do not include email, phone, street address or demographic/self-identification data.
+- Never embellish. Do not add causes, methods, tools, team sizes or results that are not written in the profile, even if they seem likely.
+- Never use em dashes.
+- Output markdown only. No preamble, no code fences.
+
+OUTPUT EXACTLY THESE SECTIONS, IN THIS ORDER:
+
+# Cover Letter Story: <candidate name>
+
+## Personal story material
+Each distinct story beat from the profile as a short paragraph, followed by "Fits when:" describing the kinds of companies or roles where it is a strong opening, and "Skip when:" where it would be clutter.
+
+## Strongest evidence stories
+The 4-6 achievements that make the best cover-letter stories. For each: a title, the exact metric, "Context:" restating only what the profile says about it (bullet text, impact field, company description), then "Story to collect:" with one question the candidate could answer in Arjun's chat to add the missing detail (e.g. what problem they spotted, how they did it). Then the role types it suits.
+
+## Motivations and themes
+Recurring themes across their career (e.g. a domain they keep returning to, a type of problem they like). Mark anything inferred as (inferred).
+
+## Tone
+Recommended register for this candidate (e.g. more formal for finance/government roles, more conversational for startups), based on their field and how their own material is written.`,
+    config: { model: SKILLS_MODEL, temperature: 0.4 },
+  },
+
+  skill_writing_voice: {
+    prompt: `You write a "writing voice" guide for ONE candidate, derived from how their own words read in their profile JSON (bullets, summary, about_me, chat-provided facts). Writers will use it so resumes and cover letters sound like this person, not like generic AI output.
+
+HARD RULES
+- Base every observation on actual text in the profile. Quote short real examples.
+- Example rewrites must use only facts from the profile.
+- Never embellish. Do not add causes, methods, tools, team sizes or results that are not written in the profile, even if they seem likely.
+- Never use em dashes.
+- Output markdown only. No preamble, no code fences.
+
+OUTPUT EXACTLY THESE SECTIONS, IN THIS ORDER:
+
+# Writing Voice: <candidate name>
+
+## How they write
+Sentence length, formality, how they describe impact, first-person habits. 4-6 bullet points, each with a short quoted example.
+
+## Preferred verbs and phrasing
+Action verbs and phrases they actually use, quoted from the profile.
+
+## Avoid
+Phrasing that would not sound like them, plus any weak habits in their current material worth avoiding (e.g. responsibility-style bullets without outcomes).
+
+## Example rewrites
+Three examples. Each: a bland generic sentence about one of their real achievements, then the same fact rewritten in their voice.`,
+    config: { model: SKILLS_MODEL, temperature: 0.4 },
+  },
+
 };
 
 // ── SYNC PROMPTS TO LANGFUSE ────────────────────────────────────────────
@@ -885,7 +1002,42 @@ function evalSmartMerge(trace, current, incoming, result) {
 // file as multimodal input (Gemini can genuinely see PDF layout/bold/etc.,
 // not just inferred text). Only use for one-time analysis calls, not calls
 // that run per-job, since re-sending file bytes on every call burns tokens.
-async function askJson(system, user, generationName, trace, langfusePrompt, history = [], model = MODEL, fileAttachment = null) {
+// Every JSON call retries once on a transient failure, then moves to a backup model. Free
+// models return "Service temporarily overloaded" often enough that a single attempt failed
+// 2 of 5 real resume uploads in testing; a paid model out of credits (402) also falls through
+// to the free backup instead of failing the user's request.
+const FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free';
+// Callers that run their own model chain under a latency budget (extension form-fill must
+// finish inside CloudFront's ~30 s) opt out.
+const OWN_FALLBACK_CHAIN = new Set(['map_form_fields']);
+
+async function askJson(system, user, generationName, trace, langfusePrompt, history = [], model = MODEL, fileAttachment = null, maxTokens = 8000) {
+  const once = (m) => askJsonOnce(system, user, generationName, trace, langfusePrompt, history, m, fileAttachment, maxTokens);
+  if (OWN_FALLBACK_CHAIN.has(generationName)) return once(model);
+
+  const backup = FALLBACK_MODEL === model ? 'nvidia/nemotron-3-super-120b-a12b:free' : FALLBACK_MODEL;
+  const errors = [];
+  let skipRetry = false;
+  for (const [i, m] of [model, model, backup].entries()) {
+    if (i === 1 && skipRetry) continue;
+    try {
+      return await once(m);
+    } catch (e) {
+      errors.push(`${m}: ${e.message}`);
+      console.error(`${generationName}: attempt ${i + 1} on ${m} failed (${e.message.slice(0, 160)})`);
+      const status = e.status || e.response?.status;
+      if (status === 401) break; // bad API key: no model will work
+      // Out of credits or output too long: the same model will fail the same way, go to backup.
+      if (i === 0 && (status === 402 || /credits|truncated/i.test(e.message))) skipRetry = true;
+      else if (i === 0) await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  const err = new Error(errors.join(' | ').slice(0, 1200));
+  err.model = backup;
+  throw err;
+}
+
+async function askJsonOnce(system, user, generationName, trace, langfusePrompt, history, model, fileAttachment, maxTokens) {
   const userContent = fileAttachment
     ? [
         { type: 'text', text: user },
@@ -916,7 +1068,7 @@ async function askJson(system, user, generationName, trace, langfusePrompt, hist
       // call — including short ones like the cover letter — which can 402 a call that
       // would've easily fit in the actual remaining balance. None of these responses
       // (resume JSON, cover letter, scoring) need anywhere near 65k tokens.
-      max_tokens: 8000,
+      max_tokens: maxTokens,
       messages,
       // Gemini's reasoning models burn hidden "thinking" tokens by default (~100x cost
       // on trivial calls) — these are structured extraction/classification tasks, not
@@ -931,6 +1083,10 @@ async function askJson(system, user, generationName, trace, langfusePrompt, hist
     // surface their message instead of crashing on choices[0].
     if (!res.choices?.length) {
       throw new Error(`No response from ${model}: ${res.error?.message || JSON.stringify(res.error || res).slice(0, 200)}`);
+    }
+    // A cut-off answer is invalid JSON; say so plainly instead of "invalid JSON".
+    if (res.choices[0].finish_reason === 'length') {
+      throw new Error(`${model} hit the ${maxTokens}-token output limit (response truncated)`);
     }
     const raw = res.choices[0].message.content;
     // response_format: json_object is an OpenAI-model guarantee — Claude (via OpenRouter)
@@ -1022,7 +1178,16 @@ async function extractFacts(rawText, ctx = {}) {
   return result;
 }
 
-async function tailorResume(profile, job, trace, resumeFormat) {
+// Candidate skills (see src/skills.js) ride in the user message, not the Langfuse-managed
+// system prompts, so prompt edits made in Langfuse keep working unchanged.
+function skillsBlock(skills, keys) {
+  const parts = keys.map(k => skills?.[k]).filter(Boolean);
+  return parts.length
+    ? `\n\nCANDIDATE SKILLS (a playbook generated from this candidate's own profile, plus their corrections, which take priority. Use it to choose, order and phrase content; every fact must still trace to CANDIDATE PROFILE / the resume):\n${parts.join('\n\n---\n\n')}`
+    : '';
+}
+
+async function tailorResume(profile, job, trace, resumeFormat, skills = null) {
   const { text: system, langfusePrompt } = await getPrompt('tailor_resume', {
     target_pages: resumeFormat?.target_pages || 'not specified',
   });
@@ -1043,14 +1208,15 @@ async function tailorResume(profile, job, trace, resumeFormat) {
   const user =
     `TARGET JOB:\nTitle: ${job.title}\nCompany: ${job.company}\nURL: ${job.url || 'N/A'}\n` +
     `Description:\n${job.jd_text}\n\n` +
-    `CANDIDATE PROFILE:\n${JSON.stringify(profile)}${styleBlock}`;
+    `CANDIDATE PROFILE:\n${JSON.stringify(profile)}${styleBlock}` +
+    skillsBlock(skills, ['career_profile', 'writing_voice']);
 
   const result = await askJson(system, user, 'tailor_resume', trace, langfusePrompt, [], WRITING_MODEL);
   evalTailoring(trace, result);
   return result;
 }
 
-async function improveResume(resume, job, ats, trace, tailoringNotes = [], jdRequirements = []) {
+async function improveResume(resume, job, ats, trace, tailoringNotes = [], jdRequirements = [], skills = null) {
   const { text: system, langfusePrompt } = await getPrompt('improve_resume');
 
   const placementLines = (ats.missing_keyword_context || []).map(c =>
@@ -1066,7 +1232,8 @@ async function improveResume(resume, job, ats, trace, tailoringNotes = [], jdReq
     `TAILORING NOTES (from original tailoring pass):\n${(tailoringNotes || []).join('\n') || '(none)'}\n\n` +
     `JD REQUIREMENTS (from original tailoring pass):\n${JSON.stringify(jdRequirements || [])}\n\n` +
     `JOB DESCRIPTION:\n${job.jd_text}\n\n` +
-    `CURRENT RESUME:\n${JSON.stringify(resume)}`;
+    `CURRENT RESUME:\n${JSON.stringify(resume)}` +
+    skillsBlock(skills, ['career_profile', 'writing_voice']);
 
   const result = await askJson(system, user, 'improve_resume', trace, langfusePrompt, [], WRITING_MODEL);
   evalImprovement(trace, result, ats.score);
@@ -1085,18 +1252,38 @@ function buildPersonalContext(profile) {
   return parts.length ? parts.join('\n') : '(none available)';
 }
 
-async function coverLetter(resume, job, trace, profile = null) {
+const letterNumbers = (t) => [...String(t || '').matchAll(/\d[\d,]*(?:\.\d+)?/g)].map(m => m[0].replace(/,/g, '').replace(/\.0+$/, ''));
+
+async function coverLetter(resume, job, trace, profile = null, skills = null) {
   const { text: system, langfusePrompt } = await getPrompt('cover_letter', {
     job_title: job.title || '',
     job_company: job.company || '',
     job_description: job.jd_text || '',
     tailored_resume_json: JSON.stringify(resume),
     candidate_name: resume.contact?.name || '',
-    personal_context: buildPersonalContext(profile),
+    personal_context: buildPersonalContext(profile) + skillsBlock(skills, ['cover_letter', 'writing_voice']),
   });
 
   const result = await askJson(system, 'Write the cover letter.', 'cover_letter', trace, langfusePrompt, [], WRITING_MODEL);
-  const paragraphs = (result.paragraphs || []).filter(p => typeof p === 'string' && p.trim().length);
+  // Em dashes read as AI-written; models use them despite the writing-voice rules.
+  let paragraphs = (result.paragraphs || []).filter(p => typeof p === 'string' && p.trim().length)
+    .map(p => p.replace(/\s*—\s*/g, ', '));
+
+  // Numbers are the easiest thing to invent and the most damaging in a letter ("improved X by
+  // 71%" seen in the Sep 2026 eval). Drop any sentence whose number isn't in the profile, the
+  // tailored resume or the job posting.
+  const known = new Set(letterNumbers(JSON.stringify(profile || {}) + JSON.stringify(resume) + (job.jd_text || '') + (job.title || '')));
+  const removed = [];
+  // Split on sentence ends only (punctuation + space + capital), never on decimals like "2.6%".
+  paragraphs = paragraphs.map(p => p.split(/(?<=[.!?]["')\]]?)\s+(?=[A-Z0-9"'(])/).filter(sent => {
+    const bad = letterNumbers(sent).filter(n => !known.has(n));
+    if (bad.length) removed.push(sent.trim());
+    return !bad.length;
+  }).join(' ').trim()).filter(Boolean);
+  if (removed.length) {
+    console.warn(`⚠ Cover letter: removed ${removed.length} sentence(s) with unsupported numbers`);
+    langfuse.score({ traceId: trace.id, name: 'cover-letter-invented-numbers', value: removed.length, comment: removed.join(' | ').slice(0, 500) });
+  }
   langfuse.score({ traceId: trace.id, name: 'cover-letter-paragraphs', value: paragraphs.length });
   return paragraphs;
 }
@@ -1186,7 +1373,7 @@ async function smartMerge(currentProfile, newExtraction, ctx = {}) {
 
   const user = `CURRENT PROFILE:\n${JSON.stringify(currentProfile)}\n\nNEW EXTRACTION:\n${JSON.stringify(newExtraction)}`;
 
-  const result = await askJson(system, user, 'smart_merge', trace, langfusePrompt);
+  const result = await askJson(system, user, 'smart_merge', trace, langfusePrompt, [], MODEL, null, 16000);
   evalSmartMerge(trace, currentProfile, newExtraction, result);
   result._mergeTraceId = trace.id;
   return result;
@@ -1317,6 +1504,54 @@ async function analyzeResumeFormat(templateText, targetPages, ctx = {}, fileAtta
   return styleProfile;
 }
 
+// Generates one per-user skill as markdown. Free models only: primary, one retry, then the
+// free fallback. Plain markdown (no JSON mode) because long free-model JSON strings break easily.
+async function generateSkill(skillName, profileForSkill, userNotes, ctx = {}) {
+  const promptName = `skill_${skillName}`;
+  const { text: system, langfusePrompt } = await getPrompt(promptName);
+  const trace = makeTrace(`generate_${promptName}`, ctx);
+  const user =
+    `CANDIDATE PROFILE JSON:\n${JSON.stringify(profileForSkill)}` +
+    (userNotes ? `\n\nCANDIDATE'S OWN CORRECTIONS (follow these exactly; they override anything in the profile):\n${userNotes}` : '');
+
+  const attempt = async (model) => {
+    const generation = trace.generation({ name: promptName, model, input: [{ role: 'system', content: system }, { role: 'user', content: user }], ...(langfusePrompt ? { prompt: langfusePrompt } : {}) });
+    try {
+      const res = await client.chat.completions.create({
+        model,
+        temperature: 0.3,
+        max_tokens: 7000,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+        ...(model.startsWith('nvidia/') ? { reasoning: { enabled: false } } : {}),
+      }, { timeout: 180_000 });
+      if (!res.choices?.length) throw new Error(`No response from ${model}: ${res.error?.message || JSON.stringify(res.error || res).slice(0, 200)}`);
+      let md = (res.choices[0].message.content || '').trim().replace(/^```(?:markdown|md)?\s*/i, '').replace(/```\s*$/, '').trim();
+      if (!md.startsWith('#') || md.length < 400) throw new Error(`${model} returned an unusable skill (${md.length} chars)`);
+      // Skills carry the "no em dashes" writing rule; models still slip them in.
+      md = md.replace(/\s*—\s*/g, ', ');
+      generation.end({ output: md, usage: { promptTokens: res.usage?.prompt_tokens, completionTokens: res.usage?.completion_tokens } });
+      return md;
+    } catch (e) {
+      generation.end({ output: { error: e.message }, level: 'ERROR' });
+      throw e;
+    }
+  };
+
+  const errors = [];
+  for (const model of [SKILLS_MODEL, SKILLS_MODEL, SKILLS_FALLBACK_MODEL]) {
+    try {
+      const content = await attempt(model);
+      await langfuse.flushAsync();
+      return { content, model };
+    } catch (e) {
+      errors.push(`${model}: ${e.message}`);
+      console.error(`${promptName}: ${e.message}`);
+    }
+  }
+  await langfuse.flushAsync();
+  throw new Error(errors.join(' | ').slice(0, 900));
+}
+
 function scoreIngestionCoverage(traceId, drops) {
   if (!traceId || !drops) return;
   const total = drops.totalExtracted || 1;
@@ -1332,4 +1567,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { generateSkill, extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };

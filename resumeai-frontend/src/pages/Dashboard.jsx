@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, signOutUser } from '../firebase';
 import { api } from '../api';
+import SkillsTab from '../components/SkillsTab';
 
 const ATSBadge = ({ score }) => {
   const color = score >= 90 ? '#22c55e' : score >= 75 ? '#f59e0b' : '#ef4444';
@@ -1199,6 +1200,7 @@ export default function Dashboard() {
             { id: 'submit', label: 'Apply to Job', desc: 'Paste a job URL → get a tailored resume' },
             { id: 'jobs', label: 'My Applications', desc: 'Track all your tailored resumes' },
             { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords' },
+            { id: 'skills', label: 'My Skills', desc: 'Your writing playbooks' },
           ].map(({ id, label, desc }) => (
             <button key={id} onClick={() => setTab(id)} style={{
               width: '100%', textAlign: 'left',
@@ -2765,6 +2767,8 @@ export default function Dashboard() {
               )}
             </div>
           )}
+
+          {tab === 'skills' && <SkillsTab />}
         </main>
       </div>
     </div>

@@ -2,6 +2,11 @@
 
 require('dotenv').config();
 const { Pool } = require('pg');
+const { EventEmitter } = require('events');
+
+// Emits 'saved' (userId, version) after every profile write, so derived data (user skills)
+// can refresh without db.js depending on the LLM layer.
+const profileEvents = new EventEmitter();
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -170,6 +175,24 @@ async function initSchema() {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     CREATE INDEX IF NOT EXISTS idx_extension_events_created ON extension_events(created_at DESC);
+
+    -- Per-user "skills": markdown playbooks generated from the user's profile (career profile,
+    -- cover-letter story, writing voice) that steer resume/cover-letter writing, and can be
+    -- exported as Claude skills. user_notes are the user's own corrections — they survive
+    -- regeneration and take priority over generated text.
+    CREATE TABLE IF NOT EXISTS user_skills (
+      user_id          TEXT NOT NULL,
+      skill            TEXT NOT NULL,
+      content          TEXT,
+      previous_content TEXT,
+      user_notes       TEXT,
+      profile_version  INTEGER,
+      status           TEXT NOT NULL DEFAULT 'pending',
+      model            TEXT,
+      error            TEXT,
+      updated_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, skill)
+    );
   `);
 }
 
@@ -214,7 +237,50 @@ async function saveProfile(profile, userId = 'me', source = 'unknown') {
     [userId]
   );
 
+  profileEvents.emit('saved', userId, nextVersion);
   return profile;
+}
+
+async function getProfileVersion(userId = 'me') {
+  const { rows } = await pool.query('SELECT COALESCE(MAX(version), 0) AS v FROM master_profile WHERE user_id = $1', [userId]);
+  return rows[0]?.v || 0;
+}
+
+// ── USER SKILLS ───────────────────────────────────────────────────────────
+async function getUserSkills(userId) {
+  const { rows } = await pool.query(
+    `SELECT skill, content, user_notes, profile_version, status, model, error, updated_at
+     FROM user_skills WHERE user_id = $1`,
+    [userId]
+  );
+  return Object.fromEntries(rows.map(r => [r.skill, r]));
+}
+
+async function setUserSkillStatus(userId, skill, status, error = null) {
+  await pool.query(
+    `INSERT INTO user_skills (user_id, skill, status, error, updated_at) VALUES ($1, $2, $3, $4, now())
+     ON CONFLICT (user_id, skill) DO UPDATE SET status = $3, error = $4, updated_at = now()`,
+    [userId, skill, status, error]
+  );
+}
+
+async function saveUserSkill(userId, skill, { content, profileVersion, model }) {
+  await pool.query(
+    `INSERT INTO user_skills (user_id, skill, content, profile_version, model, status, error, updated_at)
+     VALUES ($1, $2, $3, $4, $5, 'ready', NULL, now())
+     ON CONFLICT (user_id, skill) DO UPDATE SET
+       previous_content = user_skills.content, content = $3, profile_version = $4, model = $5,
+       status = 'ready', error = NULL, updated_at = now()`,
+    [userId, skill, content, profileVersion, model]
+  );
+}
+
+async function saveUserSkillNotes(userId, skill, notes) {
+  await pool.query(
+    `INSERT INTO user_skills (user_id, skill, user_notes, updated_at) VALUES ($1, $2, $3, now())
+     ON CONFLICT (user_id, skill) DO UPDATE SET user_notes = $3, updated_at = now()`,
+    [userId, skill, notes || null]
+  );
 }
 
 async function getProfileVersions(userId = 'me') {
@@ -635,7 +701,8 @@ async function getExtensionEvents(limit = 100) {
 }
 
 module.exports = {
-  pool, initSchema, getProfile, saveProfile,
+  pool, initSchema, getProfile, saveProfile, getProfileVersion, profileEvents,
+  getUserSkills, setUserSkillStatus, saveUserSkill, saveUserSkillNotes,
   getProfileVersions, restoreProfileVersion,
   seenJobBefore, saveTailored, markDelivered,
   getJobsForUser, getJobByJobId, getMostRecentDeliveredJob, insertJobProcessing, markJobFailed, recoverStaleJobs, forceRequeueJob,

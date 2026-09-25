@@ -117,6 +117,40 @@ export const api = {
     return res.json();
   },
 
+  // ── Per-user skills (generated from the profile) ──
+  async getSkills() {
+    const res = await checkedFetch(`${BASE}/skills`, { headers: await getHeaders() });
+    return res.json();
+  },
+
+  async saveSkillNotes(skill, notes) {
+    const res = await checkedFetch(`${BASE}/skills/${skill}/notes`, {
+      method: 'PUT',
+      headers: await getHeaders(),
+      body: JSON.stringify({ notes }),
+    });
+    if (!res.ok) throw new Error('Could not save corrections');
+    return res.json();
+  },
+
+  async regenerateSkills() {
+    const res = await checkedFetch(`${BASE}/skills/regenerate`, { method: 'POST', headers: await getHeaders() });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error === 'no_profile' ? 'Build your profile first' : 'Could not start regeneration');
+    return data;
+  },
+
+  async downloadSkills() {
+    const res = await checkedFetch(`${BASE}/skills/export`, { headers: await getHeaders() });
+    if (!res.ok) throw new Error('No skills to download yet');
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'arjun-skills.zip';
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
   async getResumeFormat() {
     const res = await checkedFetch(`${BASE}/resume-format`, { headers: await getHeaders() });
     return res.json();

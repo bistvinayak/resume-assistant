@@ -3,7 +3,8 @@
 const path = require('path');
 const os = require('os');
 const { getProfile, getResumeFormat, seenJobBefore, saveTailored, markDelivered, markJobFailed } = require('./db');
-const { tailorResume, calculateAtsScore, improveResume, coverLetter, createJobTrace } = require('./llm');
+const { tailorResume, calculateAtsScore, improveResume, coverLetter, createJobTrace, langfuse } = require('./llm');
+const { getSkillsForWriting } = require('./skills');
 const { renderResumeDocx } = require('./renderDocx');
 const { renderCoverLetterDocx } = require('./renderCoverLetter');
 const { measureResumePdf } = require('./renderPdf');
@@ -79,6 +80,47 @@ function drainQueue() {
 
 function getQueueStats() {
   return { running, queued: queue.length, maxConcurrent: MAX_CONCURRENT };
+}
+
+// ── Invented-bullet guard ──────────────────────────────────────────────────
+// Tailoring may reword bullets (and adopt JD terms), but every bullet must still come from a
+// real profile bullet. In the Sep 2026 eval about 1 in 7 tailoring runs produced bullets with
+// no source (e.g. "Leveraged payments domain experience to..."). A reworded bullet keeps most
+// of its source's words; one with <30% of its words in any profile bullet is dropped.
+const guardWords = (t) => new Set(String(t || '').toLowerCase().replace(/[^a-z0-9+#.\s-]/g, ' ').split(/\s+/).filter(w => w.length > 2));
+function traceScore(text, sources) {
+  const w = guardWords(text);
+  if (!w.size) return 0;
+  let best = 0;
+  for (const src of sources) {
+    let n = 0;
+    for (const x of w) if (src.has(x)) n++;
+    best = Math.max(best, n / w.size);
+  }
+  return best;
+}
+const bulletStr = (b) => (typeof b === 'string' ? b : b?.text || '');
+
+function dropUntraceableBullets(resume, profile) {
+  const sources = (profile.experience || []).flatMap(e => (e.bullets || []).map(bulletStr))
+    .concat((profile.projects || []).flatMap(p => [p.description, p.outcome, ...(p.bullets || []).map(bulletStr)]))
+    .filter(Boolean).map(guardWords);
+  const dropped = [];
+  for (const role of resume.experience || []) {
+    const kept = (role.bullets || []).filter(b => {
+      const ok = traceScore(bulletStr(b), sources) >= 0.3;
+      if (!ok) dropped.push(bulletStr(b));
+      return ok;
+    });
+    if (!kept.length && (role.bullets || []).length) {
+      // Never leave a role empty: fall back to that role's own profile bullets.
+      const src = (profile.experience || []).find(e => (e.company || '').toLowerCase() === (role.company || '').toLowerCase());
+      role.bullets = (src?.bullets || []).slice(0, 2).map(b => ({ text: bulletStr(b), serves: 'role coverage (guard)' }));
+    } else {
+      role.bullets = kept;
+    }
+  }
+  return dropped;
 }
 
 function validateResumeContent(resume, profile) {
@@ -284,13 +326,15 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   const trace = createJobTrace(job, { userId, sessionId, userEmail, userName });
   const profile = await getProfile(userId);
   const resumeFormat = await getResumeFormat(userId).catch(() => null);
+  // Per-user playbooks (career profile, cover-letter story, writing voice); null until generated.
+  const skills = await getSkillsForWriting(userId).catch(() => null);
 
   // Step 1: Tailor resume — LLM selects + reframes all relevant bullets
   let resume, tailoringNotes, jdRequirements;
   try {
     console.log(`⏱ [${elapsed()}] Starting tailor...`);
     const tailorResult = await withRetry(
-      () => tailorResume(profile, job, trace, resumeFormat),
+      () => tailorResume(profile, job, trace, resumeFormat, skills),
       `tailor:${job.company}`
     );
     console.log(`⏱ [${elapsed()}] Tailor complete`);
@@ -305,6 +349,12 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   }
 
   // Step 1.5: Content integrity — patch any dropped roles
+  const invented = dropUntraceableBullets(resume, profile);
+  if (invented.length) {
+    console.warn(`⚠ Dropped ${invented.length} bullet(s) not traceable to the profile: ${invented.map(b => `"${b.slice(0, 60)}"`).join(', ')}`);
+    langfuse.score({ traceId: trace.id, name: 'untraceable-bullets-dropped', value: invented.length });
+  }
+
   const integrityIssues = validateResumeContent(resume, profile);
   if (integrityIssues.missingRoles.length) {
     console.warn(`⚠ Tailoring dropped ${integrityIssues.missingRoles.length} role(s): ${integrityIssues.missingRoles.join(', ')} — patching`);
@@ -516,11 +566,13 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     console.log(`⏱ [${elapsed()}] Starting improvement pass...`);
     try {
       const improveResult = await withRetry(
-        () => improveResume(resume, job, ats, trace, tailoringNotes, jdRequirements),
+        () => improveResume(resume, job, ats, trace, tailoringNotes, jdRequirements, skills),
         `improve:${job.company}`,
         1
       );
       const improvedResume = improveResult.resume || improveResult;
+      const inventedByImprove = dropUntraceableBullets(improvedResume, profile);
+      if (inventedByImprove.length) console.warn(`⚠ Improve pass: dropped ${inventedByImprove.length} untraceable bullet(s)`);
       substitutions = improveResult.substitutions || [];
 
       console.log(`⏱ [${elapsed()}] Improvement done, re-scoring...`);
@@ -575,7 +627,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     try {
       console.log(`⏱ [${elapsed()}] Writing cover letter...`);
       const paragraphs = await withRetry(
-        () => coverLetter(resume, job, trace, profile),
+        () => coverLetter(resume, job, trace, profile, skills),
         `cover-letter:${job.company}`,
         1
       );
@@ -660,4 +712,4 @@ Generated by Resume Assistant`;
   return body.trim();
 }
 
-module.exports = { processJob, queueJob, getQueueStats };
+module.exports = { processJob, queueJob, getQueueStats, dropUntraceableBullets };

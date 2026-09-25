@@ -3,3 +3,4 @@ node_modules/
 _env
 *.docx
 src/firebase-key.json
+evals/results/

@@ -15,6 +15,7 @@ const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { assessJobFit } = require('./jev');
+const { getSkillsView, updateSkillNotes, runRefresh, buildSkillsExport } = require('./skills');
 const { renderResumeDocx } = require('./renderDocx');
 const { classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts } = require('./llm');
 const { mergeProfile, applyDeletions, resolveConflicts } = require('./profile');
@@ -578,6 +579,40 @@ app.post('/api/extension/job-fit', async (req, res, next) => {
     const profile = await getProfile(req.userId);
     if (!profile._onboarded) return res.status(400).json({ error: 'no_profile' });
     res.json(await assessJobFit(profile, { url, title, company, text }));
+  } catch (e) { next(e); }
+});
+
+// ── USER SKILLS ───────────────────────────────────────────────────────────
+// Per-user playbooks generated from the profile (see src/skills.js).
+app.get('/api/skills', async (req, res, next) => {
+  try { res.json(await getSkillsView(req.userId)); } catch (e) { next(e); }
+});
+
+app.put('/api/skills/:skill/notes', async (req, res, next) => {
+  try {
+    await updateSkillNotes(req.userId, req.params.skill, req.body?.notes);
+    res.json(await getSkillsView(req.userId));
+  } catch (e) {
+    if (e.status === 400) return res.status(400).json({ error: e.message });
+    next(e);
+  }
+});
+
+app.post('/api/skills/regenerate', async (req, res, next) => {
+  try {
+    const profile = await getProfile(req.userId);
+    if (!profile._onboarded) return res.status(400).json({ error: 'no_profile' });
+    runRefresh(req.userId);
+    res.json(await getSkillsView(req.userId));
+  } catch (e) { next(e); }
+});
+
+app.get('/api/skills/export', async (req, res, next) => {
+  try {
+    const buf = await buildSkillsExport(req.userId);
+    if (!buf) return res.status(404).json({ error: 'no_skills' });
+    res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename="arjun-skills.zip"' });
+    res.send(buf);
   } catch (e) { next(e); }
 });
 

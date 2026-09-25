@@ -45,6 +45,7 @@ EC2 (PM2-managed) runs: Express server (port 3000) serving:
 | `mailer.js` | Sends resume emails via SMTP |
 | `admin.js` | Admin endpoints: stats, user management, settings |
 | `jev.js` | Job-fit + visa-sponsorship check via TypeSafe Jev (typed score/choice/noul answers) |
+| `skills.js` | Per-user skills (career profile, cover-letter story, writing voice) generated from the profile on free models; shared methodology appended in code; Claude .zip export |
 
 ### Frontend (`resumeai-frontend/src/`)
 | File | Purpose |
@@ -78,6 +79,13 @@ PDF/text → extractFacts (LLM) → is profile empty?
 
 ### Resume Tailoring (job URL submitted)
 `scrapeJob → tailorResume (LLM) → atsScore (LLM) → [if <95: improveResume → atsScore] → renderDocx → save → email (if cron)`
+
+### User Skills (My Skills tab)
+`saveProfile → profileEvents 'saved' → 45s debounce → 3 parallel generateSkill calls (skill_career_profile / skill_cover_letter / skill_writing_voice) → user_skills table`
+- Free models only: `OPENROUTER_SKILLS_MODEL` (nemotron-3-super:free) → retry → `OPENROUTER_SKILLS_FALLBACK_MODEL` (nemotron-3-ultra:free). Markdown output, not JSON mode.
+- Generated text is personal; the shared methodology (Relevance Scoring Engine, ATS tiers, cover-letter rules, writing rules) lives in `SHARED` in skills.js and is appended at read time, never generated.
+- The pipeline calls `getSkillsForWriting` (uses current text, refreshes in background if stale) and passes skills to tailor/improve/cover-letter via the user message (`skillsBlock` in llm.js), leaving Langfuse system prompts untouched.
+- A failed regeneration keeps the previous content in use. Contact details and self-identification are stripped before generation.
 
 ### Chat (Build Profile tab)
 `userMessage → chatEnrich (LLM) → { extracted, deletions, reply } → frontend shows proposed changes → user confirms → mergeProfile/applyDeletions`
@@ -115,6 +123,10 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 | POST | /api/gmail/verify | JWT | Verify Gmail filter |
 | POST | /api/extension/map-fields | JWT | Extension: map form fields to profile values |
 | POST | /api/extension/job-fit | JWT | Extension: job fit + sponsorship via Jev (needs TYPESAFE_API_KEY) |
+| GET | /api/skills | JWT | User's generated skills + status/staleness |
+| PUT | /api/skills/:skill/notes | JWT | Save user corrections (win over generated text), regenerates that skill |
+| POST | /api/skills/regenerate | JWT | Regenerate all skills |
+| GET | /api/skills/export | JWT | Download skills as Claude SKILL.md folders (.zip) |
 | GET | /api/admin/* | JWT+admin | Admin endpoints |
 | GET | /health | none | Health check |
 

@@ -7,6 +7,11 @@ const mammoth = require('mammoth');
 const { getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched } = require('./db');
 const { extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts } = require('./llm');
 
+// smartMerge (LLM rewrites the whole profile) is off by default: on real resumes it took
+// 75-130 s, truncated past ~8K output tokens, and still left duplicates that dedupeProfile
+// had to fix, while the programmatic merge + dedupe pass converged correctly in milliseconds.
+// Set SMART_MERGE_MAX_PROFILE_CHARS (e.g. 20000) to use it again for profiles under that size.
+const SMART_MERGE_MAX_PROFILE_CHARS = Number(process.env.SMART_MERGE_MAX_PROFILE_CHARS || 0);
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.doc', '.txt', '.json']);
 
 function normalizeBullet(b) {
@@ -344,7 +349,11 @@ async function computeMergeProposal(partial, userId = 'me', ctx = {}) {
 
   let merged;
   let changesSummary = null;
-  if (isEmptyProfile(current)) {
+  // smartMerge re-emits the whole profile as JSON, so past a certain size the answer can't fit
+  // in the model's output budget (it truncated at ~8K tokens in testing, 3rd upload onward) and
+  // takes 75-90 s. Large profiles go straight to the programmatic merge + dedupe pass instead.
+  const tooLargeForLlm = JSON.stringify(current).length > SMART_MERGE_MAX_PROFILE_CHARS;
+  if (isEmptyProfile(current) || tooLargeForLlm) {
     merged = mergeProfile(current, partial, conflicts);
   } else {
     try {
@@ -355,7 +364,7 @@ async function computeMergeProposal(partial, userId = 'me', ctx = {}) {
       // an LLM-added key it doesn't know about through that reconstruction.
       changesSummary = merged.changes_summary || null;
       delete merged.changes_summary;
-      merged = validateMerge(current, partial, merged);
+      merged = dedupeProfile(validateMerge(current, partial, merged));
       detectConflicts(current, partial, merged, conflicts);
     } catch (e) {
       console.error('Smart merge failed, falling back to programmatic:', e.message);
@@ -527,6 +536,139 @@ function detectConflicts(current, partial, merged, conflicts) {
   }
 }
 
+// ── DEDUPE PASS (runs after every merge, LLM or programmatic) ─────────────
+// Different resume versions word the same role/degree/bullet differently ("Product Manager /
+// Business Analyst" vs "Product Manager", "B.Tech" vs "Bachelors of Technology"). Exact-key
+// merging duplicates them, and smartMerge doesn't reliably collapse them either, so this pass
+// makes the saved profile converge no matter which merge path ran. It also repairs profiles
+// that already contain duplicates the next time they're merged.
+
+const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+
+// "Apr 2025 – Jul 2026" → [start, end] in months since year 0; "2015 – 2019" → Jan 2015..Dec 2019.
+function dateRange(d) {
+  if (!d) return null;
+  const s = String(d).toLowerCase();
+  const points = [...s.matchAll(/(?:(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+)?((?:19|20)\d\d)/g)]
+    .map(m => ({ y: +m[2], m: m[1] ? MONTHS[m[1]] : null }));
+  if (!points.length) return null;
+  const start = points[0].y * 12 + (points[0].m ?? 0);
+  const present = /present|current|now/.test(s);
+  const last = points.length > 1 ? points[points.length - 1] : null;
+  const end = present ? 9999 * 12 : last ? last.y * 12 + (last.m ?? 11) : points[0].y * 12 + (points[0].m ?? 11);
+  return [start, end];
+}
+
+// Same stint = ranges overlap by 3+ months. A promotion (Analyst to Feb 2022, Senior from
+// Feb 2022) overlaps by at most a month, so it stays two roles.
+function sameStint(a, b) {
+  const ra = dateRange(a), rb = dateRange(b);
+  if (!ra || !rb) return !ra && !rb; // both undated → treat as same; one undated → don't guess
+  return Math.min(ra[1], rb[1]) - Math.max(ra[0], rb[0]) >= 3;
+}
+
+const COMPANY_NOISE = /\b(inc|llc|ltd|limited|pvt|private|corp|corporation|co|company|technologies|technology|group|plc|gmbh|india|usa)\b\.?/g;
+const coreCompany = (s) => (s || '').toLowerCase().replace(COMPANY_NOISE, '').replace(/[^a-z0-9]/g, '');
+// "TCS" = "Tata Consultancy Services": a short all-letters name equal to the other's initials.
+const companyInitials = (s) => (s || '').toLowerCase().replace(COMPANY_NOISE, ' ').split(/[^a-z0-9]+/).filter(w => w && !['and', 'of', 'the', '&'].includes(w)).map(w => w[0]).join('');
+function sameCompany(a, b) {
+  const x = coreCompany(a), y = coreCompany(b);
+  if (!x || !y) return false;
+  if (x === y || x.startsWith(y) || y.startsWith(x)) return true;
+  const [short, long] = x.length <= y.length ? [x, b] : [y, a];
+  const ini = companyInitials(long);
+  return /^[a-z]{2,5}$/.test(short) && ini.length >= 2 && short === ini;
+}
+
+const SCHOOL_NOISE = new Set('university of the school college institute business management technology and at in for'.split(' '));
+const schoolTokens = (s) => new Set((s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(t => t.length > 1 && !SCHOOL_NOISE.has(t)));
+function sameSchool(a, b) {
+  const A = schoolTokens(a), B = schoolTokens(b);
+  if (!A.size || !B.size) return false;
+  let shared = 0;
+  for (const t of A) if (B.has(t)) shared++;
+  return shared / Math.min(A.size, B.size) >= 0.5;
+}
+function eduLevel(degree) {
+  const s = (degree || '').toLowerCase();
+  if (/\b(phd|ph\.d|doctor)/.test(s)) return 'phd';
+  if (/\b(master|m\.?s\b|m\.?sc|m\.?tech|m\.?a\b|mba|m\.?b\.?a)/.test(s)) return 'master';
+  if (/\b(bachelor|b\.?s\b|b\.?sc|b\.?tech|b\.?e\b|b\.?a\b|btech)/.test(s)) return 'bachelor';
+  return null;
+}
+
+// Tailored resumes prefix bullets with a bold label ("Strategy & Roadmap Ownership: ..."); ignore it when comparing.
+const stripLabel = (t) => String(t || '').replace(/^[A-Z][A-Za-z0-9 &/,-]{2,60}:\s+/, '');
+const bulletWords = (t) => new Set(stripLabel(t).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length > 2));
+const bulletNums = (t) => [...String(t || '').matchAll(/\d[\d,]*(?:\.\d+)?/g)].map(m => m[0].replace(/,/g, '')).sort().join('|');
+function sameBullet(a, b) {
+  const A = bulletWords(a), B = bulletWords(b);
+  if (!A.size || !B.size) return false;
+  let shared = 0;
+  for (const w of A) if (B.has(w)) shared++;
+  const sim = shared / Math.min(A.size, B.size);
+  const na = bulletNums(a), nb = bulletNums(b);
+  // Reworded versions of one achievement keep the same numbers; different achievements rarely do.
+  return (na && na === nb && sim >= 0.5) || sim >= 0.85;
+}
+
+function dedupeBullets(bullets = []) {
+  const out = [];
+  for (const raw of bullets.map(normalizeBullet)) {
+    const i = out.findIndex(b => sameBullet(b.text, raw.text));
+    if (i === -1) { out.push(raw); continue; }
+    const keep = raw.text.length > out[i].text.length ? raw : out[i];
+    const other = keep === raw ? out[i] : raw;
+    out[i] = { ...keep, metric: keep.metric || other.metric, impact: keep.impact || other.impact };
+  }
+  return out;
+}
+
+function longer(a, b) { return (b || '').length > (a || '').length ? b : a; }
+
+function dedupeProfile(profile) {
+  const p = profile;
+  const exp = [];
+  for (const e of p.experience || []) {
+    const i = exp.findIndex(x => sameCompany(x.company, e.company) && sameStint(x.dates, e.dates));
+    if (i === -1) { exp.push({ ...e, bullets: dedupeBullets(e.bullets || []) }); continue; }
+    const x = exp[i];
+    const altTitles = [...new Set([...(x.alt_titles || []), ...(e.alt_titles || []), x.title, e.title].filter(Boolean))];
+    const title = longer(x.title, e.title);
+    exp[i] = {
+      ...e, ...x,
+      title,
+      alt_titles: altTitles.filter(t => t !== title).length ? altTitles.filter(t => t !== title) : undefined,
+      company: longer(x.company, e.company),
+      company_description: longer(x.company_description, e.company_description),
+      location: x.location || e.location,
+      // The more precise date string (has months) wins.
+      dates: (String(e.dates || '').match(/[a-z]{3}/gi) || []).length > (String(x.dates || '').match(/[a-z]{3}/gi) || []).length ? e.dates : x.dates,
+      bullets: dedupeBullets([...(x.bullets || []), ...(e.bullets || [])]),
+    };
+    if (!exp[i].alt_titles) delete exp[i].alt_titles;
+  }
+  p.experience = exp;
+
+  const edu = [];
+  for (const e of p.education || []) {
+    const i = edu.findIndex(x => {
+      if (!sameSchool(x.school, e.school)) return false;
+      const la = eduLevel(x.degree), lb = eduLevel(e.degree);
+      if (la && lb && la !== lb) return false;
+      return !x.dates || !e.dates || sameStint(x.dates, e.dates);
+    });
+    if (i === -1) { edu.push(e); continue; }
+    const x = edu[i];
+    edu[i] = { ...e, ...x, school: longer(x.school, e.school), degree: longer(x.degree, e.degree), major: longer(x.major, e.major), gpa: x.gpa || e.gpa, honors: longer(x.honors, e.honors), dates: longer(x.dates, e.dates) };
+  }
+  p.education = edu;
+
+  for (const pr of p.projects || []) if (pr.bullets) pr.bullets = dedupeBullets(pr.bullets);
+  if (Array.isArray(p.soft_skills)) p.soft_skills = unionCI([], p.soft_skills);
+  return p;
+}
+
 function datesOverlap(d1, d2) {
   if (!d1 || !d2) return false;
   const parseYear = (s) => {
@@ -652,7 +794,7 @@ function mergeProfile(base, incoming, conflicts = null) {
     if (loc) out.contact = { ...out.contact, location: loc };
   }
 
-  return out;
+  return dedupeProfile(out);
 }
 
 function upsertTechnicalSkills(existing = [], incoming = []) {
@@ -1016,4 +1158,4 @@ async function backfillApprovedCategory(category) {
   return { profilesScanned: groups.length, profilesUpdated, factsReclassified };
 }
 
-module.exports = { ingestText, ingestPdf, ingestFiles, extractTextFromFile, extractBulletIndent, mergeProfile, applyDeletions, resolveConflicts, backfillApprovedCategory, ALLOWED_EXTENSIONS };
+module.exports = { dedupeProfile, ingestText, ingestPdf, ingestFiles, extractTextFromFile, extractBulletIndent, mergeProfile, applyDeletions, resolveConflicts, backfillApprovedCategory, ALLOWED_EXTENSIONS };
