@@ -63,22 +63,37 @@ async function getStats(req, res) {
 // GET /api/admin/users
 async function getUsers(req, res) {
   try {
+    // master_profile keeps the last 3 versions per user; list each user once (latest version)
+    // and count jobs separately so the join can't multiply rows.
     const { rows } = await pool.query(`
-      SELECT 
-        mp.user_id,
-        mp.profile->>'contact' as contact_raw,
-        mp.updated_at,
-        mp.profile->>'gmail_connected' as gmail_connected,
-        mp.profile->>'daily_limit' as daily_limit,
-        mp.profile->>'active' as active,
-        mp.profile->>'auto_process_paused' as auto_process_paused,
-        COUNT(j.job_id) as jobs_count,
-        MAX(j.seen_at) as last_job,
-        AVG(j.ats_score) as avg_ats
-      FROM master_profile mp
-      LEFT JOIN jobs j ON j.user_id = mp.user_id
-      GROUP BY mp.user_id, mp.profile, mp.updated_at
-      ORDER BY mp.updated_at DESC
+      WITH latest AS (
+        SELECT DISTINCT ON (user_id) user_id, profile, updated_at
+        FROM master_profile
+        ORDER BY user_id, version DESC, updated_at DESC
+      ),
+      firsts AS (
+        SELECT user_id, MIN(updated_at) AS first_seen FROM master_profile GROUP BY user_id
+      ),
+      job_stats AS (
+        SELECT user_id, COUNT(*) AS jobs_count, MAX(seen_at) AS last_job, AVG(ats_score) AS avg_ats
+        FROM jobs GROUP BY user_id
+      )
+      SELECT
+        l.user_id,
+        l.profile->>'contact' AS contact_raw,
+        l.updated_at,
+        f.first_seen,
+        l.profile->>'gmail_connected' AS gmail_connected,
+        l.profile->>'daily_limit' AS daily_limit,
+        l.profile->>'active' AS active,
+        l.profile->>'auto_process_paused' AS auto_process_paused,
+        COALESCE(j.jobs_count, 0) AS jobs_count,
+        j.last_job,
+        j.avg_ats
+      FROM latest l
+      LEFT JOIN firsts f ON f.user_id = l.user_id
+      LEFT JOIN job_stats j ON j.user_id = l.user_id
+      ORDER BY l.updated_at DESC
     `);
 
     const users = rows.map(r => {
@@ -95,7 +110,8 @@ async function getUsers(req, res) {
         jobs_count: parseInt(r.jobs_count) || 0,
         last_job: r.last_job,
         avg_ats: Math.round(parseFloat(r.avg_ats) || 0),
-        joined: r.updated_at,
+        joined: r.first_seen || r.updated_at,
+        last_updated: r.updated_at,
       };
     });
 
@@ -105,7 +121,6 @@ async function getUsers(req, res) {
   }
 }
 
-// PATCH /api/admin/users/:userId
 async function updateUser(req, res) {
   const { userId } = req.params;
   const { active, daily_limit, auto_process_paused } = req.body;
@@ -130,19 +145,37 @@ async function updateUser(req, res) {
 }
 
 // DELETE /api/admin/users/:userId
+// Every table that stores per-user rows. tailored_resume is also cleared by job_id: older rows
+// can reference this user's jobs under a different user_id, and the job_id foreign key then
+// blocked deleting the jobs ("violates foreign key constraint tailored_resume_job_id_fkey").
+const PER_USER_TABLES = ['user_skills', 'pending_ingestions', 'resume_format', 'gmail_forwarding', 'uncategorized_facts', 'chat_feedback', 'extension_events'];
+
 async function deleteUser(req, res) {
   const { userId } = req.params;
+  const client = await pool.connect();
   try {
-    await pool.query('DELETE FROM tailored_resume WHERE user_id = $1', [userId]);
-    await pool.query('DELETE FROM jobs WHERE user_id = $1', [userId]);
-    await pool.query('DELETE FROM master_profile WHERE user_id = $1', [userId]);
-    res.json({ ok: true });
+    await client.query('BEGIN');
+    const counts = {};
+    counts.tailored_resume = (await client.query(
+      'DELETE FROM tailored_resume WHERE user_id = $1 OR job_id IN (SELECT job_id FROM jobs WHERE user_id = $1)', [userId]
+    )).rowCount;
+    counts.jobs = (await client.query('DELETE FROM jobs WHERE user_id = $1', [userId])).rowCount;
+    counts.master_profile = (await client.query('DELETE FROM master_profile WHERE user_id = $1', [userId])).rowCount;
+    for (const table of PER_USER_TABLES) {
+      counts[table] = (await client.query(`DELETE FROM ${table} WHERE user_id = $1`, [userId])).rowCount;
+    }
+    await client.query('COMMIT');
+    console.log(`✓ admin deleted user ${userId}: ${JSON.stringify(counts)}`);
+    res.json({ ok: true, deleted: counts });
   } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(`✗ admin delete user ${userId} failed: ${e.message}`);
     res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
   }
 }
 
-// GET /api/admin/jobs
 async function getJobs(req, res) {
   try {
     const { rows } = await pool.query(`

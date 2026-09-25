@@ -309,8 +309,10 @@ export const api = {
     return res.json();
   },
   async adminDeleteUser(userId) {
-    const res = await checkedFetch(`${BASE}/admin/users/${userId}`, { method: 'DELETE', headers: await getHeaders() });
-    return res.json();
+    const res = await checkedFetch(`${BASE}/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE', headers: await getHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || `Delete failed (${res.status})`);
+    return data;
   },
   async adminGetJobs() {
     const res = await checkedFetch(`${BASE}/admin/jobs`, { headers: await getHeaders() });

@@ -176,8 +176,13 @@ export default function Admin() {
 
   const handleDeleteUser = async (userId) => {
     if (!confirm('Delete this user and all their data?')) return;
-    await api.adminDeleteUser(userId);
-    setUsers(prev => prev.filter(u => u.user_id !== userId));
+    try {
+      await api.adminDeleteUser(userId);
+      // Only drop the row once the server confirms; a failed delete used to vanish until refresh.
+      setUsers(prev => prev.filter(u => u.user_id !== userId));
+    } catch (e) {
+      alert(`Could not delete this user: ${e.message}`);
+    }
   };
 
   const handleTriggerCron = async () => {
