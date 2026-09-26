@@ -322,7 +322,7 @@ export default function Admin() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                 <div>
                   <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '4px' }}>Users</h2>
-                  <p style={{ fontSize: '13px', color: '#78716c' }}>{users.length} total</p>
+                  <p style={{ fontSize: '13px', color: '#78716c' }}>{users.length} signed up · {users.filter(u => u.has_profile !== false).length} with a profile</p>
                 </div>
               </div>
 
@@ -335,8 +335,12 @@ export default function Admin() {
                           <span style={{ fontSize: '13px', fontWeight: 500 }}>{u.name}</span>
                           {u.gmail_connected && <span style={{ fontSize: '10px', color: '#22c55e', fontFamily: "'DM Mono', monospace", background: '#ecfdf5', border: '1px solid #22c55e22', borderRadius: '4px', padding: '1px 6px' }}>gmail ✓</span>}
                           {!u.active && <span style={{ fontSize: '10px', color: '#ef4444', fontFamily: "'DM Mono', monospace", background: '#fef2f2', border: '1px solid #ef444422', borderRadius: '4px', padding: '1px 6px' }}>restricted</span>}
+                          {u.has_profile === false && <span style={{ fontSize: '10px', color: '#92400e', fontFamily: "'DM Mono', monospace", background: '#fef3c7', borderRadius: '4px', padding: '1px 6px' }}>no profile yet</span>}
                         </div>
-                        <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{u.email}</div>
+                        <div style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>
+                          {u.email}{u.profile_email ? ` · profile: ${u.profile_email}` : ''}
+                          {u.last_sign_in ? ` · last sign-in ${new Date(u.last_sign_in).toLocaleDateString()}` : ''}
+                        </div>
                       </div>
 
                       <div style={{ display: 'flex', gap: '24px', fontSize: '12px', color: '#57534e' }}>

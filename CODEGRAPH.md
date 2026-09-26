@@ -326,28 +326,29 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1083] — 
 |----------|------|----------|
 | adminOnly | 12 | yes |
 | getStats | 20 | yes |
-| getUsers | 64 | yes |
-| updateUser | 124 | yes |
-| deleteUser | 153 | yes |
-| getJobs | 179 | yes |
-| retryJob | 204 | yes |
-| triggerCron | 232 | yes |
-| getSettings | 242 | yes |
-| updateSettings | 259 | yes |
-| getSchemaProposalsHandler | 273 | yes |
-| approveSchemaProposal | 283 | yes |
-| rejectSchemaProposal | 310 | yes |
-| getFeedbackHandler | 321 | yes |
-| reviewFeedback | 330 | yes |
-| getGmailForwardingHandler | 343 | yes |
-| approveGmailForwarding | 353 | yes |
-| rejectGmailForwarding | 365 | yes |
-| getExtensionEventsHandler | 377 | yes |
-| getProposalsHandler | 387 | yes |
-| acceptProposal | 395 | yes |
-| rejectProposal | 415 | yes |
-| togglePromptRule | 424 | yes |
-| runSelfHealingHandler | 435 | yes |
+| listAuthUsers | 64 | no |
+| getUsers | 77 | yes |
+| updateUser | 157 | yes |
+| deleteUser | 186 | yes |
+| getJobs | 212 | yes |
+| retryJob | 237 | yes |
+| triggerCron | 265 | yes |
+| getSettings | 275 | yes |
+| updateSettings | 292 | yes |
+| getSchemaProposalsHandler | 306 | yes |
+| approveSchemaProposal | 316 | yes |
+| rejectSchemaProposal | 343 | yes |
+| getFeedbackHandler | 354 | yes |
+| reviewFeedback | 363 | yes |
+| getGmailForwardingHandler | 376 | yes |
+| approveGmailForwarding | 386 | yes |
+| rejectGmailForwarding | 398 | yes |
+| getExtensionEventsHandler | 410 | yes |
+| getProposalsHandler | 420 | yes |
+| acceptProposal | 428 | yes |
+| rejectProposal | 448 | yes |
+| togglePromptRule | 457 | yes |
+| runSelfHealingHandler | 468 | yes |
 
 ### auth.js
 
@@ -653,6 +654,7 @@ admin.js
   ├── pipeline.js (queueJob)
   ├── scraper.js (scrapeLinkedInJob)
   ├── profile.js (backfillApprovedCategory)
+  ├── auth.js
   ├── db.js (listProposals, listPromptRules)
   ├── db.js (getProposal, setProposalStatus, addPromptRule)
   ├── llm.js (invalidateRulesCache)
@@ -665,6 +667,7 @@ admin.js
   ├── pipeline.js (queueJob)
   ├── scraper.js (scrapeLinkedInJob)
   ├── profile.js (backfillApprovedCategory)
+  ├── auth.js
   ├── db.js (listProposals, listPromptRules)
   ├── db.js (getProposal, setProposalStatus, addPromptRule)
   ├── llm.js (invalidateRulesCache)

@@ -61,6 +61,19 @@ async function getStats(req, res) {
 }
 
 // GET /api/admin/users
+async function listAuthUsers() {
+  require('./auth'); // initializes firebase-admin
+  const admin = require('firebase-admin');
+  const out = [];
+  let pageToken;
+  do {
+    const page = await admin.auth().listUsers(1000, pageToken);
+    out.push(...page.users);
+    pageToken = page.pageToken;
+  } while (pageToken);
+  return out;
+}
+
 async function getUsers(req, res) {
   try {
     // master_profile keeps the last 3 versions per user; list each user once (latest version)
@@ -96,13 +109,23 @@ async function getUsers(req, res) {
       ORDER BY l.updated_at DESC
     `);
 
+    // Everyone who has signed in (Firebase Auth), merged with profile data. People who signed
+    // up but never built a profile used to be invisible here.
+    const authUsers = await listAuthUsers().catch(e => { console.error('Firebase listUsers failed:', e.message); return null; });
+    const authById = new Map((authUsers || []).map(u => [u.uid, u]));
+
     const users = rows.map(r => {
       let contact = {};
       try { contact = JSON.parse(r.contact_raw || '{}'); } catch (e) {}
+      const auth = authById.get(r.user_id);
+      authById.delete(r.user_id);
       return {
         user_id: r.user_id,
-        email: contact.email || r.user_id,
-        name: contact.name || 'Unknown',
+        email: auth?.email || contact.email || r.user_id,
+        profile_email: contact.email && contact.email !== auth?.email ? contact.email : undefined,
+        has_profile: true,
+        last_sign_in: auth?.metadata?.lastSignInTime || null,
+        name: contact.name || auth?.displayName || 'Unknown',
         gmail_connected: r.gmail_connected === 'true',
         daily_limit: parseInt(r.daily_limit) || 10,
         active: r.active !== 'false',
@@ -110,12 +133,22 @@ async function getUsers(req, res) {
         jobs_count: parseInt(r.jobs_count) || 0,
         last_job: r.last_job,
         avg_ats: Math.round(parseFloat(r.avg_ats) || 0),
-        joined: r.first_seen || r.updated_at,
+        joined: auth?.metadata?.creationTime || r.first_seen || r.updated_at,
         last_updated: r.updated_at,
       };
     });
 
-    res.json({ users });
+    // Signed up, no profile yet (or profile deleted).
+    for (const auth of authById.values()) {
+      users.push({
+        user_id: auth.uid, email: auth.email || auth.uid, name: auth.displayName || 'No profile yet', has_profile: false,
+        last_sign_in: auth.metadata?.lastSignInTime || null, joined: auth.metadata?.creationTime || null,
+        gmail_connected: false, daily_limit: 10, active: true, auto_process_paused: false, jobs_count: 0, last_job: null, avg_ats: 0,
+      });
+    }
+    users.sort((a, b) => new Date(b.last_sign_in || b.joined || 0) - new Date(a.last_sign_in || a.joined || 0));
+
+    res.json({ users, auth_listed: !!authUsers });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
