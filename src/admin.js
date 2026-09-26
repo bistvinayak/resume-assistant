@@ -214,9 +214,12 @@ async function getJobs(req, res) {
     const { rows } = await pool.query(`
       SELECT j.*, mp.profile->>'contact' as contact_raw
       FROM jobs j
-      LEFT JOIN master_profile mp ON mp.user_id = j.user_id
+      -- latest profile version only; joining every version listed each job up to 3 times
+      LEFT JOIN LATERAL (
+        SELECT profile FROM master_profile m WHERE m.user_id = j.user_id ORDER BY version DESC LIMIT 1
+      ) mp ON true
       ORDER BY j.seen_at DESC
-      LIMIT 100
+      LIMIT 500
     `);
 
     const jobs = rows.map(r => {

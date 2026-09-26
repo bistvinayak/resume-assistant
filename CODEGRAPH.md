@@ -331,24 +331,24 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1083] — 
 | updateUser | 157 | yes |
 | deleteUser | 186 | yes |
 | getJobs | 212 | yes |
-| retryJob | 237 | yes |
-| triggerCron | 265 | yes |
-| getSettings | 275 | yes |
-| updateSettings | 292 | yes |
-| getSchemaProposalsHandler | 306 | yes |
-| approveSchemaProposal | 316 | yes |
-| rejectSchemaProposal | 343 | yes |
-| getFeedbackHandler | 354 | yes |
-| reviewFeedback | 363 | yes |
-| getGmailForwardingHandler | 376 | yes |
-| approveGmailForwarding | 386 | yes |
-| rejectGmailForwarding | 398 | yes |
-| getExtensionEventsHandler | 410 | yes |
-| getProposalsHandler | 420 | yes |
-| acceptProposal | 428 | yes |
-| rejectProposal | 448 | yes |
-| togglePromptRule | 457 | yes |
-| runSelfHealingHandler | 468 | yes |
+| retryJob | 240 | yes |
+| triggerCron | 268 | yes |
+| getSettings | 278 | yes |
+| updateSettings | 295 | yes |
+| getSchemaProposalsHandler | 309 | yes |
+| approveSchemaProposal | 319 | yes |
+| rejectSchemaProposal | 346 | yes |
+| getFeedbackHandler | 357 | yes |
+| reviewFeedback | 366 | yes |
+| getGmailForwardingHandler | 379 | yes |
+| approveGmailForwarding | 389 | yes |
+| rejectGmailForwarding | 401 | yes |
+| getExtensionEventsHandler | 413 | yes |
+| getProposalsHandler | 423 | yes |
+| acceptProposal | 431 | yes |
+| rejectProposal | 451 | yes |
+| togglePromptRule | 460 | yes |
+| runSelfHealingHandler | 471 | yes |
 
 ### auth.js
 

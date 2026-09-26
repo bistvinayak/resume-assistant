@@ -4,6 +4,11 @@ import { auth, signOutUser } from '../firebase';
 import { api } from '../api';
 import ExtensionObservability from '../components/ExtensionObservability';
 import SelfHealing from '../components/SelfHealing';
+import {
+  FilterBar, USER_DEFAULTS, userFields, filterUsers, JOB_DEFAULTS, jobFields, filterJobs,
+  FEEDBACK_DEFAULTS, feedbackFields, filterFeedback, SCHEMA_DEFAULTS, schemaFields, filterSchema,
+  GMAIL_DEFAULTS, gmailFields, filterGmail,
+} from '../components/AdminFilters';
 
 const ADMIN_EMAIL = 'arjun.resumeai@gmail.com';
 
@@ -31,6 +36,11 @@ export default function Admin() {
   const navigate = useNavigate();
   const user = auth.currentUser;
   const [tab, setTab] = useState('overview');
+  const [userF, setUserF] = useState(USER_DEFAULTS);
+  const [jobF, setJobF] = useState(JOB_DEFAULTS);
+  const [feedbackF, setFeedbackF] = useState(FEEDBACK_DEFAULTS);
+  const [schemaF, setSchemaF] = useState(SCHEMA_DEFAULTS);
+  const [gmailF, setGmailF] = useState(GMAIL_DEFAULTS);
   const [stats, setStats] = useState(null);
   const [users, setUsers] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -326,8 +336,9 @@ export default function Admin() {
                 </div>
               </div>
 
+              <FilterBar fields={userFields()} value={userF} onChange={setUserF} defaults={USER_DEFAULTS} shown={filterUsers(users, userF).length} total={users.length} noun="users" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {users.map(u => (
+                {filterUsers(users, userF).map(u => (
                   <div key={u.user_id} style={{ background: '#ffffff', border: `1px solid ${u.active ? '#e7e5e4' : '#fecaca'}`, borderRadius: '10px', padding: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <div style={{ flex: 1 }}>
@@ -398,8 +409,9 @@ export default function Admin() {
             <div style={{ animation: 'fadeIn 0.3s ease' }}>
               <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '24px' }}>All Jobs</h2>
 
+              <FilterBar fields={jobFields(jobs)} value={jobF} onChange={setJobF} defaults={JOB_DEFAULTS} shown={filterJobs(jobs, jobF).length} total={jobs.length} noun="jobs" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {jobs.map(job => (
+                {filterJobs(jobs, jobF).map(job => (
                   <div key={job.job_id} style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '8px', padding: '14px 16px', display: 'grid', gridTemplateColumns: '1fr auto auto auto auto auto', alignItems: 'center', gap: '16px' }}>
                     <div>
                       <div style={{ fontSize: '13px', fontWeight: 500, marginBottom: '2px' }}>{job.title || job.job_id} · {job.company || '—'}</div>
@@ -449,9 +461,11 @@ export default function Admin() {
                 Arjun flags resume sections it can't fit into the existing profile schema (Publications, Patents, Awards, etc). Approve to make the category permanent — every user's existing uncategorized data is automatically re-scanned and backfilled into it.
               </p>
 
+              <FilterBar fields={schemaFields(schemaProposals)} value={schemaF} onChange={setSchemaF} defaults={SCHEMA_DEFAULTS} shown={filterSchema(schemaProposals, schemaF).length} total={schemaProposals.length} noun="proposals" />
               {(() => {
-                const pending = schemaProposals.filter(p => p.status === 'pending');
-                const reviewed = schemaProposals.filter(p => p.status !== 'pending');
+                const shownProposals = filterSchema(schemaProposals, schemaF);
+                const pending = shownProposals.filter(p => p.status === 'pending');
+                const reviewed = shownProposals.filter(p => p.status !== 'pending');
                 return (
                   <>
                     <div style={{ marginBottom: '28px' }}>
@@ -546,9 +560,11 @@ export default function Admin() {
                 Users who've asked to have their forwarded LinkedIn job-alert emails processed. Matching is by their Arjun login email — approve to start attributing their forwarded mail to their account.
               </p>
 
+              <FilterBar fields={gmailFields(gmailForwarding)} value={gmailF} onChange={setGmailF} defaults={GMAIL_DEFAULTS} shown={filterGmail(gmailForwarding, gmailF).length} total={gmailForwarding.length} noun="requests" />
               {(() => {
-                const pending = gmailForwarding.filter(g => g.status === 'pending');
-                const reviewed = gmailForwarding.filter(g => g.status !== 'pending');
+                const shownGmail = filterGmail(gmailForwarding, gmailF);
+                const pending = shownGmail.filter(g => g.status === 'pending');
+                const reviewed = shownGmail.filter(g => g.status !== 'pending');
                 return (
                   <>
                     <div style={{ marginBottom: '28px' }}>
@@ -621,9 +637,11 @@ export default function Admin() {
                 Thumbs-down feedback from users. Review the conversation, note what went wrong, and mark as actioned.
               </p>
 
+              <FilterBar fields={feedbackFields(feedback)} value={feedbackF} onChange={setFeedbackF} defaults={FEEDBACK_DEFAULTS} shown={filterFeedback(feedback, feedbackF).length} total={feedback.length} noun="feedback" />
               {(() => {
-                const open = feedback.filter(f => f.status === 'open');
-                const reviewed = feedback.filter(f => f.status !== 'open');
+                const shownFeedback = filterFeedback(feedback, feedbackF);
+                const open = shownFeedback.filter(f => f.status === 'open');
+                const reviewed = shownFeedback.filter(f => f.status !== 'open');
                 return (
                   <>
                     <div style={{ marginBottom: '28px' }}>
