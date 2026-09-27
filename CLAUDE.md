@@ -44,7 +44,8 @@ EC2 (PM2-managed) runs: Express server (port 3000) serving:
 | `renderPdf.js` | Generates .pdf resume from tailored JSON |
 | `mailer.js` | Sends resume emails via SMTP |
 | `admin.js` | Admin endpoints: stats, user management, settings |
-| `jev.js` | Job-fit + visa-sponsorship check via TypeSafe Jev (typed score/choice/noul answers) |
+| `jev.js` | Job-fit + visa-sponsorship check via TypeSafe Jev (typed score/choice/noul answers); per-requirement evidence questions |
+| `insights.js` | Extension side panel: requirement extraction, Jev per-requirement matching, wording check, written analysis, grounded job chat |
 | `skills.js` | Per-user skills (career profile, cover-letter story, writing voice) generated from the profile on free models; shared methodology appended in code; Claude .zip export |
 
 ### Frontend (`resumeai-frontend/src/`)
@@ -103,6 +104,13 @@ Nightly `scripts/backup-db.sh` (node-cron 03:30; the host has no crontab) → `~
 - The pipeline calls `getSkillsForWriting` (uses current text, refreshes in background if stale) and passes skills to tailor/improve/cover-letter via the user message (`skillsBlock` in llm.js), leaving Langfuse system prompts untouched.
 - A failed regeneration keeps the previous content in use. Contact details and self-identification are stripped before generation.
 
+### Job insights (extension side panel)
+`popup "Check this job" → /extension/job-fit (Jev, saved to job_checks) → "Open full analysis" → side panel → POST /extension/job-insights (starts run) → poll GET`
+- Run (15-30 s, so async; CloudFront cuts requests at ~30 s): `extract_job_requirements` (free model: 5-8 requirements + key terms) → Jev choice question per requirement (strong/partial/none) → code wording check → status per requirement (strong / wording_gap / partial / none / unsure when Jev confidence < 0.5) → `explain_job_fit` (free model).
+- Jev's labels are final; the explanation and chat only explain them, use only profile facts, and never suggest putting job keywords into the profile.
+- Result cached on `job_checks.analysis` until the profile version changes. Chat (`/extension/job-chat`, prompt `job_fit_chat`) is stateless: the panel sends recent turns, nothing is stored.
+- Tailoring is intentionally not offered from the panel yet (insights first).
+
 ### Chat (Build Profile tab)
 `userMessage → chatEnrich (LLM) → { extracted, deletions, reply } → frontend shows proposed changes → user confirms → mergeProfile/applyDeletions`
 
@@ -114,6 +122,7 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 - `improve_resume` — rephrase bullets using missing JD keywords
 - `ats_score` — score resume vs job description
 - `chat_enrich` — conversational profile building
+- `extract_job_requirements`, `explain_job_fit`, `job_fit_chat` — extension side panel insights and chat
 
 ## Langfuse Observability
 - **Traces:** every LLM call creates a trace with userId, sessionId, userEmail
@@ -139,6 +148,9 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 | POST | /api/gmail/verify | JWT | Verify Gmail filter |
 | POST | /api/extension/map-fields | JWT | Extension: map form fields to profile values |
 | POST | /api/extension/job-fit | JWT | Extension: job fit + sponsorship via Jev (needs TYPESAFE_API_KEY) |
+| POST | /api/extension/job-insights | JWT | Start (or return cached) side panel insights for a checked job |
+| GET | /api/extension/job-insights | JWT | Poll insights: running (stage + partial requirements) / ready / failed |
+| POST | /api/extension/job-chat | JWT | Chat about one job, grounded in its saved insights (stateless) |
 | GET | /api/extension/info | JWT | Deployed extension version |
 | GET | /api/extension/download | JWT | Zip of extension/ (arjun-extension folder) for unpacked install |
 | GET | /api/skills | JWT | User's generated skills + status/staleness |
@@ -153,6 +165,7 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 - `seen_jobs` — job_id, user_id, seen_at (dedup)
 - `tailored_resumes` — id, job_id, user_id, resume_json, file_path, status, ats_score, metadata
 - `settings` — key-value store for admin settings
+- `job_checks` — user_id + job_key (LinkedIn job id or URL), posting text, Jev fit, cached side panel analysis
 
 ## Deployment
 - Push to `main` → GitHub Actions builds frontend and deploys to EC2 via SSH, then restarts via `pm2 startOrRestart deploy/ecosystem.config.js`

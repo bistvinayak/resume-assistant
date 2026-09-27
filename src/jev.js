@@ -195,4 +195,44 @@ async function assessJobFit(profile, job, ctx = {}) {
   };
 }
 
-module.exports = { assessJobFit, buildJevRequest, compactProfile };
+// Per-requirement evidence: one choice question per extracted requirement, judged by meaning.
+// Wording (does the profile use the job's terms?) is checked in code by insights.js, not here.
+const EVIDENCE = {
+  strong: 'A specific role, bullet, project or skill in the profile clearly meets this requirement, whatever words it uses',
+  partial: 'The profile shows related or adjacent experience that only partly meets this requirement',
+  none: 'Nothing in the profile supports this requirement',
+};
+
+async function assessRequirements(profile, job, requirements, trace) {
+  if (!process.env.TYPESAFE_API_KEY) throw new Error('TYPESAFE_API_KEY not set');
+  const { state } = buildJevRequest(profile, job);
+  const questions = {};
+  requirements.forEach((r, i) => {
+    questions[`req_${i}`] = {
+      type: 'choice',
+      instructions: `How strongly does \`candidate\` meet this requirement from \`job_posting\`: "${r.text}"? Judge by meaning, not wording, using the candidate's roles, bullets, projects and skills.`,
+      criteria: EVIDENCE,
+    };
+  });
+  const body = { state, model: JEV_MODEL, questions };
+
+  const { langfuse } = require('./llm');
+  const generation = trace.generation({ name: 'jev_requirements', model: JEV_MODEL, input: body });
+  let data;
+  try {
+    data = await callJev(body);
+  } catch (e) {
+    generation.end({ output: { error: e.message }, level: 'ERROR' });
+    await langfuse.flushAsync().catch(() => {});
+    throw e;
+  }
+  generation.end({ output: data.answers, model: data.model, metadata: { usage: data.usage } });
+  await langfuse.flushAsync().catch(() => {});
+
+  return requirements.map((r, i) => {
+    const a = data.answers[`req_${i}`];
+    return { ...r, evidence: a.choice, confidence: a.confidence, probabilities: a.probabilities };
+  });
+}
+
+module.exports = { assessJobFit, assessRequirements, buildJevRequest, compactProfile };

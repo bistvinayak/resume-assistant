@@ -176,6 +176,24 @@ async function initSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_extension_events_created ON extension_events(created_at DESC);
 
+    -- One row per user per job checked from the extension. The side panel's insights are cached
+    -- in \`analysis\` and recomputed when the profile version changes.
+    CREATE TABLE IF NOT EXISTS job_checks (
+      id            SERIAL PRIMARY KEY,
+      user_id       TEXT NOT NULL,
+      job_key       TEXT NOT NULL,
+      url           TEXT,
+      title         TEXT,
+      company       TEXT,
+      source        TEXT,
+      description   TEXT,
+      fit           JSONB,
+      analysis      JSONB,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (user_id, job_key)
+    );
+
     -- Per-user "skills": markdown playbooks generated from the user's profile (career profile,
     -- cover-letter story, writing voice) that steer resume/cover-letter writing, and can be
     -- exported as Claude skills. user_notes are the user's own corrections — they survive
@@ -843,6 +861,28 @@ async function logExtensionEvent({ userId, userEmail, url, fieldsCount, mappedCo
   );
 }
 
+// ── JOB CHECKS (extension job fit + side panel insights) ─────────────────
+async function saveJobCheck({ userId, jobKey, url, title, company, source, description, fit }) {
+  // A new check replaces the stored fit and clears cached insights, since the posting text may differ.
+  await pool.query(
+    `INSERT INTO job_checks (user_id, job_key, url, title, company, source, description, fit)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (user_id, job_key) DO UPDATE SET
+       url = EXCLUDED.url, title = EXCLUDED.title, company = EXCLUDED.company, source = EXCLUDED.source,
+       description = EXCLUDED.description, fit = EXCLUDED.fit, analysis = NULL, updated_at = now()`,
+    [userId, jobKey, url || null, title || null, company || null, source || null, description || null, fit ? JSON.stringify(fit) : null]
+  );
+}
+
+async function getJobCheck(userId, jobKey) {
+  const { rows } = await pool.query('SELECT * FROM job_checks WHERE user_id = $1 AND job_key = $2', [userId, jobKey]);
+  return rows[0] || null;
+}
+
+async function saveJobAnalysis(userId, jobKey, analysis) {
+  await pool.query('UPDATE job_checks SET analysis = $3, updated_at = now() WHERE user_id = $1 AND job_key = $2', [userId, jobKey, JSON.stringify(analysis)]);
+}
+
 // Admin Extension observability. Every filter is optional; the summary, breakdowns and daily
 // series are computed over the same filtered set as the event list.
 async function getExtensionEvents(filters = {}) {
@@ -916,6 +956,7 @@ async function getExtensionEvents(filters = {}) {
 }
 
 module.exports = {
+  saveJobCheck, getJobCheck, saveJobAnalysis,
   pool, initSchema, getProfile, saveProfile, getProfileVersion, profileEvents,
   getUserSkills, setUserSkillStatus, saveUserSkill, saveUserSkillNotes,
   addPendingIngestion, getDuePendingIngestions, getPendingIngestionCount, markPendingIngestion,

@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent, addPendingIngestion, getPendingIngestionCount } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent, addPendingIngestion, getPendingIngestionCount, getProfileVersion, saveJobCheck, getJobCheck, saveJobAnalysis } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile, combineTexts } = require('./profile');
 const { queueJob, getQueueStats } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
@@ -15,6 +15,7 @@ const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { assessJobFit } = require('./jev');
+const { analyzeJob, chatAboutJob } = require('./insights');
 const { getSkillsView, updateSkillNotes, runRefresh, buildSkillsExport } = require('./skills');
 const { renderResumeDocx } = require('./renderDocx');
 const { classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts } = require('./llm');
@@ -598,7 +599,80 @@ app.post('/api/extension/job-fit', async (req, res, next) => {
     }
     const profile = await getProfile(req.userId);
     if (!profile._onboarded) return res.status(400).json({ error: 'no_profile' });
-    res.json(await assessJobFit(profile, { url, title, company, text, jobId, source }, langfuseCtx(req)));
+    const result = await assessJobFit(profile, { url, title, company, text, jobId, source }, langfuseCtx(req));
+    // Saved so the side panel can build insights without the extension resending the posting.
+    const jobKey = String(jobId || url || '').slice(0, 300);
+    if (jobKey) {
+      await saveJobCheck({ userId: req.userId, jobKey, url, title, company, source, description: String(text).slice(0, 20000), fit: result })
+        .catch(e => console.error('saveJobCheck failed (non-fatal):', e.message));
+    }
+    res.json({ ...result, jobKey });
+  } catch (e) { next(e); }
+});
+
+// ── EXTENSION: JOB INSIGHTS (side panel) ────────────────────────────────
+// Insights take ~15-30 s (two free-model calls + Jev), longer than CloudFront allows for one
+// request, so POST starts a run and the panel polls GET. Runs are tracked in memory; finished
+// results are cached on the job_checks row until the profile changes.
+const insightRuns = new Map(); // `${userId}:${jobKey}` → { stage, partial, error, startedAt }
+
+async function cachedInsights(userId, jobKey) {
+  const check = await getJobCheck(userId, jobKey);
+  if (!check) return { check: null };
+  const version = await getProfileVersion(userId);
+  const fresh = check.analysis && check.analysis.profileVersion === version;
+  return { check, version, analysis: fresh ? check.analysis : null };
+}
+
+app.post('/api/extension/job-insights', async (req, res, next) => {
+  try {
+    const jobKey = String(req.body.jobKey || '').slice(0, 300);
+    if (!jobKey) return res.status(400).json({ error: 'no_job_key' });
+    const { check, version, analysis } = await cachedInsights(req.userId, jobKey);
+    if (!check) return res.status(404).json({ error: 'job_not_checked' });
+    if (analysis) return res.json({ status: 'ready', analysis });
+
+    const runKey = `${req.userId}:${jobKey}`;
+    const running = insightRuns.get(runKey);
+    if (!running || running.error) {
+      const profile = await getProfile(req.userId);
+      const run = { stage: 'starting', partial: null, error: null, startedAt: Date.now() };
+      insightRuns.set(runKey, run);
+      analyzeJob(profile, check, langfuseCtx(req), (stage, partial) => { run.stage = stage; if (partial) run.partial = partial; })
+        .then(a => saveJobAnalysis(req.userId, jobKey, { ...a, profileVersion: version }))
+        .then(() => insightRuns.delete(runKey))
+        .catch(e => { console.error('job insights failed:', e.message); run.error = e.message; });
+    }
+    res.status(202).json({ status: 'running', stage: insightRuns.get(runKey).stage });
+  } catch (e) { next(e); }
+});
+
+app.post('/api/extension/job-chat', async (req, res, next) => {
+  try {
+    const jobKey = String(req.body.jobKey || '').slice(0, 300);
+    const { check, analysis } = await cachedInsights(req.userId, jobKey);
+    if (!check) return res.status(404).json({ error: 'job_not_checked' });
+    if (!analysis) return res.status(409).json({ error: 'insights_not_ready' });
+    const profile = await getProfile(req.userId);
+    // Stay under CloudFront's ~30 s limit even if the free model is slow and askJson falls back.
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('chat_timeout'), { status: 504 })), 25000));
+    const reply = await Promise.race([chatAboutJob(profile, check, analysis, req.body.messages, langfuseCtx(req)), timeout]);
+    res.json({ reply });
+  } catch (e) {
+    if (e.status === 400 || e.status === 504) return res.status(e.status).json({ error: e.message });
+    next(e);
+  }
+});
+
+app.get('/api/extension/job-insights', async (req, res, next) => {
+  try {
+    const jobKey = String(req.query.jobKey || '').slice(0, 300);
+    const run = insightRuns.get(`${req.userId}:${jobKey}`);
+    if (run?.error) return res.json({ status: 'failed', error: run.error });
+    if (run) return res.json({ status: 'running', stage: run.stage, partial: run.partial });
+    const { check, analysis } = await cachedInsights(req.userId, jobKey);
+    if (!check) return res.status(404).json({ error: 'job_not_checked' });
+    res.json(analysis ? { status: 'ready', analysis } : { status: 'idle' });
   } catch (e) { next(e); }
 });
 

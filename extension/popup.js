@@ -48,7 +48,7 @@ const fitResultEl = document.getElementById('fitResult');
 
 // Runs inside the job page (injected, so it must be self-contained). Returns the posting plus
 // `source`, which says where the text came from so a bad read is visible in Langfuse.
-function extractJobPosting() {
+async function extractJobPosting() {
   const clean = (s) => String(s || '').replace(/\n{3,}/g, '\n\n').trim();
 
   // LinkedIn: search results show a list of jobs beside the open one, so page-wide containers
@@ -58,8 +58,15 @@ function extractJobPosting() {
   if (/(^|\.)linkedin\.com$/.test(location.hostname)) {
     const jobId = new URLSearchParams(location.search).get('currentJobId')
       || location.pathname.match(/\/jobs\/view\/(\d+)/)?.[1] || '';
-    const about = (jobId && document.getElementById(`JobDetails_AboutTheJob_${jobId}`))
-      || document.querySelector('[id^="JobDetails_AboutTheJob_"]');
+    // After a click in the job list, LinkedIn renders the description block empty and fills it
+    // about half a second later; wait up to 3 s so a quick click doesn't read nothing.
+    let about;
+    for (let i = 0; i < 15; i++) {
+      about = (jobId && document.getElementById(`JobDetails_AboutTheJob_${jobId}`))
+        || document.querySelector('[id^="JobDetails_AboutTheJob_"]');
+      if (about && about.innerText.trim().length > 200) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
     // Tab title is "<title> | <company> | LinkedIn" for the open job.
     const parts = document.title.replace(/^\(\d+\)\s*/, '').split(' | ');
     const [title, company] = parts.length >= 3 && parts[parts.length - 1] === 'LinkedIn' ? parts : [parts[0], ''];
@@ -103,7 +110,24 @@ function renderFit(r, job) {
     <div class="row"><span>Skills</span><span>${r.skills.percent}% <span class="conf">${esc(r.skills.label)}</span></span></div>
     <div class="row"><span>Domain</span><span>${r.domain.percent}% <span class="conf">${esc(r.domain.label)}</span></span></div>
     <div class="row"><span>Seniority</span><span>${seniority} <span class="conf">${pct(r.seniority.confidence)}</span></span></div>
-    <div class="fit-note">Scored by ${esc(r.model)} in ${r.durationMs} ms. Visa is flagged only when the posting explicitly rules you out.</div>`;
+    <div class="fit-note">Scored by ${esc(r.model)} in ${r.durationMs} ms. Visa is flagged only when the posting explicitly rules you out.</div>
+    ${r.jobKey ? '<button id="insightsBtn" class="secondary">Open full analysis</button>' : ''}`;
+  const btn = document.getElementById('insightsBtn');
+  if (btn) btn.addEventListener('click', () => openInsights(r, job));
+}
+
+// Looked up when the popup opens, so the click handler can call sidePanel.open synchronously.
+let popupWindowId;
+chrome.windows.getCurrent().then((w) => { popupWindowId = w.id; });
+
+// Opens the side panel for this job. sidePanel.open must run inside the click, before any await.
+function openInsights(r, job) {
+  chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
+    chrome.storage.session.set({ arjunPanelJob: { jobKey: r.jobKey, title: job?.title || '', company: job?.company || '', fit: { overall: r.overallFit, skills: r.skills, domain: r.domain, seniority: r.seniority, visa: r.visa }, at: Date.now() } });
+  });
+  chrome.sidePanel.open({ windowId: popupWindowId })
+    .then(() => window.close())
+    .catch((e) => { fitResultEl.insertAdjacentHTML('beforeend', `<div class="fit-note">Couldn’t open the side panel (${esc(e.message)}).</div>`); });
 }
 
 const FIT_ERRORS = {

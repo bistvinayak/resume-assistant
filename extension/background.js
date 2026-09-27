@@ -90,6 +90,22 @@ async function apiPost(path, body) {
   return res;
 }
 
+// Same token handling as apiPost, for GET requests.
+async function apiGet(path) {
+  const call = (token) => fetch(`${API_BASE}${path}`, { headers: { 'Authorization': `Bearer ${token}` } });
+  let res = await call(await getValidToken());
+  if (res.status === 401) res = await call(await getValidToken({ forceRefresh: true }));
+  if (res.status === 401) throw new Error('not_logged_in');
+  return res;
+}
+
+// Side panel calls: returns the parsed body, or throws with the API's error code.
+async function apiJson(res) {
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error || `api_error_${res.status}`);
+  return body;
+}
+
 async function getAuthState() {
   const { authToken, refreshToken, userEmail, tokenExp, authAt } = await chrome.storage.local.get(AUTH_KEYS);
   // With a refresh token the extension renews itself, so the session only ends on logout/revocation.
@@ -129,6 +145,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'JOB_FIT') {
     checkJobFit(message.job)
       .then((result) => sendResponse({ ok: true, result }))
+      .catch((e) => sendResponse({ ok: false, error: e.message || 'unknown_error' }));
+    return true;
+  }
+  if (message.type === 'JOB_INSIGHTS_START' || message.type === 'JOB_INSIGHTS_GET' || message.type === 'JOB_CHAT') {
+    const jobKey = String(message.jobKey || '');
+    const call = message.type === 'JOB_INSIGHTS_START' ? apiPost('/extension/job-insights', { jobKey })
+      : message.type === 'JOB_INSIGHTS_GET' ? apiGet(`/extension/job-insights?jobKey=${encodeURIComponent(jobKey)}`)
+      : apiPost('/extension/job-chat', { jobKey, messages: message.messages });
+    call.then(apiJson)
+      .then((data) => sendResponse({ ok: true, data }))
       .catch((e) => sendResponse({ ok: false, error: e.message || 'unknown_error' }));
     return true;
   }
