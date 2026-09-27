@@ -50,7 +50,7 @@ export function syncExtensionAuth(user) {
   refreshTimer = setInterval(pushToken, 45 * 60 * 1000);
 }
 
-// Asks the installed extension for its version (extension 1.3.2+ answers ARJUN_PING).
+// Asks the installed extension for its version (the extension answers ARJUN_PING).
 // Resolves null when it isn't installed, or is an older version that doesn't answer.
 export function pingExtension(timeoutMs = 1500) {
   return new Promise((resolve) => {

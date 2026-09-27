@@ -21,7 +21,13 @@ function compactProfile(p) {
       highlights: (e.bullets || []).slice(0, 5).map(b => (typeof b === 'string' ? b : b.text)),
     })),
     projects: (p.projects || []).map(pr => ({ name: pr.name, description: pr.description, tech_stack: pr.tech_stack })),
-    skills: p.skills || [],
+    // Extraction stores skills in technical_skills ({ name, ... } objects) and soft_skills;
+    // the legacy `skills` list is usually empty, so merge all three.
+    skills: [...new Set([
+      ...(p.skills || []),
+      ...(p.technical_skills || []).map(s => (typeof s === 'object' ? s?.name : s)),
+      ...(p.soft_skills || []),
+    ].filter(Boolean).map(s => String(s).trim()))],
     education: (p.education || []).map(ed => ({ school: ed.school, degree: ed.degree, major: ed.major, dates: ed.dates })),
     certifications: (p.certifications || []).map(c => c.name),
   };
@@ -114,22 +120,47 @@ function visaVerdict(a) {
   };
 }
 
-async function assessJobFit(profile, job) {
+// The exact body sent to Jev. Exported so a dry run can show it without calling the API.
+function buildJevRequest(profile, job) {
+  return {
+    state: {
+      candidate: compactProfile(profile),
+      job_posting: {
+        title: job.title || '',
+        company: job.company || '',
+        url: job.url || '',
+        description: String(job.text || '').slice(0, MAX_JOB_CHARS),
+      },
+    },
+    model: JEV_MODEL,
+    questions: QUESTIONS,
+  };
+}
+
+async function assessJobFit(profile, job, ctx = {}) {
   if (!process.env.TYPESAFE_API_KEY) throw new Error('TYPESAFE_API_KEY not set');
 
-  const state = {
-    candidate: compactProfile(profile),
-    job_posting: {
-      title: job.title || '',
-      company: job.company || '',
-      url: job.url || '',
-      description: String(job.text || '').slice(0, MAX_JOB_CHARS),
-    },
-  };
+  const body = buildJevRequest(profile, job);
+  // Required lazily: llm.js pulls in the DB layer, which the pure helpers here don't need.
+  const { makeTrace, langfuse } = require('./llm');
+  const trace = makeTrace('job_fit', ctx, {
+    url: job.url || '', jobId: job.jobId || '', source: job.source || 'unknown',
+    descriptionChars: body.state.job_posting.description.length,
+  });
+  const generation = trace.generation({ name: 'jev_job_fit', model: JEV_MODEL, input: body.state, metadata: { questions: Object.keys(QUESTIONS) } });
 
   const t0 = Date.now();
-  const data = await callJev({ state, model: JEV_MODEL, questions: QUESTIONS });
+  let data;
+  try {
+    data = await callJev(body);
+  } catch (e) {
+    generation.end({ output: { error: e.message }, level: 'ERROR' });
+    await langfuse.flushAsync().catch(() => {});
+    throw e;
+  }
   const a = data.answers;
+  generation.end({ output: a, model: data.model, metadata: { usage: data.usage } });
+  await langfuse.flushAsync().catch(() => {});
 
   return {
     model: data.model,
@@ -162,4 +193,4 @@ async function assessJobFit(profile, job) {
   };
 }
 
-module.exports = { assessJobFit, compactProfile };
+module.exports = { assessJobFit, buildJevRequest, compactProfile };

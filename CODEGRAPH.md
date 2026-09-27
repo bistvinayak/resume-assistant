@@ -460,9 +460,10 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1083] — 
 | Function | Line | Exported |
 |----------|------|----------|
 | compactProfile | 11 | yes |
-| callJev | 80 | no |
-| visaVerdict | 103 | no |
-| assessJobFit | 117 | yes |
+| callJev | 86 | no |
+| visaVerdict | 109 | no |
+| buildJevRequest | 124 | yes |
+| assessJobFit | 140 | yes |
 
 ### llm.js
 
@@ -481,7 +482,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1083] — 
 | evalSmartMerge | 1052 | no |
 | askJson | 1083 | no |
 | askJsonOnce | 1113 | no |
-| makeTrace | 1189 | no |
+| makeTrace | 1189 | yes |
 | createJobTrace | 1202 | yes |
 | recordSchemaSuggestions | 1211 | no |
 | extractFacts | 1230 | yes |
@@ -712,6 +713,10 @@ healing.js
   ├── llm.js (diagnoseChatFeedback, diagnoseExtensionSite)
   ├── db.js
   └── llm.js (diagnoseChatFeedback, diagnoseExtensionSite)
+
+jev.js
+  ├── llm.js (makeTrace, langfuse)
+  └── llm.js (makeTrace, langfuse)
 
 llm.js
   ├── db.js (getApprovedCategories, upsertSchemaProposal, getActivePromptRules)

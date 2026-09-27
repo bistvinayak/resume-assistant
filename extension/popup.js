@@ -46,36 +46,54 @@ fillBtn.addEventListener('click', async () => {
 // ── Job fit (TypeSafe Jev via /api/extension/job-fit) ────────────────────
 const fitResultEl = document.getElementById('fitResult');
 
-// Runs inside the job page. Prefers known job-description containers (LinkedIn, Greenhouse,
-// Lever, Workday, Ashby, Indeed) and falls back to <main>/<body> text.
+// Runs inside the job page (injected, so it must be self-contained). Returns the posting plus
+// `source`, which says where the text came from so a bad read is visible in Langfuse.
 function extractJobPosting() {
+  const clean = (s) => String(s || '').replace(/\n{3,}/g, '\n\n').trim();
+
+  // LinkedIn: search results show a list of jobs beside the open one, so page-wide containers
+  // like <main> mix in other postings. The description block's id carries the job id
+  // (JobDetails_AboutTheJob_<id>), which pins the text to the job in the URL. Class names
+  // are generated hashes and change without notice, so they are not used.
+  if (/(^|\.)linkedin\.com$/.test(location.hostname)) {
+    const jobId = new URLSearchParams(location.search).get('currentJobId')
+      || location.pathname.match(/\/jobs\/view\/(\d+)/)?.[1] || '';
+    const about = (jobId && document.getElementById(`JobDetails_AboutTheJob_${jobId}`))
+      || document.querySelector('[id^="JobDetails_AboutTheJob_"]');
+    // Tab title is "<title> | <company> | LinkedIn" for the open job.
+    const parts = document.title.replace(/^\(\d+\)\s*/, '').split(' | ');
+    const [title, company] = parts.length >= 3 && parts[parts.length - 1] === 'LinkedIn' ? parts : [parts[0], ''];
+    const text = about
+      ? clean(about.innerText.replace(/^\s*About the job\s*/, '').replace(/\n…\s*more[\s\S]*$/, ''))
+      : '';
+    return { url: location.href, jobId, title: title.trim(), company: company.trim(), text: text.slice(0, 20000), source: about ? 'linkedin_about' : 'linkedin_missing' };
+  }
+
   const selectors = [
-    '.jobs-description__content', '#job-details', '.jobs-search__job-details--container',
-    '#content .job-post', '#content', '.posting-page', '[data-automation-id="jobPostingDescription"]',
-    '.ashby-job-posting-right-pane', '#jobDescriptionText', 'main', 'article',
+    '#content .job-post', '.posting-page', '[data-automation-id="jobPostingDescription"]',
+    '.ashby-job-posting-right-pane', '#jobDescriptionText', '#content', 'main', 'article',
   ];
-  let text = '';
   for (const sel of selectors) {
     const el = document.querySelector(sel);
-    if (el && el.innerText.trim().length > 400) { text = el.innerText; break; }
+    if (el && el.innerText.trim().length > 400) {
+      return { url: location.href, title: document.querySelector('h1')?.innerText.trim() || document.title, company: '', text: clean(el.innerText).slice(0, 20000), source: sel };
+    }
   }
-  if (!text) text = document.body.innerText;
-  const title = document.querySelector('h1')?.innerText.trim() || document.title;
-  const company = document.querySelector('meta[property="og:site_name"]')?.content
-    || document.querySelector('.job-details-jobs-unified-top-card__company-name')?.innerText.trim() || '';
-  return { url: location.href, title, company, text: text.trim().slice(0, 20000) };
+  return { url: location.href, title: document.querySelector('h1')?.innerText.trim() || document.title, company: '', text: clean(document.body.innerText).slice(0, 20000), source: 'body' };
 }
 
 const pct = (x) => `${Math.round(x * 100)}%`;
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-function renderFit(r) {
+function renderFit(r, job) {
   const visaPill = r.visa.status === 'blocked'
     ? '<span class="pill bad">Not eligible</span>'
     : '<span class="pill good">OK to apply</span>';
   const seniority = { under_qualified: 'Under-qualified', good_match: 'Good match', over_qualified: 'Over-qualified' }[r.seniority.value];
 
+  const checked = [job?.title, job?.company].filter(Boolean).join(' at ');
   fitResultEl.innerHTML = `
+    ${checked ? `<div class="fit-checked">Checked: ${esc(checked)}</div>` : ''}
     <div class="fit-head">
       <span class="fit-pct">${r.overallFit.percent}%</span>
       <span class="fit-label">${esc(r.overallFit.label)}<br><span class="conf">confidence ${pct(r.overallFit.confidence)}</span></span>
@@ -109,7 +127,7 @@ fitBtn.addEventListener('click', async () => {
     // JOB_FIT (unpacked installs keep running the old worker until the extension is reloaded).
     if (!resp) throw new Error('extension_outdated');
     if (!resp.ok) throw new Error(resp.error || 'unknown_error');
-    renderFit(resp.result);
+    renderFit(resp.result, job);
   } catch (e) {
     fitResultEl.textContent = FIT_ERRORS[e.message] || `Couldn’t check this job (${e.message}).`;
   } finally {

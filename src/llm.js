@@ -1650,4 +1650,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { diagnoseChatFeedback, diagnoseExtensionSite, invalidateRulesCache, generateSkill, extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { makeTrace, diagnoseChatFeedback, diagnoseExtensionSite, invalidateRulesCache, generateSkill, extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };

@@ -18,7 +18,7 @@ function tokenExpiry(idToken) {
   }
 }
 
-// Versions before 1.3.3 could store an "account-creation password" to autofill; that feature
+// Early development builds could store an "account-creation password" to autofill; that feature
 // was removed. Delete any saved value on install/update so nothing is left behind.
 chrome.runtime.onInstalled.addListener(() => chrome.storage.local.remove('autofillPassword'));
 
