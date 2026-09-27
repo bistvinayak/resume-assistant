@@ -84,7 +84,17 @@ const QUESTIONS = {
 };
 
 async function callJev(body, attempt = 0) {
-  const res = await fetch(JEV_URL, {
+  let res;
+  try {
+    res = await fetchJev(body);
+  } catch (e) {
+    throw new Error(`jev_error_${e.name === 'TimeoutError' || /timeout|aborted/i.test(e.message) ? 'timeout' : 'network'}: ${e.message}`);
+  }
+  return handleJev(res, body, attempt);
+}
+
+function fetchJev(body) {
+  return fetch(JEV_URL, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.TYPESAFE_API_KEY}`,
@@ -93,6 +103,9 @@ async function callJev(body, attempt = 0) {
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(20000),
   });
+}
+
+async function handleJev(res, body, attempt) {
   // 429 rate limit / 529 overloaded — docs recommend exponential backoff
   if ((res.status === 429 || res.status === 529) && attempt < 2) {
     await new Promise(r => setTimeout(r, 500 * 2 ** attempt));

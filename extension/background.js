@@ -117,7 +117,10 @@ async function getAuthState() {
 
 async function mapFields(fields, url) {
   const res = await apiPost('/extension/map-fields', { fields, url });
-  if (!res.ok) throw new Error(`api_error_${res.status}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `api_error_${res.status}`);
+  }
   const data = await res.json();
   return data.mappings || [];
 }

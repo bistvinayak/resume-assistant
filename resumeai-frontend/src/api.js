@@ -33,6 +33,11 @@ async function checkedFetch(url, opts) {
     window.location.href = '/';
     throw new Error('Session expired');
   }
+  // Free AI models busy / job-fit service slow: surface the server's plain-language message.
+  if (res.status === 503) {
+    const body = await res.clone().json().catch(() => null);
+    if (body?.error === 'ai_busy' || body?.error === 'fit_busy') throw new Error(body.message);
+  }
   return res;
 }
 

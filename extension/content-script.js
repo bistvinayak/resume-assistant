@@ -350,7 +350,9 @@
       if (!res?.ok) {
         showToast(res?.error === 'not_logged_in'
           ? 'Arjun: sign in at vinayakbist.com/projects/arjun first.'
-          : `Arjun: couldn't map fields (${res?.error || 'unknown error'}).`);
+          : res?.error === 'ai_busy'
+            ? 'Arjun: Arjun runs on free AI models, and they’re busy right now because many people are using them. Please try again in a minute. Nothing was filled.'
+            : `Arjun: couldn't map fields (${res?.error || 'unknown error'}).`);
         return;
       }
 

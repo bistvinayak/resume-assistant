@@ -587,6 +587,8 @@ async function insertJobProcessing(job, userId = 'me') {
 }
 
 async function markJobFailed(jobId, reason) {
+  // Shown in My Applications and the side panel: say "free models are busy" instead of a raw 429.
+  reason = require('./aiErrors').friendlyAiError(reason)?.message || reason;
   await pool.query(
     `UPDATE jobs SET status = 'failed', error_reason = $2 WHERE job_id = $1`,
     [jobId, reason || 'Scraping failed']

@@ -20,7 +20,9 @@ const ERRORS = {
   not_logged_in: 'You’re signed out. Open vinayakbist.com/projects/arjun, then try again.',
   job_not_checked: 'Check this job in the Arjun popup first.',
   insights_not_ready: 'The analysis isn’t ready yet.',
-  chat_timeout: 'The free AI model is busy. Try asking again in a moment.',
+  chat_timeout: 'Arjun runs on free AI models, and they’re busy right now because many people are using them. Please try again in a minute.',
+  ai_busy: 'Arjun runs on free AI models, and they’re busy right now because many people are using them. Please try again in a minute.',
+  fit_busy: 'The job-fit service is slow to respond right now. Please try again in a minute.',
   unsupported_message: 'Arjun needs a restart. Reload it at chrome://extensions.',
 };
 const errorText = (e) => ERRORS[e] || `Something went wrong (${e}).`;

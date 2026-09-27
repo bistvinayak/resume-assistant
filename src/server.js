@@ -16,6 +16,7 @@ const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { assessJobFit } = require('./jev');
 const { analyzeJob, chatAboutJob } = require('./insights');
+const { friendlyAiError } = require('./aiErrors');
 const { getSkillsView, updateSkillNotes, runRefresh, buildSkillsExport } = require('./skills');
 const { renderResumeDocx } = require('./renderDocx');
 const { classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts } = require('./llm');
@@ -641,7 +642,7 @@ app.post('/api/extension/job-insights', async (req, res, next) => {
       analyzeJob(profile, check, langfuseCtx(req), (stage, partial) => { run.stage = stage; if (partial) run.partial = partial; })
         .then(a => saveJobAnalysis(req.userId, jobKey, { ...a, profileVersion: version }))
         .then(() => insightRuns.delete(runKey))
-        .catch(e => { console.error('job insights failed:', e.message); run.error = e.message; });
+        .catch(e => { console.error('job insights failed:', e.message); run.error = friendlyAiError(e.message)?.code || e.message; });
     }
     res.status(202).json({ status: 'running', stage: insightRuns.get(runKey).stage });
   } catch (e) { next(e); }
@@ -715,7 +716,8 @@ app.post('/api/extension/job-chat', async (req, res, next) => {
     }
     res.json({ reply: out.reply, action: out.action, resume });
   } catch (e) {
-    if (e.status === 400 || e.status === 504) return res.status(e.status).json({ error: e.message });
+    if (e.message === 'chat_timeout') return res.status(503).json({ error: 'ai_busy', message: friendlyAiError('timeout').message });
+    if (e.status === 400) return res.status(400).json({ error: e.message });
     next(e);
   }
 });
@@ -815,6 +817,8 @@ app.get(['/projects/arjun', '/projects/arjun/*'], (req, res) => {
 // ── ERROR HANDLER ─────────────────────────────────────────────────────────
 app.use((err, _req, res, _next) => {
   console.error(err);
+  const friendly = friendlyAiError(err.message);
+  if (friendly) return res.status(503).json({ error: friendly.code, message: friendly.message });
   res.status(500).json({ error: err.message });
 });
 
