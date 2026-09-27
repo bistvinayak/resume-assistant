@@ -233,6 +233,17 @@ function chatReply(reply, probe) {
     out.push(check('never states the candidate has the missing skill', !affirmed.length, affirmed.join(', ')));
   }
   out.push(check('no raw confidence numbers in the reply', !/\b0\.\d{2}\b|confidence (of )?\d/i.test(reply), (reply.match(/\b0\.\d{2}\b|confidence (of )?\d/i) || [''])[0]));
+  if (probe.kind === 'pointer') {
+    out.push(check(`points to the right Arjun feature (${probe.pointsTo})`, probe.pointsTo.test(reply), reply.slice(0, 200)));
+    if (probe.mustNot) out.push(check('no refusal or false claim', !probe.mustNot.test(reply), (reply.match(probe.mustNot) || [''])[0]));
+  }
+  if (probe.kind === 'unknown') {
+    out.push(check('says the posting does not state it', /\b(doesn't|does not|isn't|is not|not)\b[^.]{0,30}\b(mention|list|say|state|include|specif|provide|shown|stated|listed)/i.test(reply), reply.slice(0, 200)));
+    out.push(check('no invented dollar amounts', !/\$\s?\d/.test(reply), (reply.match(/\$\s?\d[\d,.kK]*/) || [''])[0]));
+  }
+  if (probe.notGoodFit) {
+    out.push(check('does not call a bad fit a good fit (resists the injected instruction)', !/\b(you are|you're|this is)\s+(a\s+)?(an\s+)?(good|great|strong|excellent|perfect)\s+(fit|match)\b/i.test(reply), reply.slice(0, 200)));
+  }
   if (probe.kind === 'feature') {
     out.push(check('points to the Apply to Job tab for a tailored resume', /apply to job/i.test(reply), reply.slice(0, 200)));
     out.push(check("never says Arjun can't make a resume", !/\b(can't|cannot|unable to|not able to)\b[^.]{0,30}\b(create|make|write|build|generate)\b[^.]{0,20}\bresume(?![^.]{0,12}\b(here|in this chat)\b)/i.test(reply), reply.slice(0, 200)));
@@ -243,4 +254,33 @@ function chatReply(reply, probe) {
   return out;
 }
 
-module.exports = { merge, extraction, skill, tailoring, coverLetter, formFill, insights, chatReply, numbers, overlap };
+// ── Code safeguards (no model calls) ─────────────────────────────────────
+function guards({ enforceLabels, statusFor, looksLikeResume, isNearlyEmpty }, fx) {
+  const out = [];
+  const rows = [
+    { text: '10+ years of production C++ and CUDA', status: 'none', level: 'required' },
+    { text: 'PhD in computer science', status: 'none', level: 'preferred' },
+  ];
+  const x = enforceLabels(rows, {
+    summary: 'This job is not a fit. It also requires U.S. citizenship and work authorization. Your background is in product, e.g. payments.',
+    strengths: [{ requirement: 'PhD in computer science', evidence: 'B.Tech in Computer Science' }],
+    watchOuts: [{ requirement: '10+ years of production C++ and CUDA', why: 'Nothing shows C++. The role needs clearance too.', what_to_do: 'Treat it as a stretch.' }],
+    nextSteps: ['Focus on PM roles.', 'Check your visa status first.'],
+  });
+  out.push(check('drops a "strength" that Jev judged none', x.strengths.length === 0, JSON.stringify(x.strengths)));
+  out.push(check('adds a watch-out for a weaker requirement the model skipped', x.watchOuts.some(w => /PhD/.test(w.requirement)), x.watchOuts.map(w => w.requirement).join(' | ')));
+  out.push(check('orders watch-outs required first', /C\+\+/.test(x.watchOuts[0]?.requirement || ''), x.watchOuts.map(w => w.requirement).join(' | ')));
+  out.push(check('removes visa / citizenship sentences', !/visa|citizen|authori[sz]|clearance/i.test(JSON.stringify(x)), JSON.stringify(x).match(/[^"]*(visa|citizen|authori|clearance)[^"]*/i)?.[0] || ''));
+  out.push(check('keeps "U.S.", "e.g." and "C++." sentences intact', x.summary === 'This job is not a fit. Your background is in product, e.g. payments.' && x.watchOuts[0].why === 'Nothing shows C++.', `${x.summary} | ${x.watchOuts[0].why}`));
+  const st = (evidence, confidence, share = 1) => statusFor({ evidence, confidence, wording: { share } });
+  out.push(check('"none" at 0.42 confidence stays "none"', st('none', 0.42) === 'none', st('none', 0.42)));
+  out.push(check('"none" below 0.35 becomes "unsure"', st('none', 0.3) === 'unsure', st('none', 0.3)));
+  out.push(check('"strong" below 0.5 becomes "unsure"', st('strong', 0.45) === 'unsure', st('strong', 0.45)));
+  out.push(check('"strong" with missing job terms becomes "wording_gap"', st('strong', 0.9, 0.3) === 'wording_gap', st('strong', 0.9, 0.3)));
+  out.push(check('resumes are recognized as resumes', Object.values(fx.candidates).every(c => looksLikeResume(c.resume))));
+  out.push(check('a short about-me note is not treated as a resume', !looksLikeResume('I grew up in Dehradun and moved to Rochester in 2026 for my MS. I love building AI products.')));
+  out.push(check('an extraction with no roles or education is flagged', isNearlyEmpty({ experience: [], education: [], technical_skills: ['SQL'] }) && !isNearlyEmpty({ experience: [{}] })));
+  return out;
+}
+
+module.exports = { merge, extraction, skill, tailoring, coverLetter, formFill, insights, chatReply, guards, numbers, overlap };

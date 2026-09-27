@@ -511,8 +511,8 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1175] — 
 | makeTrace | 1281 | yes |
 | createJobTrace | 1294 | yes |
 | recordSchemaSuggestions | 1303 | no |
-| looksLikeResume | 1323 | no |
-| isNearlyEmpty | 1327 | no |
+| looksLikeResume | 1323 | yes |
+| isNearlyEmpty | 1327 | yes |
 | extractFacts | 1332 | yes |
 | skillsBlock | 1367 | no |
 | tailorResume | 1374 | yes |

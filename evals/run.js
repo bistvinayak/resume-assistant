@@ -99,6 +99,13 @@ async function pool(items, limit, fn) {
   const profiles = {};
   const skills = {};
 
+  // 0. Code safeguards: deterministic, no model calls
+  if (want('guards')) {
+    const { enforceLabels, statusFor } = require('../src/insights');
+    const { looksLikeResume, isNearlyEmpty } = require('../src/llm');
+    record('guards', 'insights + extraction safeguards', C.guards({ enforceLabels, statusFor, looksLikeResume, isNearlyEmpty }, fx));
+  }
+
   // 1. Profile extraction
   await Promise.all(Object.entries(fx.candidates).map(async ([key, c]) => {
     try {
