@@ -55,7 +55,7 @@
   }
 
   function scrapeFields() {
-    // Password fields are never scraped or sent to the backend — see fillPasswordFields().
+    // Password fields are never scraped, sent to the backend, or filled: users type their own.
     const elements = Array.from(document.querySelectorAll('input, select, textarea'))
       .filter(isFillable)
       .filter(el => el.type !== 'password');
@@ -115,18 +115,6 @@
     return true;
   }
 
-  // Fills every password field on the page from a value saved locally in the popup —
-  // entirely client-side. This never goes through MAP_FIELDS/the backend/an LLM, so the
-  // password is never logged in Langfuse or sent to any model, and one saved value works
-  // across every ATS's account-creation form without ever being transmitted off-device.
-  async function fillPasswordFields() {
-    const { autofillPassword } = await chrome.storage.local.get(['autofillPassword']);
-    if (!autofillPassword) return 0;
-    const pwFields = Array.from(document.querySelectorAll('input[type="password"]')).filter(isFillable);
-    for (const el of pwFields) setNativeValue(el, autofillPassword);
-    return pwFields.length;
-  }
-
   function showToast(text) {
     const toast = document.createElement('div');
     toast.textContent = text;
@@ -141,7 +129,6 @@
   }
 
   async function run() {
-    const pwFilled = await fillPasswordFields();
     const fields = scrapeFields();
 
     if (!fields.length) {
@@ -150,23 +137,20 @@
       // reports "nothing found" so one genuinely-empty page still gets a signal,
       // without every subframe spamming its own toast.
       if (window === window.top) {
-        showToast(pwFilled
-          ? `Arjun: filled ${pwFilled} password field${pwFilled === 1 ? '' : 's'}.`
-          : 'Arjun: no fillable fields found on this page.');
+        showToast('Arjun: no fillable fields found on this page.');
       }
       return;
     }
 
     chrome.runtime.sendMessage({ type: 'MAP_FIELDS', fields, url: location.href }, (res) => {
       if (!res?.ok) {
-        const pwNote = pwFilled ? ` (filled ${pwFilled} password field${pwFilled === 1 ? '' : 's'} locally)` : '';
-        showToast((res?.error === 'not_logged_in'
+        showToast(res?.error === 'not_logged_in'
           ? 'Arjun: sign in at vinayakbist.com/projects/arjun first.'
-          : `Arjun: couldn't map fields (${res?.error || 'unknown error'}).`) + pwNote);
+          : `Arjun: couldn't map fields (${res?.error || 'unknown error'}).`);
         return;
       }
 
-      let filled = pwFilled, skipped = 0;
+      let filled = 0, skipped = 0;
       for (const mapping of res.mappings) {
         const el = document.querySelector(`[data-arjun-field-id="${mapping.field_id}"]`);
         if (!el) continue;

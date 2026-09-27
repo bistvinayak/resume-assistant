@@ -18,6 +18,10 @@ function tokenExpiry(idToken) {
   }
 }
 
+// Versions before 1.3.3 could store an "account-creation password" to autofill; that feature
+// was removed. Delete any saved value on install/update so nothing is left behind.
+chrome.runtime.onInstalled.addListener(() => chrome.storage.local.remove('autofillPassword'));
+
 // Receives the tokens pushed from vinayakbist.com (see resumeai-frontend/src/extensionBridge.js)
 chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) => {
   if (message.type === 'ARJUN_AUTH') {
