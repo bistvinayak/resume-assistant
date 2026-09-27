@@ -35,7 +35,7 @@ fillBtn.addEventListener('click', async () => {
     // application form in an iframe rather than the top-level page, so scanning only
     // the top frame finds zero fields even on forms that are clearly fillable.
     await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, files: ['content-script.js'] });
-    resultEl.textContent = 'Check the page — Arjun shows a summary there.';
+    resultEl.textContent = 'Done. Filled fields are outlined in green, and a list on the page shows exactly what Arjun filled.';
   } catch (e) {
     resultEl.textContent = `Couldn't run on this page (${e.message}).`;
   } finally {
