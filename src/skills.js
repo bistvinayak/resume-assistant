@@ -257,7 +257,7 @@ function zip(files) {
   let offset = 0;
   for (const f of files) {
     const name = Buffer.from(f.path, 'utf8');
-    const data = Buffer.from(f.data, 'utf8');
+    const data = Buffer.isBuffer(f.data) ? f.data : Buffer.from(f.data, 'utf8');
     const crc = crc32(data);
     const local = Buffer.alloc(30);
     local.writeUInt32LE(0x04034b50, 0); local.writeUInt16LE(20, 4); local.writeUInt16LE(0x0800, 6);

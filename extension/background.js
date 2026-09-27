@@ -25,6 +25,9 @@ chrome.runtime.onMessageExternal.addListener((message, _sender, sendResponse) =>
     if (message.refreshToken) update.refreshToken = message.refreshToken;
     chrome.storage.local.set(update);
     sendResponse({ ok: true });
+  } else if (message.type === 'ARJUN_PING') {
+    // Lets the Arjun dashboard show "installed" and whether an update is available.
+    sendResponse({ ok: true, version: chrome.runtime.getManifest().version });
   } else if (message.type === 'ARJUN_LOGOUT') {
     chrome.storage.local.remove(AUTH_KEYS);
     sendResponse({ ok: true });

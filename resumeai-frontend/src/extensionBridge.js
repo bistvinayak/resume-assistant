@@ -32,3 +32,19 @@ export function syncExtensionAuth(user) {
   // Firebase ID tokens expire hourly — refresh while this tab stays open.
   refreshTimer = setInterval(pushToken, 45 * 60 * 1000);
 }
+
+// Asks the installed extension for its version (extension 1.3.2+ answers ARJUN_PING).
+// Resolves null when it isn't installed, or is an older version that doesn't answer.
+export function pingExtension(timeoutMs = 1500) {
+  return new Promise((resolve) => {
+    if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return resolve(null);
+    const timer = setTimeout(() => resolve(null), timeoutMs);
+    try {
+      chrome.runtime.sendMessage(EXTENSION_ID, { type: 'ARJUN_PING' }, (resp) => {
+        clearTimeout(timer);
+        if (chrome.runtime.lastError || !resp?.ok) return resolve(null);
+        resolve(resp.version || 'unknown');
+      });
+    } catch { clearTimeout(timer); resolve(null); }
+  });
+}

@@ -602,6 +602,38 @@ app.post('/api/extension/job-fit', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── EXTENSION DOWNLOAD ────────────────────────────────────────────────────
+// Until the Chrome Web Store listing exists, users install the extension unpacked. The zip is
+// built from the deployed extension/ folder, so it always matches the running backend. The
+// manifest's fixed "key" gives every install the same extension ID, which the site's auth
+// bridge (resumeai-frontend/src/extensionBridge.js) depends on.
+const EXTENSION_DIR = path.join(__dirname, '..', 'extension');
+function extensionVersion() {
+  return JSON.parse(require('fs').readFileSync(path.join(EXTENSION_DIR, 'manifest.json'), 'utf8')).version;
+}
+app.get('/api/extension/info', (req, res) => {
+  try { res.json({ version: extensionVersion() }); } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.get('/api/extension/download', (req, res, next) => {
+  try {
+    const fs = require('fs');
+    const files = [];
+    const walk = (dir, rel = '') => {
+      for (const name of fs.readdirSync(dir)) {
+        if (name.startsWith('.')) continue;
+        const full = path.join(dir, name);
+        const relPath = rel ? `${rel}/${name}` : name;
+        if (fs.statSync(full).isDirectory()) walk(full, relPath);
+        else files.push({ path: `arjun-extension/${relPath}`, data: fs.readFileSync(full) });
+      }
+    };
+    walk(EXTENSION_DIR);
+    const version = extensionVersion();
+    res.set({ 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="arjun-extension-${version}.zip"` });
+    res.send(require('./skills').zip(files));
+  } catch (e) { next(e); }
+});
+
 // ── USER SKILLS ───────────────────────────────────────────────────────────
 // Per-user playbooks generated from the profile (see src/skills.js).
 app.get('/api/skills', async (req, res, next) => {

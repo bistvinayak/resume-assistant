@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { auth, signOutUser } from '../firebase';
 import { api } from '../api';
 import SkillsTab from '../components/SkillsTab';
+import ExtensionTab from '../components/ExtensionTab';
 
 const ATSBadge = ({ score }) => {
   const color = score >= 90 ? '#22c55e' : score >= 75 ? '#f59e0b' : '#ef4444';
@@ -1207,6 +1208,7 @@ export default function Dashboard() {
             { id: 'jobs', label: 'My Applications', desc: 'Track all your tailored resumes' },
             { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords' },
             { id: 'skills', label: 'My Skills', desc: 'Your writing playbooks' },
+            { id: 'extension', label: 'Chrome Extension', desc: 'Autofill + job fit check' },
           ].map(({ id, label, desc }) => (
             <button key={id} onClick={() => setTab(id)} style={{
               width: '100%', textAlign: 'left',
@@ -2775,6 +2777,8 @@ export default function Dashboard() {
           )}
 
           {tab === 'skills' && <SkillsTab />}
+
+          {tab === 'extension' && <ExtensionTab />}
         </main>
       </div>
     </div>

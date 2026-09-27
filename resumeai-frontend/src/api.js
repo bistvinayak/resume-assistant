@@ -117,6 +117,24 @@ export const api = {
     return res.json();
   },
 
+  // ── Chrome extension download ──
+  async getExtensionInfo() {
+    const res = await checkedFetch(`${BASE}/extension/info`, { headers: await getHeaders() });
+    return res.json();
+  },
+
+  async downloadExtension() {
+    const res = await checkedFetch(`${BASE}/extension/download`, { headers: await getHeaders() });
+    if (!res.ok) throw new Error('Download failed. Please try again.');
+    const filename = res.headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] || 'arjun-extension.zip';
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
   // ── Per-user skills (generated from the profile) ──
   async getSkills() {
     const res = await checkedFetch(`${BASE}/skills`, { headers: await getHeaders() });

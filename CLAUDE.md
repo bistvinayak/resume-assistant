@@ -139,6 +139,8 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 | POST | /api/gmail/verify | JWT | Verify Gmail filter |
 | POST | /api/extension/map-fields | JWT | Extension: map form fields to profile values |
 | POST | /api/extension/job-fit | JWT | Extension: job fit + sponsorship via Jev (needs TYPESAFE_API_KEY) |
+| GET | /api/extension/info | JWT | Deployed extension version |
+| GET | /api/extension/download | JWT | Zip of extension/ (arjun-extension folder) for unpacked install |
 | GET | /api/skills | JWT | User's generated skills + status/staleness |
 | PUT | /api/skills/:skill/notes | JWT | Save user corrections (win over generated text), regenerates that skill |
 | POST | /api/skills/regenerate | JWT | Regenerate all skills |

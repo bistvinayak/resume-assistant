@@ -34,37 +34,39 @@ Quick-lookup graph of the codebase. Check here FIRST before reading files — go
 | POST | /gmail/connect | server.js:559 | connectGmail |
 | POST | /api/extension/map-fields | server.js:563 | getProfile, mapFormFields, logExtensionEvent |
 | POST | /api/extension/job-fit | server.js:593 | getProfile, assessJobFit |
-| GET | /api/skills | server.js:607 | getSkillsView |
-| PUT | /api/skills/:skill/notes | server.js:611 | updateSkillNotes, getSkillsView |
-| POST | /api/skills/regenerate | server.js:621 | getProfile, runRefresh, getSkillsView |
-| GET | /api/skills/export | server.js:630 | buildSkillsExport |
-| GET | /projects/arjun | server.js:640 | — |
-| GET | /admin/stats | server.js:673 | adminOnly, getStats, authMiddleware |
-| GET | /admin/users | server.js:674 | adminOnly, getUsers, authMiddleware |
-| PATCH | /admin/users/:userId | server.js:675 | adminOnly, updateUser, authMiddleware |
-| DELETE | /admin/users/:userId | server.js:676 | adminOnly, deleteUser, authMiddleware |
-| GET | /admin/jobs | server.js:677 | adminOnly, authMiddleware |
-| POST | /admin/jobs/:jobId/retry | server.js:678 | adminOnly, retryJob, authMiddleware |
-| POST | /admin/cron/run | server.js:679 | adminOnly, triggerCron, authMiddleware |
-| GET | /admin/settings | server.js:680 | adminOnly, getSettings, authMiddleware |
-| PATCH | /admin/settings | server.js:681 | adminOnly, updateSettings, authMiddleware |
-| GET | /admin/schema-proposals | server.js:682 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
-| POST | /admin/schema-proposals/:id/approve | server.js:683 | adminOnly, approveSchemaProposal, authMiddleware |
-| POST | /admin/schema-proposals/:id/reject | server.js:684 | adminOnly, rejectSchemaProposal, authMiddleware |
-| GET | /admin/feedback | server.js:685 | adminOnly, getFeedbackHandler, authMiddleware |
-| PATCH | /admin/feedback/:id | server.js:686 | adminOnly, reviewFeedback, authMiddleware |
-| GET | /admin/gmail-forwarding | server.js:687 | adminOnly, getGmailForwardingHandler, authMiddleware |
-| POST | /admin/gmail-forwarding/:userId/approve | server.js:688 | adminOnly, approveGmailForwarding, authMiddleware |
-| POST | /admin/gmail-forwarding/:userId/reject | server.js:689 | adminOnly, rejectGmailForwarding, authMiddleware |
-| GET | /admin/extension-events | server.js:690 | adminOnly, getExtensionEventsHandler, authMiddleware, getExtensionEvents |
-| GET | /admin/proposals | server.js:691 | getProposalsHandler, adminOnly, authMiddleware, getProposal |
-| POST | /admin/proposals/run | server.js:692 | runSelfHealingHandler, adminOnly, authMiddleware, runSelfHealing |
-| POST | /admin/proposals/:id/accept | server.js:693 | acceptProposal, adminOnly, authMiddleware |
-| POST | /admin/proposals/:id/reject | server.js:694 | rejectProposal, adminOnly, authMiddleware |
-| PATCH | /admin/prompt-rules/:id | server.js:695 | togglePromptRule, adminOnly, authMiddleware |
-| GET | /jobs/:jobId/download | server.js:701 | renderCoverLetterDocx, renderResumePdf, renderResumeDocx |
-| POST | /gmail/request-forwarding | server.js:756 | requestGmailForwarding |
-| GET | /gmail/forwarding-status | server.js:763 | getGmailForwardingStatus |
+| GET | /api/extension/info | server.js:614 | — |
+| GET | /api/extension/download | server.js:617 | zip |
+| GET | /api/skills | server.js:639 | getSkillsView |
+| PUT | /api/skills/:skill/notes | server.js:643 | updateSkillNotes, getSkillsView |
+| POST | /api/skills/regenerate | server.js:653 | getProfile, runRefresh, getSkillsView |
+| GET | /api/skills/export | server.js:662 | buildSkillsExport |
+| GET | /projects/arjun | server.js:672 | — |
+| GET | /admin/stats | server.js:705 | adminOnly, getStats, authMiddleware |
+| GET | /admin/users | server.js:706 | adminOnly, getUsers, authMiddleware |
+| PATCH | /admin/users/:userId | server.js:707 | adminOnly, updateUser, authMiddleware |
+| DELETE | /admin/users/:userId | server.js:708 | adminOnly, deleteUser, authMiddleware |
+| GET | /admin/jobs | server.js:709 | adminOnly, authMiddleware |
+| POST | /admin/jobs/:jobId/retry | server.js:710 | adminOnly, retryJob, authMiddleware |
+| POST | /admin/cron/run | server.js:711 | adminOnly, triggerCron, authMiddleware |
+| GET | /admin/settings | server.js:712 | adminOnly, getSettings, authMiddleware |
+| PATCH | /admin/settings | server.js:713 | adminOnly, updateSettings, authMiddleware |
+| GET | /admin/schema-proposals | server.js:714 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
+| POST | /admin/schema-proposals/:id/approve | server.js:715 | adminOnly, approveSchemaProposal, authMiddleware |
+| POST | /admin/schema-proposals/:id/reject | server.js:716 | adminOnly, rejectSchemaProposal, authMiddleware |
+| GET | /admin/feedback | server.js:717 | adminOnly, getFeedbackHandler, authMiddleware |
+| PATCH | /admin/feedback/:id | server.js:718 | adminOnly, reviewFeedback, authMiddleware |
+| GET | /admin/gmail-forwarding | server.js:719 | adminOnly, getGmailForwardingHandler, authMiddleware |
+| POST | /admin/gmail-forwarding/:userId/approve | server.js:720 | adminOnly, approveGmailForwarding, authMiddleware |
+| POST | /admin/gmail-forwarding/:userId/reject | server.js:721 | adminOnly, rejectGmailForwarding, authMiddleware |
+| GET | /admin/extension-events | server.js:722 | adminOnly, getExtensionEventsHandler, authMiddleware, getExtensionEvents |
+| GET | /admin/proposals | server.js:723 | getProposalsHandler, adminOnly, authMiddleware, getProposal |
+| POST | /admin/proposals/run | server.js:724 | runSelfHealingHandler, adminOnly, authMiddleware, runSelfHealing |
+| POST | /admin/proposals/:id/accept | server.js:725 | acceptProposal, adminOnly, authMiddleware |
+| POST | /admin/proposals/:id/reject | server.js:726 | rejectProposal, adminOnly, authMiddleware |
+| PATCH | /admin/prompt-rules/:id | server.js:727 | togglePromptRule, adminOnly, authMiddleware |
+| GET | /jobs/:jobId/download | server.js:733 | renderCoverLetterDocx, renderResumePdf, renderResumeDocx |
+| POST | /gmail/request-forwarding | server.js:788 | requestGmailForwarding |
+| GET | /gmail/forwarding-status | server.js:795 | getGmailForwardingStatus |
 
 ## Chat Flow (server.js:311)
 
@@ -274,10 +276,12 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1083] — 
 | api.getIngestionStatus() | /api/ingest/status | — |
 | api.confirmIngestion() | /api/ingest/confirm | — |
 | api.rejectIngestion() | /api/ingest/reject | — |
-| api.getSkills() | /api/skills | server.js:607 |
+| api.getExtensionInfo() | /api/extension/info | server.js:614 |
+| api.downloadExtension() | /api/extension/download | server.js:617 |
+| api.getSkills() | /api/skills | server.js:639 |
 | api.saveSkillNotes() | /api/skills/:id/notes | — |
-| api.regenerateSkills() | /api/skills/regenerate | server.js:621 |
-| api.downloadSkills() | /api/skills/export | server.js:630 |
+| api.regenerateSkills() | /api/skills/regenerate | server.js:653 |
+| api.downloadSkills() | /api/skills/export | server.js:662 |
 | api.getResumeFormat() | /api/resume-format | server.js:278 |
 | api.deleteResumeFormat() | /api/resume-format | server.js:278 |
 | api.getProfileVersions() | /api/profile/versions | server.js:97 |
@@ -625,6 +629,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1083] — 
 |----------|------|----------|
 | normalizeJobUrl | 24 | no |
 | langfuseCtx | 66 | no |
+| extensionVersion | 611 | no |
 
 ### skills.js
 
@@ -748,6 +753,7 @@ server.js
   ├── llm.js (classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts)
   ├── profile.js (mergeProfile, applyDeletions, resolveConflicts)
   ├── profile.js (ALLOWED_EXTENSIONS)
+  ├── skills.js
   ├── admin.js
   ├── renderCoverLetter.js (renderCoverLetterDocx)
   ├── renderPdf.js (renderResumePdf)
@@ -764,6 +770,7 @@ server.js
   ├── llm.js (classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts)
   ├── profile.js (mergeProfile, applyDeletions, resolveConflicts)
   ├── profile.js (ALLOWED_EXTENSIONS)
+  ├── skills.js
   ├── admin.js
   ├── renderCoverLetter.js (renderCoverLetterDocx)
   └── renderPdf.js (renderResumePdf)
