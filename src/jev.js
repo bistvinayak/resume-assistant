@@ -147,7 +147,9 @@ async function assessJobFit(profile, job, ctx = {}) {
     url: job.url || '', jobId: job.jobId || '', source: job.source || 'unknown',
     descriptionChars: body.state.job_posting.description.length,
   });
-  const generation = trace.generation({ name: 'jev_job_fit', model: JEV_MODEL, input: body.state, metadata: { questions: Object.keys(QUESTIONS) } });
+  // Log the full request body (questions with their instructions, state, model) so the
+  // trace shows exactly what Jev was asked, not only what it read.
+  const generation = trace.generation({ name: 'jev_job_fit', model: JEV_MODEL, input: body });
 
   const t0 = Date.now();
   let data;
