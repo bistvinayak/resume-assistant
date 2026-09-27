@@ -134,8 +134,8 @@ const FIT_ERRORS = {
   not_logged_in: 'Not signed in — open vinayakbist.com/projects/arjun first.',
   no_job_text: 'Couldn’t find a job description on this page. Open the full job posting and try again.',
   no_profile: 'Your Arjun profile is empty — upload your resume first.',
-  extension_outdated: 'Arjun needs a restart. Open chrome://extensions, click the reload icon on Arjun Autofill, then refresh this page.',
-  unsupported_message: 'Arjun needs a restart. Open chrome://extensions, click the reload icon on Arjun Autofill, then refresh this page.',
+  extension_outdated: 'Arjun needs a restart. Open chrome://extensions, click the reload icon on Arjun, then refresh this page.',
+  unsupported_message: 'Arjun needs a restart. Open chrome://extensions, click the reload icon on Arjun, then refresh this page.',
 };
 
 fitBtn.addEventListener('click', async () => {

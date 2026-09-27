@@ -65,14 +65,14 @@ export default function ExtensionTab() {
       <div>
         <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Chrome Extension</h2>
         <p style={{ fontSize: '13px', color: '#78716c', lineHeight: 1.55, maxWidth: '620px' }}>
-          Arjun Autofill fills job applications from your profile on Greenhouse, Lever, Workday, Ashby and more,
-          and checks any job posting for fit and visa sponsorship in one click.
+          The Arjun extension checks any job posting against your profile, explains where you fit and where you don't,
+          and fills job applications on Greenhouse, Lever, Workday, Ashby and more.
         </p>
       </div>
 
       <div style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
         <div style={{ display: 'grid', gap: '6px' }}>
-          <div style={{ fontSize: '15px', fontWeight: 700 }}>Arjun Autofill {latest && <span style={{ fontFamily: mono, fontSize: '12px', color: '#a8a29e', fontWeight: 400 }}>v{latest}</span>}</div>
+          <div style={{ fontSize: '15px', fontWeight: 700 }}>Arjun {latest && <span style={{ fontFamily: mono, fontSize: '12px', color: '#a8a29e', fontWeight: 400 }}>v{latest}</span>}</div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
             <span style={{ background: status.bg, color: status.fg, borderRadius: '999px', padding: '3px 10px', fontSize: '11.5px', fontWeight: 600 }}>{status.text}</span>
             {installed !== undefined && <button onClick={check} style={{ background: 'none', border: 'none', color: '#b45309', fontSize: '12px', cursor: 'pointer', padding: 0 }}>Check again</button>}
@@ -92,7 +92,7 @@ export default function ExtensionTab() {
           <>
             <Step n={1} title="Download the update">Use the button above and unzip it.</Step>
             <Step n={2} title="Replace the old folder">Put the new <Code>arjun-extension</Code> folder where the old one was (replace it).</Step>
-            <Step n={3} title="Reload">Open <Code>chrome://extensions</Code> and click the reload arrow on Arjun Autofill. Your sign-in carries over.</Step>
+            <Step n={3} title="Reload">Open <Code>chrome://extensions</Code> and click the reload arrow on Arjun. Your sign-in carries over.</Step>
           </>
         ) : (
           <>
@@ -103,7 +103,7 @@ export default function ExtensionTab() {
             </Step>
             <Step n={3} title="Turn on Developer mode">Use the switch in the top-right corner of that page.</Step>
             <Step n={4} title="Load the extension">Click <b>Load unpacked</b> and select the <Code>arjun-extension</Code> folder.</Step>
-            <Step n={5} title="Pin it">Click the puzzle-piece icon in Chrome's toolbar and pin <b>Arjun Autofill</b>.</Step>
+            <Step n={5} title="Pin it">Click the puzzle-piece icon in Chrome's toolbar and pin <b>Arjun</b>.</Step>
             <Step n={6} title="Connect your account">Come back to this page. The extension signs in automatically and stays signed in. If its popup still says "Not signed in", refresh this page.</Step>
           </>
         )}

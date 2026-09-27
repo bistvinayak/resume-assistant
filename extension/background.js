@@ -1,4 +1,4 @@
-// Arjun Autofill — background service worker
+// Arjun extension — background service worker
 // Holds the Firebase ID token bridged from the vinayakbist.com tab, and proxies
 // authenticated calls to the Arjun API (extension content scripts have no auth of their own).
 

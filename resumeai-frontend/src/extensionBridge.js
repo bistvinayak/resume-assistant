@@ -1,4 +1,4 @@
-// Pushes the current Firebase ID token + refresh token to the Arjun Autofill extension
+// Pushes the current Firebase ID token + refresh token to the Arjun Chrome extension
 // (if installed), so it can make authenticated calls without its own login flow and
 // renew the hourly ID token itself after this tab is closed.
 const EXTENSION_ID = 'ljeplebcfpakamlgehpfmemkbmnalfdc';

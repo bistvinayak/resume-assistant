@@ -385,7 +385,7 @@ export default function Landing() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
               <span style={{ width: 18, height: 18, borderRadius: '5px', background: '#f59e0b', display: 'inline-block' }} />
-              <span style={{ fontSize: '13px', fontWeight: 600 }}>Arjun Autofill</span>
+              <span style={{ fontSize: '13px', fontWeight: 600 }}>Arjun</span>
               <span style={{ marginLeft: 'auto', fontSize: '9.5px', fontFamily: "'DM Mono', monospace", color: '#a8a29e' }}>EXAMPLE</span>
             </div>
             <div style={{ background: '#f59e0b', color: '#fff', borderRadius: '7px', padding: '8px', fontSize: '12px', fontWeight: 600, textAlign: 'center', marginBottom: '14px' }}>Fill this page</div>

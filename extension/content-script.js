@@ -1,4 +1,4 @@
-// Arjun Autofill — runs two ways:
+// Arjun extension autofill — runs two ways:
 //  1. Manual: injected on demand via popup "Fill this page" click (any page).
 //  2. Auto: declared in manifest.json content_scripts, matching known ATS domains only.
 // Scrapes visible form fields (never search boxes or passwords), asks the backend to map them
@@ -277,7 +277,7 @@
           .undo { background: #fff; color: #1c1917; border: 1px solid #d6d3d1; border-radius: 6px; padding: 6px 10px; font-weight: 600; cursor: pointer; }
           button:focus-visible, .row:focus-visible { outline: 2px solid #f59e0b; outline-offset: 2px; }
         </style>
-        <div class="card" role="dialog" aria-label="Arjun autofill summary">
+        <div class="card" role="dialog" aria-label="Arjun fill summary">
           <div class="head">
             <div class="title"><span>Arjun filled ${filled.length} of ${fields.length} field${fields.length === 1 ? '' : 's'}</span><span><button class="x" data-act="collapse" aria-label="Minimize" title="Minimize">–</button><button class="x" data-act="close" aria-label="Close" title="Close">×</button></span></div>
             <div class="legend"><span><span class="dot" style="background:${GREEN}"></span>Filled from your profile</span>${check.length ? `<span><span class="dot" style="background:${AMBER}"></span>Check these</span>` : ''}</div>
