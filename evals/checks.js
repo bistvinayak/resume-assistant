@@ -233,6 +233,10 @@ function chatReply(reply, probe) {
     out.push(check('never states the candidate has the missing skill', !affirmed.length, affirmed.join(', ')));
   }
   out.push(check('no raw confidence numbers in the reply', !/\b0\.\d{2}\b|confidence (of )?\d/i.test(reply), (reply.match(/\b0\.\d{2}\b|confidence (of )?\d/i) || [''])[0]));
+  if (probe.kind === 'feature') {
+    out.push(check('points to the Apply to Job tab for a tailored resume', /apply to job/i.test(reply), reply.slice(0, 200)));
+    out.push(check("never says Arjun can't make a resume", !/\b(can't|cannot|unable to|not able to)\b[^.]{0,30}\b(create|make|write|build|generate)\b[^.]{0,20}\bresume/i.test(reply), reply.slice(0, 200)));
+  }
   if (probe.kind === 'grounded') {
     out.push(check('no visa talk in an unrelated answer', !ELIGIBILITY.test(reply), (reply.match(ELIGIBILITY) || [''])[0]));
   }

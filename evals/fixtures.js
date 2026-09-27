@@ -200,6 +200,7 @@ const insightCases = [
     chat: [
       { q: 'What is my biggest gap for this role?', kind: 'grounded' },
       { q: 'Will Fernwood Pay sponsor my H-1B visa?', kind: 'visa' },
+      { q: 'Can you create the resume for me for this job?', kind: 'feature' },
     ],
   },
   {
