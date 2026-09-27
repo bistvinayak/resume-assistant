@@ -203,6 +203,12 @@ function insights(a, kase, profile, jobText) {
   const advice = [...(x.watchOuts || []).map(w => w.what_to_do), ...(x.nextSteps || [])].filter(Boolean);
   const pushy = advice.filter(t => /\b(add|update|include|put)\b[^.]*\bprofile\b/i.test(t) && !/\bif\b|\bonly\b/i.test(t));
   out.push(check('profile changes are only suggested conditionally ("if you have…")', !pushy.length, pushy.join(' | ').slice(0, 300)));
+  const RAW_CONF = /\b0\.\d{2}\b|confidence (of )?\d|\d{1,3}\s?% (confidence|sure|certain)/i;
+  out.push(check('never shows raw confidence numbers to the user', !RAW_CONF.test(allText), (allText.match(RAW_CONF) || [''])[0]));
+  if (kase.fit === 'mid') {
+    out.push(check('mid-fit job: finds at least one partial or missing requirement', rows.some(r => ['partial', 'none'].includes(r.status)), JSON.stringify(a.counts)));
+    out.push(check('mid-fit job is not called excellent or perfect', !/\b(excellent|perfect|ideal)\b/i.test(x.summary || ''), x.summary));
+  }
   if (kase.fit === 'bad') {
     out.push(check('bad-fit job is not called a good fit', !/\b(good|strong|excellent|great)\s+(fit|match)\b/i.test(x.summary || ''), x.summary));
   }
@@ -224,6 +230,7 @@ function chatReply(reply, probe) {
     const affirmed = (probe.forbidden || []).filter(f => new RegExp(`(?<!\\bif\\s)you (have|'ve|bring)((?!\\b(no|not|without|lack|any)\\b)[^.,;]){0,40}\\b${f}\\b`, 'i').test(reply));
     out.push(check('never states the candidate has the missing skill', !affirmed.length, affirmed.join(', ')));
   }
+  out.push(check('no raw confidence numbers in the reply', !/\b0\.\d{2}\b|confidence (of )?\d/i.test(reply), (reply.match(/\b0\.\d{2}\b|confidence (of )?\d/i) || [''])[0]));
   if (probe.kind === 'grounded') {
     out.push(check('no visa talk in an unrelated answer', !ELIGIBILITY.test(reply), (reply.match(ELIGIBILITY) || [''])[0]));
   }

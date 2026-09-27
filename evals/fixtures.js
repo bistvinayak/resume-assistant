@@ -113,6 +113,19 @@ Anna University | B.Tech, Computer Science | 2015 – 2019`,
 };
 
 const jobs = {
+  // Mid-fit jobs for the insights stage: some requirements met, some adjacent, some missing.
+  pm_consumer_checkout: {
+    title: 'Senior Product Manager, Consumer Checkout', company: 'Brightcart', url: 'https://example.com/jobs/4',
+    jd_text: `Brightcart, an online grocery retailer, is hiring a Senior Product Manager for Consumer Checkout & Payments (New York, NY).
+Responsibilities: own the checkout funnel and payment methods for 3 million shoppers; run growth experiments; partner with fraud, engineering and design.
+Requirements: 5+ years of product management; consumer-facing (B2C) checkout or payments experience at scale; running growth experiments and A/B tests; SQL for self-serve analysis; experience with fraud or risk models; retail or e-commerce marketplace experience. Nice to have: loyalty or rewards programs.`,
+  },
+  ds_retail_pricing: {
+    title: 'Senior Data Scientist, Pricing', company: 'Northstar Retail', url: 'https://example.com/jobs/5',
+    jd_text: `Northstar Retail is hiring a Senior Data Scientist to build pricing and promotion models (Chicago, IL).
+Responsibilities: build demand forecasting and price elasticity models; design experiments to measure promotion lift; ship models with engineering.
+Requirements: 4+ years of data science, Python and SQL, causal inference or experimentation, demand forecasting, retail or e-commerce domain experience, Spark for large-scale data. Nice to have: price optimization experience.`,
+  },
   pm_ai_payments: {
     title: 'Senior Product Manager, AI Payments', company: 'Fernwood Pay', url: 'https://example.com/jobs/1',
     jd_text: `Fernwood Pay is hiring a Senior Product Manager to lead AI features in our payments platform (Boston, MA).
@@ -148,7 +161,33 @@ const pairs = [
 // OK = the resume clearly supports it; NO = the resume has no evidence for it.
 const OK = ['strong', 'wording_gap'];
 const NO = ['none'];
+const NOT_STRONG = ['partial', 'none'];
 const insightCases = [
+  {
+    candidate: 'priya', job: 'pm_consumer_checkout', fit: 'mid',
+    topics: [
+      { name: 'A/B tests / experiments', match: /a\/b|experiment/i, expect: OK },
+      { name: 'SQL', match: /\bsql\b/i, expect: OK },
+      { name: 'consumer (B2C) checkout / payments', match: /consumer|b2c|checkout/i, expect: ['partial'] },
+      { name: 'retail / e-commerce marketplace', match: /retail|e-?commerce|marketplace/i, expect: NOT_STRONG },
+      { name: 'loyalty / rewards', match: /loyalty|rewards/i, expect: ['none'] },
+    ],
+    chat: [
+      { q: 'Should I apply? Be honest about my chances.', kind: 'grounded' },
+    ],
+  },
+  {
+    candidate: 'marcus', job: 'ds_retail_pricing', fit: 'mid', forbidden: ['Spark'],
+    topics: [
+      { name: 'Python and SQL', match: /python|\bsql\b/i, expect: OK },
+      { name: 'causal inference / experimentation', match: /causal|experiment/i, expect: OK },
+      { name: 'retail / e-commerce domain', match: /retail|e-?commerce/i, expect: NOT_STRONG },
+      { name: 'Spark', match: /spark/i, expect: ['none'] },
+    ],
+    chat: [
+      { q: 'Does this posting say anything about visa sponsorship?', kind: 'visa' },
+    ],
+  },
   {
     candidate: 'priya', job: 'pm_ai_payments', fit: 'good',
     topics: [

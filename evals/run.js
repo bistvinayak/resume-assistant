@@ -240,7 +240,7 @@ async function pool(items, limit, fn) {
         const ms = Date.now() - t;
         a.fit = fit;
         record('insights', label, [
-          ...C.insights(a, { ...kase, forbiddenInStrengths: pair.forbidden }, profile, job.jd_text),
+          ...C.insights(a, { ...kase, forbiddenInStrengths: pair.forbidden || kase.forbidden }, profile, job.jd_text),
           { name: 'analysis finishes under 60 s', pass: ms < 60000, detail: `${(ms / 1000).toFixed(1)} s` },
         ], { sample: `${fit.overallFit.percent}% fit · ${JSON.stringify(a.counts)} · ${a.explanation.summary}`.slice(0, 300) });
 
