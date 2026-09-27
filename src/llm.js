@@ -1319,11 +1319,34 @@ async function recordSchemaSuggestions(trace, suggestions) {
 }
 
 // ── PUBLIC FUNCTIONS ────────────────────────────────────────────────────
+// A resume-like text: long enough and with several years in it (dates of roles and degrees).
+function looksLikeResume(text) {
+  const t = String(text || '');
+  return t.length > 800 && (t.match(/\b(19|20)\d{2}\b/g) || []).length >= 4;
+}
+function isNearlyEmpty(result) {
+  const ext = result?.extracted || result || {};
+  return !(ext.experience || []).length && !(ext.education || []).length;
+}
+
 async function extractFacts(rawText, ctx = {}) {
   const trace = makeTrace('extract_facts', ctx);
   const approvedCategories = await formatApprovedCategories();
   const { text: system, langfusePrompt } = await getPrompt('extract_facts', { profile_schema: PROFILE_SCHEMA, approved_categories: approvedCategories });
-  const result = await askJson(system, `Extract facts from:\n\n"""${rawText}"""`, 'extract_facts', trace, langfusePrompt);
+  const ask = (model) => askJson(system, `Extract facts from:\n\n"""${rawText}"""`, 'extract_facts', trace, langfusePrompt, [], model);
+  let result = await ask();
+  // Free models sometimes return valid JSON with almost nothing in it. For text that is clearly
+  // a resume, an extraction with no roles and no education is a failure, not an empty resume:
+  // retry on the backup model, then throw so the caller's retry rounds take over instead of
+  // "successfully" adding nothing to the profile.
+  if (looksLikeResume(rawText) && isNearlyEmpty(result)) {
+    langfuse.score({ traceId: trace.id, name: 'empty-extraction', value: 1, comment: 'resume-like text, no roles or education extracted' });
+    result = await ask(FREE_SECONDARY);
+    if (isNearlyEmpty(result)) {
+      await langfuse.flushAsync().catch(() => {});
+      throw new Error('extraction returned no roles or education for a resume');
+    }
+  }
   evalExtraction(trace, result);
   const ambiguities = result.ambiguities || [];
   delete result.ambiguities;
