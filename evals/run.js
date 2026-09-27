@@ -231,6 +231,28 @@ async function pool(items, limit, fn) {
     } catch (e) { recordError('form_fill', 'greenhouse-style form', e); }
   }
 
+  // 5b. Resume feedback from the side panel chat is applied on re-tailoring
+  if (want('feedback') && profiles.priya) {
+    const job = { ...fx.jobs.pm_ai_payments, job_id: 'eval-feedback' };
+    const feedback = [{ text: 'Keep the summary under 30 words.' }, { text: 'Lead the first role with the payments and payouts work.' }];
+    const words = (t) => String(t || '').split(/\s+/).filter(Boolean).length;
+    const firstBullet = (r) => { const b = (r.experience || [])[0]?.bullets?.[0]; return typeof b === 'string' ? b : b?.text || ''; };
+    try {
+      const trace = createJobTrace(job, ctx);
+      const [before, after] = await Promise.all([
+        timed('tailor', () => retry(() => tailorResume(profiles.priya, job, trace, null, null))),
+        timed('tailor', () => retry(() => tailorResume(profiles.priya, { ...job, candidate_feedback: feedback }, trace, null, null))),
+      ]);
+      const untraceable = dropUntraceableBullets(JSON.parse(JSON.stringify(after)), profiles.priya);
+      record('feedback', 'priya → pm_ai_payments', [
+        { name: 'summary under 30 words after feedback', pass: words(after.summary) <= 32, detail: `${words(before.summary)} → ${words(after.summary)} words` },
+        { name: 'first bullet leads with payments / payouts after feedback', pass: /payment|payout|reconcil/i.test(firstBullet(after)), detail: firstBullet(after).slice(0, 140) },
+        { name: 'feedback adds no untraceable bullets', pass: !untraceable.length, detail: untraceable.map(b => b.slice(0, 60)).join(' | ') },
+        { name: 'keeps every role', pass: (after.experience || []).length === (before.experience || []).length, detail: `${(before.experience || []).length} → ${(after.experience || []).length}` },
+      ], { sample: `before: ${before.summary} || after: ${after.summary}`.slice(0, 400) });
+    } catch (e) { recordError('feedback', 'priya → pm_ai_payments', e); }
+  }
+
   // 6. Extension side panel: requirement insights + grounded chat
   if (want('insights')) {
     await pool(fx.insightCases, 2, async (kase) => {
@@ -253,8 +275,8 @@ async function pool(items, limit, fn) {
 
         for (const probe of kase.chat) {
           try {
-            const reply = await timed('chat', () => retry(() => chatAboutJob(profile, check, a, [{ role: 'user', content: probe.q }], ctx)));
-            record('chat', `${label} · ${probe.kind}`, C.chatReply(reply, probe), { sample: `Q: ${probe.q} A: ${reply}`.slice(0, 400) });
+            const out = await timed('chat', () => retry(() => chatAboutJob(profile, check, a, [{ role: 'user', content: probe.q }], ctx, probe.resumeState)));
+            record('chat', `${label} · ${probe.kind}`, C.chatReply(out.reply, probe, out), { sample: `Q: ${probe.q} A: ${out.reply} [action: ${out.action}${out.feedback ? `, feedback: ${out.feedback}` : ''}]`.slice(0, 450) });
           } catch (e) { recordError('chat', `${label} · ${probe.kind}`, e); }
         }
       } catch (e) { recordError('insights', label, e); }

@@ -148,10 +148,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, error: e.message || 'unknown_error' }));
     return true;
   }
-  if (message.type === 'JOB_INSIGHTS_START' || message.type === 'JOB_INSIGHTS_GET' || message.type === 'JOB_CHAT') {
+  if (['JOB_INSIGHTS_START', 'JOB_INSIGHTS_GET', 'JOB_CHAT', 'JOB_RESUME_GET'].includes(message.type)) {
     const jobKey = String(message.jobKey || '');
     const call = message.type === 'JOB_INSIGHTS_START' ? apiPost('/extension/job-insights', { jobKey })
       : message.type === 'JOB_INSIGHTS_GET' ? apiGet(`/extension/job-insights?jobKey=${encodeURIComponent(jobKey)}`)
+      : message.type === 'JOB_RESUME_GET' ? apiGet(`/extension/job-resume?jobKey=${encodeURIComponent(jobKey)}`)
       : apiPost('/extension/job-chat', { jobKey, messages: message.messages });
     call.then(apiJson)
       .then((data) => sendResponse({ ok: true, data }))

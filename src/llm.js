@@ -994,11 +994,15 @@ Include every partial, none, unsure and wording_gap requirement in watch_outs, o
 Ground every answer in the ANALYSIS below. It comes from the Jev scoring model and Arjun's per-requirement check, and its scores and labels are final: explain them, never re-grade them or claim a better or worse fit than they show.
 Use ONLY facts from the candidate profile. Never invent experience, skills, numbers, employers or projects. If the candidate asks you to add or claim something the profile doesn't show, say it isn't in their profile and suggest adding it only if it's true.
 If a question can't be answered from the analysis, profile or posting, say so briefly.
-What else Arjun does (point the candidate there instead of doing it in this chat, and never say Arjun can't do it):
-- Tailored resume, with an optional cover letter, for this job: the Arjun dashboard's "Apply to Job" tab. Paste this job's link there.
-- Adding experience, skills or projects to the profile: the "Chat with Arjun" tab.
-- Filling the application form: the extension's "Fill this page" button on the application page.
-You may still say which of their real experience a tailored resume should lead with for this job, in one or two sentences.
+RESUMES FOR THIS JOB (you can start these; the server runs Arjun's resume pipeline, which uses the candidate's profile and writing playbooks and drops anything not traceable to the profile):
+- If the candidate asks you to create, make, write, generate or tailor a resume for this job: set "action": "tailor_resume". If they also want a cover letter, set "cover_letter": true. If they state preferences (e.g. "one page", "lead with payments"), put them in "feedback".
+- If a resume already exists (see RESUME STATE) and the candidate asks for changes to it: set "action": "revise_resume" and put the requested change in "feedback", as one clear instruction in their words.
+- Feedback can change emphasis, order, length and wording. If the candidate asks to add experience, skills or numbers that are not in their profile, do not start anything ("action": "none"), say it isn't in their profile, and suggest adding it in the "Chat with Arjun" tab only if it's true.
+- When you start a resume, say briefly what will happen (about a minute; it appears below and in My Applications). Do not write the resume in the chat.
+- Filling the application form: point to the extension's "Fill this page" button on the application page.
+
+RESUME STATE: {{resume_state}}
+
 Never quote confidence scores, probabilities or decimals; describe certainty in words.
 Visa and work authorization: you may state exactly what the posting says about sponsorship or work authorization, quoting it. If the posting says nothing, say so and suggest confirming with the recruiter. Never guess the employer's policy beyond the posting and never give immigration advice.
 Keep answers short and practical: at most about 150 words, plain language, no em dashes. Use short bullet points only when listing steps.
@@ -1014,7 +1018,7 @@ CANDIDATE PROFILE:
 POSTING:
 {{job_description}}
 
-Return ONLY JSON: {"reply": "your answer"}`,
+Return ONLY JSON: {"reply": "your answer", "action": "none | tailor_resume | revise_resume", "feedback": "the change requested, or empty", "cover_letter": false}`,
     config: { model: MODEL, temperature: 0.3 },
   },
 };
@@ -1371,6 +1375,16 @@ function skillsBlock(skills, keys) {
     : '';
 }
 
+// Feedback the candidate gave on earlier versions (side panel chat). Applied in order; later
+// feedback wins on conflicts. It shapes emphasis, length and tone only: facts still come from
+// the profile, and the pipeline's integrity checks still drop anything untraceable.
+function feedbackBlock(feedback) {
+  const items = (Array.isArray(feedback) ? feedback : []).map(f => (typeof f === 'string' ? f : f?.text)).filter(Boolean);
+  if (!items.length) return '';
+  return `\n\nCANDIDATE FEEDBACK ON EARLIER VERSIONS OF THIS RESUME (apply all of it; later items win on conflicts; it changes emphasis, order, length and wording only, never the facts, and every fact must still come from CANDIDATE PROFILE):\n` +
+    items.map((f, i) => `${i + 1}. ${f}`).join('\n');
+}
+
 async function tailorResume(profile, job, trace, resumeFormat, skills = null) {
   const { text: system, langfusePrompt } = await getPrompt('tailor_resume', {
     target_pages: resumeFormat?.target_pages || 'not specified',
@@ -1393,7 +1407,8 @@ async function tailorResume(profile, job, trace, resumeFormat, skills = null) {
     `TARGET JOB:\nTitle: ${job.title}\nCompany: ${job.company}\nURL: ${job.url || 'N/A'}\n` +
     `Description:\n${job.jd_text}\n\n` +
     `CANDIDATE PROFILE:\n${JSON.stringify(profile)}${styleBlock}` +
-    skillsBlock(skills, ['career_profile', 'writing_voice']);
+    skillsBlock(skills, ['career_profile', 'writing_voice']) +
+    feedbackBlock(job.candidate_feedback);
 
   const result = await askJson(system, user, 'tailor_resume', trace, langfusePrompt, [], WRITING_MODEL);
   evalTailoring(trace, result);
@@ -1417,7 +1432,8 @@ async function improveResume(resume, job, ats, trace, tailoringNotes = [], jdReq
     `JD REQUIREMENTS (from original tailoring pass):\n${JSON.stringify(jdRequirements || [])}\n\n` +
     `JOB DESCRIPTION:\n${job.jd_text}\n\n` +
     `CURRENT RESUME:\n${JSON.stringify(resume)}` +
-    skillsBlock(skills, ['career_profile', 'writing_voice']);
+    skillsBlock(skills, ['career_profile', 'writing_voice']) +
+    feedbackBlock(job.candidate_feedback);
 
   const result = await askJson(system, user, 'improve_resume', trace, langfusePrompt, [], WRITING_MODEL);
   evalImprovement(trace, result, ats.score);

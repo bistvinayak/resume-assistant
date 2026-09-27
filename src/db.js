@@ -193,6 +193,8 @@ async function initSchema() {
       updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
       UNIQUE (user_id, job_key)
     );
+    -- Resume feedback the candidate gave in the side panel chat, applied on every re-tailor.
+    ALTER TABLE job_checks ADD COLUMN IF NOT EXISTS resume_feedback JSONB NOT NULL DEFAULT '[]';
 
     -- Per-user "skills": markdown playbooks generated from the user's profile (career profile,
     -- cover-letter story, writing voice) that steer resume/cover-letter writing, and can be
@@ -879,6 +881,31 @@ async function getJobCheck(userId, jobKey) {
   return rows[0] || null;
 }
 
+async function addResumeFeedback(userId, jobKey, text) {
+  const { rows } = await pool.query(
+    `UPDATE job_checks SET resume_feedback = resume_feedback || $3::jsonb, updated_at = now()
+     WHERE user_id = $1 AND job_key = $2 RETURNING resume_feedback`,
+    [userId, jobKey, JSON.stringify([{ text: String(text).slice(0, 500), at: new Date().toISOString() }])]
+  );
+  return rows[0]?.resume_feedback || [];
+}
+
+// Latest tailored resume for a job (a job can be re-tailored several times).
+async function getLatestTailored(jobId, userId) {
+  const { rows } = await pool.query(
+    `SELECT j.status, j.ats_score, j.error_reason, j.title, j.company, t.resume_json, t.created_at, t.cover_letter_text
+     FROM jobs j
+     LEFT JOIN LATERAL (
+       SELECT resume_json, created_at, cover_letter_text FROM tailored_resume
+       WHERE job_id = j.job_id AND user_id = j.user_id AND delivered = true
+       ORDER BY created_at DESC LIMIT 1
+     ) t ON true
+     WHERE j.job_id = $1 AND j.user_id = $2`,
+    [jobId, userId]
+  );
+  return rows[0] || null;
+}
+
 async function saveJobAnalysis(userId, jobKey, analysis) {
   await pool.query('UPDATE job_checks SET analysis = $3, updated_at = now() WHERE user_id = $1 AND job_key = $2', [userId, jobKey, JSON.stringify(analysis)]);
 }
@@ -956,7 +983,7 @@ async function getExtensionEvents(filters = {}) {
 }
 
 module.exports = {
-  saveJobCheck, getJobCheck, saveJobAnalysis,
+  saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored,
   pool, initSchema, getProfile, saveProfile, getProfileVersion, profileEvents,
   getUserSkills, setUserSkillStatus, saveUserSkill, saveUserSkillNotes,
   addPendingIngestion, getDuePendingIngestions, getPendingIngestionCount, markPendingIngestion,

@@ -28,6 +28,8 @@ const errorText = (e) => ERRORS[e] || `Something went wrong (${e}).`;
 let current = null;   // { jobKey, title, company, fit }
 let pollTimer = null;
 let chat = [];        // in-memory only; never stored
+let resumeTimer = null;
+const DASHBOARD_JOBS = 'https://vinayakbist.com/projects/arjun/dashboard?tab=jobs';
 
 function send(message) {
   return chrome.runtime.sendMessage(message).then((resp) => {
@@ -39,9 +41,10 @@ function send(message) {
 
 function resetView() {
   clearTimeout(pollTimer);
+  clearTimeout(resumeTimer);
   chat = [];
   $('msgs').innerHTML = '';
-  for (const id of ['fitSection', 'status', 'error', 'reqSection', 'analysisSection', 'strengthSection', 'watchSection', 'stepsSection', 'chatSection']) show(id, false);
+  for (const id of ['fitSection', 'status', 'error', 'reqSection', 'analysisSection', 'strengthSection', 'watchSection', 'stepsSection', 'resumeSection', 'chatSection']) show(id, false);
 }
 
 function renderFit(job) {
@@ -98,6 +101,42 @@ function renderAnalysis(a) {
   }
   show('status', false);
   show('chatSection');
+  pollResume(current.jobKey);
+}
+
+// ── Resume card ────────────────────────────────────────────────────────
+function renderResume(v) {
+  if (!v || v.status === 'none') { show('resumeSection', false); return; }
+  const fb = (v.feedback || []).map((f) => `<li>${esc(f.text)}</li>`).join('');
+  let html = '';
+  if (v.status === 'processing') {
+    html = `<div class="r-status"><span class="spinner"></span>Making your resume from your profile… usually about a minute.</div>`;
+  } else if (v.status === 'failed') {
+    html = `<div class="error">Couldn’t make the resume this time${v.error ? ` (${esc(v.error)})` : ''}. Ask again in the chat to retry.</div>`;
+  } else if (v.preview) {
+    html = `
+      ${v.atsScore != null ? `<div class="r-score">Keyword match with the posting: ${esc(v.atsScore)}%</div>` : ''}
+      ${v.preview.summary ? `<p class="r-summary">${esc(v.preview.summary)}</p>` : ''}
+      ${v.preview.role ? `<div class="r-role">${esc(v.preview.role)}</div><ul class="r-bullets">${v.preview.bullets.map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}`;
+  }
+  if (fb) html += `<div class="r-fb">Your feedback applied:<ul>${fb}</ul></div>`;
+  if (v.status === 'delivered') {
+    html += `<div class="r-actions"><a href="${DASHBOARD_JOBS}" target="_blank" rel="noopener">Download from My Applications →</a>${v.hasCoverLetter ? '<span>Cover letter included</span>' : ''}</div>
+      <div class="hint">Want changes? Tell me in the chat, e.g. “shorter summary” or “lead with my payments work”.</div>`;
+  }
+  $('resumeBody').innerHTML = html;
+  show('resumeSection');
+}
+
+async function pollResume(jobKey, startedAt = Date.now()) {
+  clearTimeout(resumeTimer);
+  if (!current || current.jobKey !== jobKey) return;
+  try {
+    const v = await send({ type: 'JOB_RESUME_GET', jobKey });
+    if (!current || current.jobKey !== jobKey) return;
+    renderResume(v);
+    if (v.status === 'processing' && Date.now() - startedAt < 300000) resumeTimer = setTimeout(() => pollResume(jobKey, startedAt), 4000);
+  } catch { /* the card just stays as it was */ }
 }
 
 function fail(e) {
@@ -159,6 +198,7 @@ $('chatForm').addEventListener('submit', async (ev) => {
     const r = await send({ type: 'JOB_CHAT', jobKey: current.jobKey, messages: chat });
     pending.textContent = r.reply;
     chat.push({ role: 'assistant', content: r.reply });
+    if (r.resume) { renderResume({ status: 'processing', feedback: [] }); setTimeout(() => pollResume(current.jobKey), 1500); }
   } catch (e) {
     pending.textContent = errorText(e.message);
     chat.pop(); // drop the unanswered question so it can be asked again

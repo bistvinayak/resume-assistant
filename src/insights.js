@@ -166,7 +166,7 @@ async function analyzeJob(profile, check, ctx = {}, onStage = () => {}) {
 
 // Follow-up chat in the side panel. Stateless: the panel sends the recent turns each time and
 // nothing is stored (chat messages are never persisted). Context is the saved Jev analysis.
-async function chatAboutJob(profile, check, analysis, messages, ctx = {}) {
+async function chatAboutJob(profile, check, analysis, messages, ctx = {}, resumeState = 'No resume has been made for this job yet.') {
   const trace = makeTrace('job_fit_chat', ctx, { jobKey: check.job_key, title: check.title, company: check.company });
   try {
     const turns = (Array.isArray(messages) ? messages : [])
@@ -185,11 +185,15 @@ async function chatAboutJob(profile, check, analysis, messages, ctx = {}) {
       }),
       profile_json: JSON.stringify(compactProfile(profile)),
       job_description: String(check.description || '').slice(0, 8000),
+      resume_state: resumeState,
     });
     const out = await askJson(system, last.content, 'job_fit_chat', trace, langfusePrompt, turns, undefined, null, 1200);
     const reply = String(out.reply || '').trim();
     if (!reply) throw new Error('empty reply');
-    return reply;
+    const action = ['tailor_resume', 'revise_resume'].includes(out.action) ? out.action : 'none';
+    const feedback = String(out.feedback || '').trim().slice(0, 500);
+    trace.update({ output: { reply, action, feedback } });
+    return { reply, action, feedback, coverLetter: out.cover_letter === true };
   } finally {
     await langfuse.flushAsync().catch(() => {});
   }

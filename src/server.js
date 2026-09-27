@@ -7,7 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent, addPendingIngestion, getPendingIngestionCount, getProfileVersion, saveJobCheck, getJobCheck, saveJobAnalysis } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent, addPendingIngestion, getPendingIngestionCount, getProfileVersion, saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile, combineTexts } = require('./profile');
 const { queueJob, getQueueStats } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
@@ -647,6 +647,54 @@ app.post('/api/extension/job-insights', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// Resumes made from the side panel reuse the Apply to Job pipeline and job id, so they show up
+// in My Applications. The posting text is already saved on the check, so nothing is scraped.
+function panelJobId(check) {
+  if (/^\d+$/.test(check.job_key)) return `linkedin_${check.job_key}`;
+  return `ext_${require('crypto').createHash('sha1').update(check.job_key).digest('hex').slice(0, 16)}`;
+}
+
+function resumeView(row, feedback) {
+  if (!row) return { status: 'none', feedback };
+  const r = row.resume_json || {};
+  const firstRole = (r.experience || [])[0];
+  return {
+    status: row.status,                          // processing | delivered | failed
+    atsScore: row.ats_score ?? null,
+    error: row.status === 'failed' ? row.error_reason : null,
+    createdAt: row.created_at,
+    hasCoverLetter: !!row.cover_letter_text,
+    preview: row.resume_json ? {
+      summary: r.summary || '',
+      role: firstRole ? `${firstRole.title || ''} · ${firstRole.company || ''}` : '',
+      bullets: (firstRole?.bullets || []).slice(0, 3).map(b => (typeof b === 'string' ? b : b?.text)).filter(Boolean),
+    } : null,
+    feedback,
+  };
+}
+
+function resumeStateText(view) {
+  if (view.status === 'none') return 'No resume has been made for this job yet.';
+  if (view.status === 'processing') return 'A resume for this job is being made right now.';
+  if (view.status === 'failed') return 'The last attempt to make a resume for this job failed.';
+  const fb = (view.feedback || []).map(f => f.text).join(' | ');
+  return `A tailored resume exists (match score ${view.atsScore ?? 'n/a'}). Summary: "${view.preview?.summary || ''}". Feedback already applied: ${fb || 'none'}.`;
+}
+
+async function startPanelResume(req, check, { coverLetter }) {
+  const job_id = panelJobId(check);
+  const row = await getLatestTailored(job_id, req.userId);
+  if (row?.status === 'processing') return false;
+  await insertJobProcessing({ job_id, url: check.url, title: check.title, company: check.company }, req.userId);
+  const fresh = await getJobCheck(req.userId, check.job_key);
+  queueJob({
+    job_id, title: check.title, company: check.company, url: check.url,
+    jd_text: check.description, candidate_feedback: fresh?.resume_feedback || [],
+  }, req.userId, { force: true, source: 'extension', wantCoverLetter: !!coverLetter, ...langfuseCtx(req) })
+    .catch(e => { console.error('panel resume failed:', e.message); markJobFailed(job_id, e.message).catch(() => {}); });
+  return true;
+}
+
 app.post('/api/extension/job-chat', async (req, res, next) => {
   try {
     const jobKey = String(req.body.jobKey || '').slice(0, 300);
@@ -654,14 +702,31 @@ app.post('/api/extension/job-chat', async (req, res, next) => {
     if (!check) return res.status(404).json({ error: 'job_not_checked' });
     if (!analysis) return res.status(409).json({ error: 'insights_not_ready' });
     const profile = await getProfile(req.userId);
+    const view = resumeView(await getLatestTailored(panelJobId(check), req.userId), check.resume_feedback || []);
     // Stay under CloudFront's ~30 s limit even if the free model is slow and askJson falls back.
     const timeout = new Promise((_, reject) => setTimeout(() => reject(Object.assign(new Error('chat_timeout'), { status: 504 })), 25000));
-    const reply = await Promise.race([chatAboutJob(profile, check, analysis, req.body.messages, langfuseCtx(req)), timeout]);
-    res.json({ reply });
+    const out = await Promise.race([chatAboutJob(profile, check, analysis, req.body.messages, langfuseCtx(req), resumeStateText(view)), timeout]);
+
+    let resume = null;
+    if (out.action === 'tailor_resume' || (out.action === 'revise_resume' && view.status !== 'none')) {
+      if (out.feedback) await addResumeFeedback(req.userId, jobKey, out.feedback);
+      const started = await startPanelResume(req, check, { coverLetter: out.coverLetter });
+      resume = { status: 'processing', started };
+    }
+    res.json({ reply: out.reply, action: out.action, resume });
   } catch (e) {
     if (e.status === 400 || e.status === 504) return res.status(e.status).json({ error: e.message });
     next(e);
   }
+});
+
+app.get('/api/extension/job-resume', async (req, res, next) => {
+  try {
+    const jobKey = String(req.query.jobKey || '').slice(0, 300);
+    const check = await getJobCheck(req.userId, jobKey);
+    if (!check) return res.status(404).json({ error: 'job_not_checked' });
+    res.json(resumeView(await getLatestTailored(panelJobId(check), req.userId), check.resume_feedback || []));
+  } catch (e) { next(e); }
 });
 
 app.get('/api/extension/job-insights', async (req, res, next) => {
