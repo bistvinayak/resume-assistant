@@ -38,6 +38,19 @@ const FEATURES = [
   },
 ];
 
+const EXTENSION_FEATURES = [
+  {
+    tag: 'AUTOFILL',
+    title: 'Fill applications in one click',
+    desc: 'Open any application on Greenhouse, Lever, Workday, Ashby, iCIMS or SmartRecruiters and Arjun fills it from your profile: contact details, work history, education, links. It matches fields by meaning, not by label, so odd wordings still land in the right place. Anything it isn\'t sure about is left for you to review.',
+  },
+  {
+    tag: 'JOB FIT',
+    title: 'Know before you apply',
+    desc: 'On any job posting, click "Check this job". In about a second you get a fit score against your real profile, your skills, domain and seniority match, and a visa verdict that flags the job only when the posting explicitly rules out sponsorship.',
+  },
+];
+
 const HOW_IT_WORKS = [
   { step: 'Add your work', detail: 'Upload a resume, paste some text, or just chat about your experience. Arjun pulls out everything — roles, skills, metrics, impact — and builds a structured profile that holds your full professional journey.' },
   { step: 'Point it at jobs', detail: 'Paste a job URL or connect Gmail to your LinkedIn alerts. Arjun reads the full job description and understands what they\'re actually looking for.' },
@@ -66,7 +79,8 @@ export default function Landing() {
     return () => observerRef.current?.disconnect();
   }, []);
 
-  const handleGoogle = async () => {
+  // nextTab: open a specific dashboard tab after sign-in (the extension section uses 'extension').
+  const handleGoogle = async (nextTab) => {
     setLoading(true);
     setError('');
     try {
@@ -76,7 +90,8 @@ export default function Landing() {
         navigate('/admin', { replace: true });
       } else {
         const profile = await api.getProfile();
-        navigate(profile?._onboarded ? '/dashboard' : '/onboarding', { replace: true });
+        const dashboard = typeof nextTab === 'string' ? `/dashboard?tab=${nextTab}` : '/dashboard';
+        navigate(profile?._onboarded ? dashboard : '/onboarding', { replace: true });
       }
     } catch (e) {
       setError('Sign-in failed. Please try again.');
@@ -109,6 +124,7 @@ export default function Landing() {
           .stats-row { gap: 32px !important; flex-wrap: wrap; justify-content: center; }
           .nav-bar { padding: 16px 20px !important; }
           .section-pad { padding: 60px 20px !important; }
+          .ext-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
@@ -121,8 +137,10 @@ export default function Landing() {
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: '20px' }}>
           arjun<span style={{ color: '#f59e0b' }}>.</span>
         </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+        <a href="#chrome-extension" style={{ fontSize: '13px', color: '#57534e', textDecoration: 'none' }}>Chrome extension</a>
         <button
-          onClick={handleGoogle}
+          onClick={() => handleGoogle()}
           disabled={loading}
           style={{
             background: 'transparent', border: '1px solid #d6d3d1',
@@ -133,6 +151,7 @@ export default function Landing() {
         >
           Sign in
         </button>
+        </div>
       </nav>
 
       {/* HERO */}
@@ -173,7 +192,7 @@ export default function Landing() {
 
         <button
           className="g-btn"
-          onClick={handleGoogle}
+          onClick={() => handleGoogle()}
           disabled={loading}
           style={{
             display: 'flex', alignItems: 'center', gap: '12px',
@@ -323,6 +342,85 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* CHROME EXTENSION */}
+      <section id="chrome-extension" className="section-pad" style={{ padding: '80px 48px', scrollMarginTop: '80px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+          <span style={{
+            fontSize: '11px', fontFamily: "'DM Mono', monospace",
+            color: '#f59e0b', letterSpacing: '2px', textTransform: 'uppercase',
+          }}>
+            ARJUN FOR CHROME
+          </span>
+          <h2 style={{
+            fontFamily: "'DM Serif Display', serif", fontSize: 'clamp(28px, 4vw, 40px)',
+            maxWidth: '640px', margin: '16px auto 16px', letterSpacing: '-1px', lineHeight: 1.15,
+          }}>
+            Your profile, <span style={{ color: '#f59e0b', fontStyle: 'italic' }}>right on</span> the job page.
+          </h2>
+          <p style={{ fontSize: '15px', color: '#78716c', maxWidth: '540px', margin: '0 auto', lineHeight: 1.7, fontWeight: 300 }}>
+            The Arjun extension brings everything in your profile to the application form, and tells you
+            whether a job is worth applying to before you spend twenty minutes on it.
+          </p>
+        </div>
+
+        <div className="ext-grid" style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr 300px',
+          gap: '20px', maxWidth: '1040px', margin: '0 auto', alignItems: 'stretch',
+        }}>
+          {EXTENSION_FEATURES.map((f, i) => (
+            <div key={f.tag} className="feature-card" data-idx={i + 20} style={{
+              textAlign: 'left', padding: '32px', border: '1px solid #e7e5e4', borderRadius: '12px',
+              background: '#fff', transition: 'border-color 0.2s', ...fadeIn(i + 20),
+            }}>
+              <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#f59e0b', letterSpacing: '1.5px' }}>{f.tag}</span>
+              <h3 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '20px', margin: '8px 0 12px', letterSpacing: '-0.5px' }}>{f.title}</h3>
+              <p style={{ fontSize: '13.5px', color: '#78716c', lineHeight: 1.65, margin: 0 }}>{f.desc}</p>
+            </div>
+          ))}
+
+          {/* Popup preview: a sample "Check this job" result, labelled as an example */}
+          <div data-idx={22} aria-label="Example of the extension popup" style={{
+            border: '1px solid #e7e5e4', borderRadius: '12px', background: '#fff', padding: '18px',
+            boxShadow: '0 12px 32px rgba(28,25,23,0.08)', ...fadeIn(22),
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <span style={{ width: 18, height: 18, borderRadius: '5px', background: '#f59e0b', display: 'inline-block' }} />
+              <span style={{ fontSize: '13px', fontWeight: 600 }}>Arjun Autofill</span>
+              <span style={{ marginLeft: 'auto', fontSize: '9.5px', fontFamily: "'DM Mono', monospace", color: '#a8a29e' }}>EXAMPLE</span>
+            </div>
+            <div style={{ background: '#f59e0b', color: '#fff', borderRadius: '7px', padding: '8px', fontSize: '12px', fontWeight: 600, textAlign: 'center', marginBottom: '14px' }}>Fill this page</div>
+            <div style={{ fontSize: '9.5px', fontFamily: "'DM Mono', monospace", color: '#a8a29e', letterSpacing: '0.06em', marginBottom: '6px' }}>JOB FIT &amp; SPONSORSHIP</div>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ fontSize: '26px', fontWeight: 700 }}>92%</span>
+              <span style={{ fontSize: '11px', color: '#57534e' }}>Excellent fit</span>
+            </div>
+            <div style={{ height: 5, background: '#f5f5f4', borderRadius: 3, overflow: 'hidden', marginBottom: '10px' }}>
+              <div style={{ width: '92%', height: '100%', background: '#f59e0b' }} />
+            </div>
+            {[
+              ['Visa', <span key="v" style={{ background: '#dcfce7', color: '#166534', borderRadius: 999, padding: '1px 8px', fontSize: '10.5px', fontWeight: 600 }}>OK to apply</span>],
+              ['Skills', '98%'], ['Domain', '95%'], ['Seniority', 'Good match'],
+            ].map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderTop: '1px solid #f5f5f4', fontSize: '11.5px' }}>
+                <span style={{ color: '#78716c' }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ textAlign: 'center', marginTop: '40px' }}>
+          <button className="g-btn" onClick={() => handleGoogle('extension')} disabled={loading} style={{
+            background: '#f59e0b', color: '#1c1917', border: 'none', padding: '13px 28px', borderRadius: '8px',
+            fontSize: '14px', fontWeight: 700, cursor: 'pointer', opacity: loading ? 0.7 : 1, transition: 'opacity 0.15s',
+          }}>
+            {loading ? 'Signing in...' : 'Get the Chrome extension'}
+          </button>
+          <p style={{ fontSize: '12px', color: '#a8a29e', marginTop: '12px', fontFamily: "'DM Mono', monospace" }}>
+            free · Chrome and Edge on desktop · installs in about a minute
+          </p>
+        </div>
+      </section>
+
       {/* THE PIPELINE — VISUAL */}
       <section className="section-pad" style={{ padding: '80px 48px', textAlign: 'center' }}>
         <span style={{
@@ -392,7 +490,7 @@ export default function Landing() {
         </p>
         <button
           className="g-btn"
-          onClick={handleGoogle}
+          onClick={() => handleGoogle()}
           disabled={loading}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: '12px',

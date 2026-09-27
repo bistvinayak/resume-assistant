@@ -205,7 +205,11 @@ const DownloadButtons = ({ jobId, downloading, onDownload, hasCoverLetter }) => 
 export default function Dashboard() {
   const navigate = useNavigate();
   const user = auth.currentUser;
-  const [tab, setTab] = useState('profile');
+  // ?tab=extension (etc.) opens a tab directly, e.g. from the landing page's extension section.
+  const [tab, setTab] = useState(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    return ['profile', 'chat', 'submit', 'jobs', 'gaps', 'skills', 'extension'].includes(t) ? t : 'profile';
+  });
   const [profile, setProfile] = useState(null);
   const [jobs, setJobs] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
