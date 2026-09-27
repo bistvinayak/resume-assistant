@@ -52,6 +52,7 @@ require.cache[dbPath] = {
 
 const { extractFacts, tailorResume, calculateAtsScore, improveResume, coverLetter, createJobTrace, mapFormFields, generateSkill, langfuse } = require('../src/llm');
 const { assessJobFit } = require('../src/jev');
+const { analyzeJob, chatAboutJob } = require('../src/insights');
 const { ingestText } = require('../src/profile');
 const { dropUntraceableBullets } = require('../src/pipeline');
 const { profileForSkill, composeSkill, SKILL_NAMES } = require('../src/skills');
@@ -221,6 +222,36 @@ async function pool(items, limit, fn) {
       const ms = Date.now() - t;
       record('form_fill', 'greenhouse-style form', [...C.formFill(mappings, fx.form), { name: 'finishes under 30 s (CloudFront limit)', pass: ms < 30000, detail: `${(ms / 1000).toFixed(1)} s` }], { model });
     } catch (e) { recordError('form_fill', 'greenhouse-style form', e); }
+  }
+
+  // 6. Extension side panel: requirement insights + grounded chat
+  if (want('insights')) {
+    await pool(fx.insightCases, 2, async (kase) => {
+      const label = `${kase.candidate} → ${kase.job}`;
+      const profile = profiles[kase.candidate];
+      if (!profile) return recordError('insights', label, new Error('no profile (extraction failed)'));
+      const job = fx.jobs[kase.job];
+      const pair = fx.pairs.find(p => p.candidate === kase.candidate && p.job === kase.job) || {};
+      try {
+        const fit = await timed('jev', () => assessJobFit(profile, { ...job, text: job.jd_text }, ctx));
+        const check = { job_key: `eval-${kase.job}`, url: job.url, title: job.title, company: job.company, description: job.jd_text, fit };
+        const t = Date.now();
+        const a = await timed('insights', () => retry(() => analyzeJob(profile, check, ctx)));
+        const ms = Date.now() - t;
+        a.fit = fit;
+        record('insights', label, [
+          ...C.insights(a, { ...kase, forbiddenInStrengths: pair.forbidden }, profile, job.jd_text),
+          { name: 'analysis finishes under 60 s', pass: ms < 60000, detail: `${(ms / 1000).toFixed(1)} s` },
+        ], { sample: `${fit.overallFit.percent}% fit · ${JSON.stringify(a.counts)} · ${a.explanation.summary}`.slice(0, 300) });
+
+        for (const probe of kase.chat) {
+          try {
+            const reply = await timed('chat', () => retry(() => chatAboutJob(profile, check, a, [{ role: 'user', content: probe.q }], ctx)));
+            record('chat', `${label} · ${probe.kind}`, C.chatReply(reply, probe), { sample: `Q: ${probe.q} A: ${reply}`.slice(0, 400) });
+          } catch (e) { recordError('chat', `${label} · ${probe.kind}`, e); }
+        }
+      } catch (e) { recordError('insights', label, e); }
+    });
   }
 
   await langfuse.flushAsync().catch(() => {});

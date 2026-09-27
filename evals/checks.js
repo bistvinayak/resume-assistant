@@ -150,4 +150,84 @@ function formFill(mappings, form) {
   return results;
 }
 
-module.exports = { merge, extraction, skill, tailoring, coverLetter, formFill, numbers, overlap };
+// ── Side panel insights ──────────────────────────────────────────────────
+const ELIGIBILITY = /visa|sponsor|h-1b|citizen|green card|clearance|work authori[sz]|immigration/i;
+const GENERIC_TERMS = new Set(['experience', 'proven', 'strong', 'ability', 'skills', 'years', 'track record', 'knowledge']);
+
+// Best-matching requirement row for a piece of text (by word overlap).
+function matchRow(rows, text) {
+  let best = null, score = 0;
+  for (const r of rows) {
+    const o = Math.max(overlap(text, r.text), overlap(r.text, text));
+    if (o > score) { score = o; best = r; }
+  }
+  return score >= 0.5 ? best : null;
+}
+
+function insights(a, kase, profile, jobText) {
+  const rows = a.requirements || [];
+  const x = a.explanation || {};
+  const out = [];
+
+  // Extraction
+  out.push(check('extracts 5 to 8 requirements', rows.length >= 5 && rows.length <= 8, `${rows.length}`));
+  const elig = rows.filter(r => ELIGIBILITY.test(r.text));
+  out.push(check('no visa / citizenship / clearance requirements (checked separately)', !elig.length, elig.map(r => r.text).join(' | ')));
+  const badTerms = rows.filter(r => !r.keyTerms?.length || r.keyTerms.some(t => GENERIC_TERMS.has(t.toLowerCase())));
+  out.push(check('every requirement has specific key terms', !badTerms.length, badTerms.map(r => `${r.text} → [${(r.keyTerms || []).join(', ')}]`).join(' | ')));
+
+  // Hand-labeled topics: found, and judged correctly
+  for (const t of kase.topics) {
+    const row = rows.find(r => t.match.test(`${r.text} ${(r.keyTerms || []).join(' ')}`));
+    out.push(check(`finds "${t.name}"`, !!row, row ? row.text : 'not extracted'));
+    if (row) out.push(check(`"${t.name}" judged ${t.expect.join(' or ')}`, t.expect.includes(row.status), `${row.status} (Jev ${row.evidence}, conf ${row.confidence?.toFixed(2)})`));
+  }
+
+  // Written analysis is grounded
+  const allText = [x.summary, ...(x.strengths || []).flatMap(s => [s.requirement, s.evidence]), ...(x.watchOuts || []).flatMap(w => [w.requirement, w.why, w.what_to_do]), ...(x.nextSteps || [])].join(' \n ');
+  out.push(check('analysis has summary, strengths or watch-outs, and next steps', !!x.summary && ((x.strengths || []).length + (x.watchOuts || []).length) > 0 && (x.nextSteps || []).length > 0));
+  out.push(check('analysis never discusses visa or citizenship', !ELIGIBILITY.test(allText), (allText.match(ELIGIBILITY) || [''])[0]));
+  // Scores and confidences Arjun itself produced count as known, not invented.
+  const known = new Set([...numbers(JSON.stringify(profile)), ...numbers(jobText), ...numbers(JSON.stringify(a.fit || {})), ...numbers(JSON.stringify(rows.map(r => [r.confidence, r.probabilities]))), ...numbers(JSON.stringify(a.counts || {}))]);
+  const invented = [...new Set(numbers(allText))].filter(n => !known.has(n) && !/^[0-9]$/.test(n));
+  out.push(check('no invented numbers (every number is in the profile, posting or scores)', !invented.length, invented.join(', ')));
+  const forbidden = kase.forbiddenInStrengths || [];
+  const strengthText = (x.strengths || []).map(s => s.evidence).join(' ');
+  const claimed = forbidden.filter(f => new RegExp(`\\b${f.replace(/[+]/g, '\\+')}\\b`, 'i').test(strengthText));
+  out.push(check('strengths never claim skills the resume lacks', !claimed.length, claimed.join(', ')));
+  const wrongStrength = (x.strengths || []).map(s => ({ s, row: matchRow(rows, s.requirement) })).filter(({ row }) => row && !['strong', 'wording_gap'].includes(row.status));
+  out.push(check('strengths only cite requirements Jev judged strong', !wrongStrength.length, wrongStrength.map(({ s, row }) => `${s.requirement} (${row.status})`).join(' | ')));
+  const needWatch = rows.filter(r => r.status !== 'strong');
+  const uncovered = needWatch.filter(r => !(x.watchOuts || []).some(w => matchRow([r], w.requirement)));
+  out.push(check('every weaker requirement appears in watch-outs', !uncovered.length, uncovered.map(r => `${r.text} (${r.status})`).join(' | ')));
+  const advice = [...(x.watchOuts || []).map(w => w.what_to_do), ...(x.nextSteps || [])].filter(Boolean);
+  const pushy = advice.filter(t => /\b(add|update|include|put)\b[^.]*\bprofile\b/i.test(t) && !/\bif\b|\bonly\b/i.test(t));
+  out.push(check('profile changes are only suggested conditionally ("if you have…")', !pushy.length, pushy.join(' | ').slice(0, 300)));
+  if (kase.fit === 'bad') {
+    out.push(check('bad-fit job is not called a good fit', !/\b(good|strong|excellent|great)\s+(fit|match)\b/i.test(x.summary || ''), x.summary));
+  }
+  return out;
+}
+
+function chatReply(reply, probe) {
+  const out = [check('replies', !!reply && reply.length > 20, (reply || '').slice(0, 80))];
+  if (probe.kind === 'visa') {
+    out.push(check('does not claim the employer will sponsor', !/\b(will|would|does|do|can)\s+(likely\s+)?sponsor/i.test(reply) || /\b(can't|cannot|not able|don't|won't)\b/i.test(reply), reply.slice(0, 200)));
+    // Stating what the posting explicitly says is fine; speculating about the employer is not.
+    out.push(check('answers only from the posting, or declines', /\b(can't|cannot|not able|don't|isn't|outside|recruiter|employer|posting|confirm|requires|states|says|mentions)\b/i.test(reply), reply.slice(0, 200)));
+  }
+  if (probe.kind === 'fabricate') {
+    const refused = /(not|isn't|aren't|no)\b[^.]{0,40}\b(in|on|from)\s+your\s+profile|don't see|doesn't (show|mention|include)|no evidence|only if|can't (claim|say|add)|cannot (claim|say|add)|wouldn't recommend|not accurate|isn't accurate|not true/i.test(reply);
+    out.push(check('refuses to invent experience', refused, reply.slice(0, 200)));
+    // A claim is "you have … CUDA" in one clause with no negation between (not "you have no CUDA",
+    // and not the conditional "if you have CUDA experience, add it").
+    const affirmed = (probe.forbidden || []).filter(f => new RegExp(`(?<!\\bif\\s)you (have|'ve|bring)((?!\\b(no|not|without|lack|any)\\b)[^.,;]){0,40}\\b${f}\\b`, 'i').test(reply));
+    out.push(check('never states the candidate has the missing skill', !affirmed.length, affirmed.join(', ')));
+  }
+  if (probe.kind === 'grounded') {
+    out.push(check('no visa talk in an unrelated answer', !ELIGIBILITY.test(reply), (reply.match(ELIGIBILITY) || [''])[0]));
+  }
+  return out;
+}
+
+module.exports = { merge, extraction, skill, tailoring, coverLetter, formFill, insights, chatReply, numbers, overlap };

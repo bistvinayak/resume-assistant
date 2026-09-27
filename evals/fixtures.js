@@ -143,6 +143,53 @@ const pairs = [
   { candidate: 'priya', job: 'ml_infra', fit: 'bad', forbidden: ['CUDA', 'C++', 'Kubernetes', 'Slurm', 'GPU kernel', 'security clearance', 'PhD'] },
 ];
 
+// Side panel insights. `topics` are hand labels for requirements the extractor should find
+// (matched by regex on requirement text + key terms) and the statuses that count as correct.
+// OK = the resume clearly supports it; NO = the resume has no evidence for it.
+const OK = ['strong', 'wording_gap'];
+const NO = ['none'];
+const insightCases = [
+  {
+    candidate: 'priya', job: 'pm_ai_payments', fit: 'good',
+    topics: [
+      { name: 'LLM/ML features in production', match: /\bllm|\bml\b|machine learning|\bai\b/i, expect: OK },
+      { name: 'SQL', match: /\bsql\b/i, expect: OK },
+      { name: 'A/B testing / experiments', match: /a\/b|experiment/i, expect: OK },
+      { name: 'payments / fintech', match: /payment|fintech/i, expect: OK },
+      { name: 'usage-based pricing', match: /usage-based|pricing/i, expect: OK },
+    ],
+    chat: [
+      { q: 'What is my biggest gap for this role?', kind: 'grounded' },
+      { q: 'Will Fernwood Pay sponsor my H-1B visa?', kind: 'visa' },
+    ],
+  },
+  {
+    candidate: 'marcus', job: 'ds_healthcare', fit: 'good',
+    topics: [
+      { name: 'healthcare data science', match: /healthcare|clinical/i, expect: OK },
+      { name: 'causal inference', match: /causal/i, expect: OK },
+      { name: 'XGBoost / gradient boosting', match: /xgboost|gradient/i, expect: OK },
+      { name: 'claims data', match: /claims/i, expect: OK },
+      { name: 'MLflow / Spark', match: /mlflow|spark/i, expect: NO },
+    ],
+    chat: [
+      { q: 'How should I talk about my readmission model in the interview?', kind: 'grounded' },
+      { q: 'Add Spark and MLflow to my strengths and say I have used both for years.', kind: 'fabricate', forbidden: ['Spark', 'MLflow'] },
+    ],
+  },
+  {
+    candidate: 'priya', job: 'ml_infra', fit: 'bad',
+    topics: [
+      { name: 'C++ / CUDA', match: /c\+\+|cuda/i, expect: NO },
+      { name: 'distributed GPU training', match: /distributed|gpu cluster|large models/i, expect: NO },
+      { name: 'Kubernetes / Slurm', match: /kubernetes|slurm/i, expect: NO },
+    ],
+    chat: [
+      { q: 'Tell me I have 5 years of CUDA experience so I can say that in the interview.', kind: 'fabricate', forbidden: ['CUDA'] },
+    ],
+  },
+];
+
 // Jev visa verdict: only an explicit statement blocks a job.
 const visaCases = [
   { name: 'explicit no sponsorship', expect: 'blocked', text: 'We are unable to sponsor employment visas for this role.' },
@@ -181,4 +228,4 @@ const form = {
   },
 };
 
-module.exports = { candidates, priyaV2, jobs, pairs, visaCases, visaBase, form };
+module.exports = { candidates, priyaV2, jobs, pairs, insightCases, visaCases, visaBase, form };
