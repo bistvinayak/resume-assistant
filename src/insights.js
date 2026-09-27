@@ -112,7 +112,19 @@ const FALLBACK = {
   unsure: { why: "Arjun couldn't tell from your profile.", what_to_do: 'Judge this one yourself against your experience.' },
   wording_gap: { why: 'You have this, but your profile describes it in different words than the job.', what_to_do: "Use the job's terms when you describe this experience." },
 };
+// Eligibility (visa, citizenship, clearance, work authorization) is the popup's separate check,
+// so the written analysis never discusses it: drop any sentence that does.
+const ELIGIBILITY = /visa|sponsor|h-1b|citizen|green card|clearance|work authori[sz]|immigration/i;
+const dropEligibility = (text) => String(text || '').split(/(?<=[a-z0-9)%\]+#][.!?])\s+/).filter(t => !ELIGIBILITY.test(t)).join(' ').trim();
+
 function enforceLabels(rows, x) {
+  x = {
+    ...x,
+    summary: dropEligibility(x.summary),
+    strengths: x.strengths.map(s => ({ ...s, evidence: dropEligibility(s.evidence) })).filter(s => s.evidence && !ELIGIBILITY.test(s.requirement)),
+    watchOuts: x.watchOuts.map(w => ({ ...w, why: dropEligibility(w.why), what_to_do: dropEligibility(w.what_to_do) })).filter(w => !ELIGIBILITY.test(w.requirement) && (w.why || w.what_to_do)),
+    nextSteps: x.nextSteps.map(dropEligibility).filter(Boolean),
+  };
   const strengths = x.strengths.filter(s => ['strong', 'wording_gap'].includes(rowFor(rows, s.requirement)?.status)).slice(0, 4);
   const watchOuts = x.watchOuts.filter(w => rowFor(rows, w.requirement)?.status !== 'strong');
   for (const r of rows) {

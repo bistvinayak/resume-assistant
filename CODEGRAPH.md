@@ -476,9 +476,9 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1175] — 
 | extractRequirements | 56 | no |
 | explain | 68 | yes |
 | rowFor | 98 | no |
-| enforceLabels | 115 | yes |
-| analyzeJob | 130 | yes |
-| chatAboutJob | 157 | yes |
+| enforceLabels | 120 | yes |
+| analyzeJob | 142 | yes |
+| chatAboutJob | 169 | yes |
 
 ### jev.js
 
