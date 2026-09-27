@@ -129,7 +129,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message.type === 'JOB_FIT') {
     checkJobFit(message.job)
       .then((result) => sendResponse({ ok: true, result }))
-      .catch((e) => sendResponse({ ok: false, error: e.message }));
+      .catch((e) => sendResponse({ ok: false, error: e.message || 'unknown_error' }));
     return true;
   }
+  // Answer unknown types instead of leaving the sender with an undefined response.
+  sendResponse({ ok: false, error: 'unsupported_message' });
 });

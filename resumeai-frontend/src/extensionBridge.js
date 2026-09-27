@@ -4,6 +4,22 @@
 const EXTENSION_ID = 'ljeplebcfpakamlgehpfmemkbmnalfdc';
 
 let refreshTimer = null;
+let pushToken = null; // set while a user is signed in
+let lastFocusPush = 0;
+
+// Installing the extension happens in another tab (chrome://extensions), after this page has
+// already pushed its token to nothing. Re-push when the user comes back so a fresh install
+// connects without a manual refresh. Throttled; getIdToken() is cached by Firebase.
+function onReturn() {
+  if (!pushToken || document.visibilityState !== 'visible') return;
+  if (Date.now() - lastFocusPush < 5000) return;
+  lastFocusPush = Date.now();
+  pushToken();
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', onReturn);
+  document.addEventListener('visibilitychange', onReturn);
+}
 
 function send(message) {
   if (typeof chrome === 'undefined' || !chrome.runtime?.sendMessage) return;
@@ -19,11 +35,12 @@ export function syncExtensionAuth(user) {
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
 
   if (!user) {
+    pushToken = null;
     send({ type: 'ARJUN_LOGOUT' });
     return;
   }
 
-  const pushToken = async () => {
+  pushToken = async () => {
     const token = await user.getIdToken().catch(() => null);
     if (token) send({ type: 'ARJUN_AUTH', token, refreshToken: user.refreshToken, email: user.email });
   };
@@ -43,6 +60,8 @@ export function pingExtension(timeoutMs = 1500) {
       chrome.runtime.sendMessage(EXTENSION_ID, { type: 'ARJUN_PING' }, (resp) => {
         clearTimeout(timer);
         if (chrome.runtime.lastError || !resp?.ok) return resolve(null);
+        // Found it: make sure it has our sign-in (covers installs made after page load).
+        if (pushToken) pushToken();
         resolve(resp.version || 'unknown');
       });
     } catch { clearTimeout(timer); resolve(null); }

@@ -104,7 +104,7 @@ export default function ExtensionTab() {
             <Step n={3} title="Turn on Developer mode">Use the switch in the top-right corner of that page.</Step>
             <Step n={4} title="Load the extension">Click <b>Load unpacked</b> and select the <Code>arjun-extension</Code> folder.</Step>
             <Step n={5} title="Pin it">Click the puzzle-piece icon in Chrome's toolbar and pin <b>Arjun Autofill</b>.</Step>
-            <Step n={6} title="Connect your account">Come back to this page and refresh it. The extension signs in automatically and stays signed in.</Step>
+            <Step n={6} title="Connect your account">Come back to this page. The extension signs in automatically and stays signed in. If its popup still says "Not signed in", refresh this page.</Step>
           </>
         )}
       </div>

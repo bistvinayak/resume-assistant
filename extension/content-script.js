@@ -95,6 +95,29 @@
     el.dispatchEvent(new Event('blur', { bubbles: true }));
   }
 
+  const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  const pad = (n) => String(n).padStart(2, '0');
+
+  // Profile dates come as "01/2015", "Jan 2015", "2015-01", "01/15/2015", etc. Native
+  // <input type="month|date"> only accepts "yyyy-MM" / "yyyy-MM-dd" and silently blanks
+  // anything else, so convert, or return null (field left for the user) when we can't.
+  function normalizeDate(type, raw) {
+    const v = String(raw).trim();
+    let m;
+    let y, mo, d;
+    if ((m = v.match(/^(\d{4})-(\d{1,2})(?:-(\d{1,2}))?$/))) [, y, mo, d] = m;
+    else if ((m = v.match(/^(\d{4})\/(\d{1,2})$/))) [, y, mo] = m;
+    else if ((m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/))) [, mo, d, y] = m; // US MM/DD/YYYY
+    else if ((m = v.match(/^(\d{1,2})[/-](\d{4})$/))) [, mo, y] = m;
+    else if ((m = v.match(/^([A-Za-z]{3})[a-z]*\.?,?\s+(\d{4})$/)) && MONTHS[m[1].toLowerCase()]) {
+      mo = MONTHS[m[1].toLowerCase()]; y = m[2];
+    } else return null; // "Present", "2015" alone, free text
+    if (+mo < 1 || +mo > 12 || (d && (+d < 1 || +d > 31))) return null;
+    if (type === 'month') return `${y}-${pad(mo)}`;
+    if (type === 'date') return d ? `${y}-${pad(mo)}-${pad(d)}` : null; // don't invent a day
+    return v;
+  }
+
   function fillField(el, mapping) {
     if (el.tagName === 'SELECT') {
       const opt = Array.from(el.options).find(o => o.value === mapping.value || o.textContent.trim() === mapping.value);
@@ -110,6 +133,12 @@
       target.checked = true;
       target.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
+    }
+    if (el.type === 'month' || el.type === 'date') {
+      const value = normalizeDate(el.type, mapping.value);
+      if (!value) return false;
+      setNativeValue(el, value);
+      return el.value === value; // the browser blanks values it rejects
     }
     setNativeValue(el, mapping.value);
     return true;

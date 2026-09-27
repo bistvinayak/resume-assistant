@@ -92,6 +92,8 @@ const FIT_ERRORS = {
   not_logged_in: 'Not signed in — open vinayakbist.com/projects/arjun first.',
   no_job_text: 'Couldn’t find a job description on this page. Open the full job posting and try again.',
   no_profile: 'Your Arjun profile is empty — upload your resume first.',
+  extension_outdated: 'Arjun needs a restart. Open chrome://extensions, click the reload icon on Arjun Autofill, then refresh this page.',
+  unsupported_message: 'Arjun needs a restart. Open chrome://extensions, click the reload icon on Arjun Autofill, then refresh this page.',
 };
 
 fitBtn.addEventListener('click', async () => {
@@ -103,7 +105,10 @@ fitBtn.addEventListener('click', async () => {
     const [{ result: job }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: extractJobPosting });
     fitResultEl.textContent = 'Asking Jev…';
     const resp = await chrome.runtime.sendMessage({ type: 'JOB_FIT', job });
-    if (!resp?.ok) throw new Error(resp?.error || 'unknown_error');
+    // No response at all means the background worker is an older version that doesn't know
+    // JOB_FIT (unpacked installs keep running the old worker until the extension is reloaded).
+    if (!resp) throw new Error('extension_outdated');
+    if (!resp.ok) throw new Error(resp.error || 'unknown_error');
     renderFit(resp.result);
   } catch (e) {
     fitResultEl.textContent = FIT_ERRORS[e.message] || `Couldn’t check this job (${e.message}).`;
