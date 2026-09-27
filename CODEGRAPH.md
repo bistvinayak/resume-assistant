@@ -469,14 +469,16 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1170] — 
 
 | Function | Line | Exported |
 |----------|------|----------|
-| cleanRequirements | 18 | yes |
-| termPresent | 35 | yes |
-| wording | 40 | yes |
-| statusFor | 47 | yes |
-| extractRequirements | 53 | no |
-| explain | 65 | yes |
-| analyzeJob | 93 | yes |
-| chatAboutJob | 120 | yes |
+| cleanRequirements | 21 | yes |
+| termPresent | 38 | yes |
+| wording | 43 | yes |
+| statusFor | 50 | yes |
+| extractRequirements | 56 | no |
+| explain | 68 | yes |
+| rowFor | 98 | no |
+| enforceLabels | 115 | yes |
+| analyzeJob | 130 | yes |
+| chatAboutJob | 157 | yes |
 
 ### jev.js
 

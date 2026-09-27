@@ -984,7 +984,7 @@ Return ONLY JSON:
   "watch_outs": [{"requirement": "requirement text", "why": "what is missing or weaker, citing the closest real profile fact", "what_to_do": "one concrete action"}],
   "next_steps": ["up to 3 concrete actions, most important first"]
 }
-Include every partial, none, unsure and wording_gap requirement in watch_outs, ordered by importance as above. Put 2 to 4 of the strongest matches in strengths.`,
+Include every partial, none, unsure and wording_gap requirement in watch_outs, ordered by importance as above. Strengths: up to 4, and ONLY requirements with status strong or wording_gap; if there are none, return an empty strengths list.`,
     config: { model: MODEL, temperature: 0.2 },
   },
 

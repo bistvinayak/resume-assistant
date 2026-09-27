@@ -106,7 +106,7 @@ Nightly `scripts/backup-db.sh` (node-cron 03:30; the host has no crontab) → `~
 
 ### Job insights (extension side panel)
 `popup "Check this job" → /extension/job-fit (Jev, saved to job_checks) → "Open full analysis" → side panel → POST /extension/job-insights (starts run) → poll GET`
-- Run (15-30 s, so async; CloudFront cuts requests at ~30 s): `extract_job_requirements` (free model: 5-8 requirements + key terms) → Jev choice question per requirement (strong/partial/none) → code wording check → status per requirement (strong / wording_gap / partial / none / unsure when Jev confidence < 0.5) → `explain_job_fit` (free model).
+- Run (15-30 s, so async; CloudFront cuts requests at ~30 s): `extract_job_requirements` (free model: 5-8 requirements + key terms) → Jev choice question per requirement (strong/partial/none) → code wording check → status per requirement (strong / wording_gap / partial / none / unsure when Jev confidence < 0.5, or < 0.35 for a "none" answer) → `explain_job_fit` (free model).
 - Jev's labels are final; the explanation and chat only explain them, use only profile facts, and never suggest putting job keywords into the profile.
 - Result cached on `job_checks.analysis` until the profile version changes. Chat (`/extension/job-chat`, prompt `job_fit_chat`) is stateless: the panel sends recent turns, nothing is stored.
 - Tailoring is intentionally not offered from the panel yet (insights first).

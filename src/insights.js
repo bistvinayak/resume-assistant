@@ -13,6 +13,9 @@ const { assessRequirements, compactProfile } = require('./jev');
 
 const MAX_REQUIREMENTS = 8;
 const UNSURE_BELOW = 0.5; // Jev confidence under this → "unsure", the user judges it
+// "none" keeps its label down to a lower confidence: in the eval, every "none" answer at
+// 0.42-0.45 confidence matched the hand label (MLflow, retail), while "unsure" hid that.
+const UNSURE_BELOW_NONE = 0.35;
 const WORDING_OK_SHARE = 0.5; // share of a requirement's key terms the profile must already use
 
 function cleanRequirements(raw) {
@@ -45,7 +48,7 @@ function wording(req, profileText) {
 
 // status drives the badge and the explanation: strong | wording_gap | partial | none | unsure
 function statusFor(row) {
-  if (row.confidence < UNSURE_BELOW) return 'unsure';
+  if (row.confidence < (row.evidence === 'none' ? UNSURE_BELOW_NONE : UNSURE_BELOW)) return 'unsure';
   if (row.evidence === 'strong') return row.wording.share >= WORDING_OK_SHARE ? 'strong' : 'wording_gap';
   return row.evidence; // partial | none
 }
@@ -81,12 +84,46 @@ async function explain(check, profile, rows, trace) {
   });
   const out = await askJson(system, 'Write the analysis.', 'explain_job_fit', trace, langfusePrompt, [], undefined, null, 3000);
   const list = (v) => (Array.isArray(v) ? v : []);
-  return {
+  return enforceLabels(rows, {
     summary: String(out.summary || '').trim(),
-    strengths: list(out.strengths).filter(s => s?.requirement && s?.evidence).slice(0, 4),
-    watchOuts: list(out.watch_outs).filter(w => w?.requirement && (w?.why || w?.what_to_do)).slice(0, 8),
+    strengths: list(out.strengths).filter(s => s?.requirement && s?.evidence),
+    watchOuts: list(out.watch_outs).filter(w => w?.requirement && (w?.why || w?.what_to_do)),
     nextSteps: list(out.next_steps).map(String).filter(Boolean).slice(0, 3),
-  };
+  });
+}
+
+// Jev's labels are final, so the written analysis can't contradict them: a "strength" must be a
+// strong requirement, and every weaker requirement gets a watch-out even if the model skipped it.
+const words = (s) => new Set(norm(s).split(/\s+/).filter(w => w.length > 2));
+function rowFor(rows, text) {
+  const a = words(text);
+  let best = null, bestScore = 0;
+  for (const r of rows) {
+    const b = words(r.text);
+    const shared = [...a].filter(w => b.has(w)).length;
+    const score = shared / Math.max(1, Math.min(a.size, b.size));
+    if (score > bestScore) { bestScore = score; best = r; }
+  }
+  return bestScore >= 0.5 ? best : null;
+}
+const FALLBACK = {
+  none: { why: 'Nothing in your profile shows this.', what_to_do: 'If you have done this, add it to your profile; otherwise treat it as a stretch.' },
+  partial: { why: 'Your profile shows related experience, but not this exactly.', what_to_do: 'Lead with your closest related work when you describe your experience.' },
+  unsure: { why: "Arjun couldn't tell from your profile.", what_to_do: 'Judge this one yourself against your experience.' },
+  wording_gap: { why: 'You have this, but your profile describes it in different words than the job.', what_to_do: "Use the job's terms when you describe this experience." },
+};
+function enforceLabels(rows, x) {
+  const strengths = x.strengths.filter(s => ['strong', 'wording_gap'].includes(rowFor(rows, s.requirement)?.status)).slice(0, 4);
+  const watchOuts = x.watchOuts.filter(w => rowFor(rows, w.requirement)?.status !== 'strong');
+  for (const r of rows) {
+    if (r.status === 'strong' || watchOuts.some(w => rowFor([r], w.requirement))) continue;
+    const f = FALLBACK[r.status];
+    watchOuts.push({ requirement: r.text, why: r.status === 'wording_gap' && r.wording?.absent?.length ? `${f.why} The job says: ${r.wording.absent.join(', ')}.` : f.why, what_to_do: f.what_to_do });
+  }
+  const rank = { none: 0, partial: 1, unsure: 2, wording_gap: 3 };
+  const levelRank = (w) => (rowFor(rows, w.requirement)?.level === 'required' ? 0 : 1);
+  watchOuts.sort((a, b) => levelRank(a) - levelRank(b) || (rank[rowFor(rows, a.requirement)?.status] ?? 9) - (rank[rowFor(rows, b.requirement)?.status] ?? 9));
+  return { ...x, strengths, watchOuts: watchOuts.slice(0, 8) };
 }
 
 // onStage(stage, partial) lets the caller expose progress while this runs.
@@ -146,4 +183,4 @@ async function chatAboutJob(profile, check, analysis, messages, ctx = {}) {
   }
 }
 
-module.exports = { analyzeJob, chatAboutJob, explain, cleanRequirements, statusFor, wording, termPresent };
+module.exports = { analyzeJob, chatAboutJob, explain, enforceLabels, cleanRequirements, statusFor, wording, termPresent };
