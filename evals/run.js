@@ -255,7 +255,7 @@ async function pool(items, limit, fn) {
 
   // 6. Extension side panel: requirement insights + grounded chat
   if (want('insights')) {
-    await pool(fx.insightCases, 2, async (kase) => {
+    await pool(fx.insightCases, 1, async (kase) => { // one at a time: OpenRouter free models are rate-limited per minute
       const label = `${kase.candidate} → ${kase.job}`;
       const profile = profiles[kase.candidate];
       if (!profile) return recordError('insights', label, new Error('no profile (extraction failed)'));

@@ -4,6 +4,7 @@ import { auth, signOutUser } from '../firebase';
 import { api } from '../api';
 import SkillsTab from '../components/SkillsTab';
 import ExtensionTab from '../components/ExtensionTab';
+import GettingStarted from '../components/GettingStarted';
 
 const ATSBadge = ({ score }) => {
   const color = score >= 90 ? '#22c55e' : score >= 75 ? '#f59e0b' : '#ef4444';
@@ -208,9 +209,18 @@ export default function Dashboard() {
   // ?tab=extension (etc.) opens a tab directly, e.g. from the landing page's extension section.
   const [tab, setTab] = useState(() => {
     const t = new URLSearchParams(window.location.search).get('tab');
-    return ['profile', 'chat', 'submit', 'jobs', 'gaps', 'skills', 'extension'].includes(t) ? t : 'profile';
+    if (['start', 'profile', 'chat', 'submit', 'jobs', 'gaps', 'skills', 'extension'].includes(t)) return t;
+    // New users land on Get started until they finish the core steps or dismiss it.
+    let setupDone = false;
+    try { setupDone = localStorage.getItem('arjun_getting_started_done') === '1'; } catch { /* storage blocked */ }
+    return setupDone ? 'profile' : 'start';
   });
   const [profile, setProfile] = useState(null);
+  // Getting started: open a tab, then scroll to a section inside it (e.g. resume format, Gmail).
+  const goToSection = (tabId, anchor) => {
+    setTab(tabId);
+    if (anchor) setTimeout(() => document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+  };
   const [jobs, setJobs] = useState([]);
   const [activeJob, setActiveJob] = useState(null);
   const [addedKeywords, setAddedKeywords] = useState([]);
@@ -1086,6 +1096,11 @@ export default function Dashboard() {
     }
   };
 
+  // Getting started ticks off "Chat with Arjun" once the user has opened it.
+  useEffect(() => {
+    if (tab === 'chat') { try { localStorage.setItem('arjun_gs_chat', '1'); } catch { /* storage blocked */ } }
+  }, [tab]);
+
   useEffect(() => {
     if (tab === 'chat' && chatMessages.length === 0) {
       const missing = [];
@@ -1206,13 +1221,14 @@ export default function Dashboard() {
 
           {/* Nav tabs */}
           {[
+            { id: 'start', label: 'Get started', desc: 'Setup steps & what Arjun does' },
             { id: 'profile', label: 'My Profile', desc: 'Your career snapshot' },
             { id: 'chat', label: 'Chat with Arjun', desc: 'Add info via chat or file upload' },
             { id: 'submit', label: 'Apply to Job', desc: 'Paste a job URL → get a tailored resume' },
             { id: 'jobs', label: 'My Applications', desc: 'Track all your tailored resumes' },
             { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords' },
             { id: 'skills', label: 'My Skills', desc: 'Your writing playbooks' },
-            { id: 'extension', label: 'Chrome Extension', desc: 'Autofill + job fit check' },
+            { id: 'extension', label: 'Chrome Extension', desc: 'Job fit, analysis & autofill' },
           ].map(({ id, label, desc }) => (
             <button key={id} onClick={() => setTab(id)} style={{
               width: '100%', textAlign: 'left',
@@ -1243,7 +1259,7 @@ export default function Dashboard() {
           </div>
 
           {/* Gmail forwarding */}
-          <div style={{ marginTop: '20px', borderTop: '1px solid #e7e5e4', paddingTop: '16px' }}>
+          <div id="gmail-forwarding" style={{ marginTop: '20px', borderTop: '1px solid #e7e5e4', paddingTop: '16px', scrollMarginTop: '16px' }}>
             <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '6px' }}>
               ⚡ GMAIL FORWARDING
             </div>
@@ -1391,7 +1407,7 @@ export default function Dashboard() {
 
               {!editing ? (
                 <>
-                  <div style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px' }}>
+                  <div id="resume-format" style={{ background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '12px', padding: '20px', marginBottom: '16px', scrollMarginTop: '16px' }}>
                     <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", letterSpacing: '0.1em', marginBottom: '10px' }}>RESUME FORMAT</div>
                     <p style={{ fontSize: '12px', color: '#78716c', marginBottom: '14px' }}>
                       Upload a resume as a style reference — future tailored resumes will match its section order, heading style, and page count.
@@ -2783,6 +2799,7 @@ export default function Dashboard() {
           {tab === 'skills' && <SkillsTab />}
 
           {tab === 'extension' && <ExtensionTab />}
+          {tab === 'start' && <GettingStarted profile={profile} jobs={jobs} gmailStatus={gmailForwardingStatus} goTo={goToSection} />}
         </main>
       </div>
     </div>
