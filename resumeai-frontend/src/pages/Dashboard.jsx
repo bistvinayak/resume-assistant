@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, signOutUser } from '../firebase';
+import DeleteAccountDialog from '../components/DeleteAccountDialog';
 import { api } from '../api';
 import SkillsTab from '../components/SkillsTab';
 import ExtensionTab from '../components/ExtensionTab';
@@ -228,6 +229,7 @@ export default function Dashboard() {
   const [submitting, setSubmitting] = useState(false);
   const [submitMsg, setSubmitMsg] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
   const [downloading, setDownloading] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -1184,9 +1186,18 @@ export default function Dashboard() {
             <button onClick={async () => { await signOutUser(); navigate('/'); }} style={{ background: 'none', border: 'none', color: '#a8a29e', fontSize: '12px', fontFamily: "'DM Mono', monospace" }}>
               sign out
             </button>
+            <button onClick={() => setShowDeleteAccount(true)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+              delete account
+            </button>
           </div>
         </div>
       </nav>
+      {showDeleteAccount && (
+        <DeleteAccountDialog
+          onClose={() => setShowDeleteAccount(false)}
+          onDeleted={() => navigate('/', { replace: true })}
+        />
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', flex: 1 }}>
         {/* Sidebar */}

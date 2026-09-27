@@ -1009,7 +1009,48 @@ async function getExtensionEvents(filters = {}) {
   };
 }
 
+// Every table that stores per-user rows. Shared tables (schema_proposals,
+// improvement_proposals, prompt_rules, admin_settings) hold no user data and are kept.
+// tailored_resume is also cleared by job_id: older rows can reference this user's jobs
+// under a different user_id, and the job_id foreign key then blocks deleting the jobs.
+const PER_USER_TABLES = [
+  'user_skills', 'pending_ingestions', 'resume_format', 'gmail_forwarding', 'uncategorized_facts',
+  'chat_feedback', 'extension_events', 'job_checks', 'user_api_keys',
+];
+
+async function deleteAllUserData(userId) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const counts = {};
+    const { rows: files } = await client.query(
+      'SELECT file_path, cover_letter_file_path FROM tailored_resume WHERE user_id = $1 OR job_id IN (SELECT job_id FROM jobs WHERE user_id = $1)', [userId]
+    );
+    counts.tailored_resume = (await client.query(
+      'DELETE FROM tailored_resume WHERE user_id = $1 OR job_id IN (SELECT job_id FROM jobs WHERE user_id = $1)', [userId]
+    )).rowCount;
+    counts.jobs = (await client.query('DELETE FROM jobs WHERE user_id = $1', [userId])).rowCount;
+    counts.master_profile = (await client.query('DELETE FROM master_profile WHERE user_id = $1', [userId])).rowCount;
+    for (const table of PER_USER_TABLES) {
+      counts[table] = (await client.query(`DELETE FROM ${table} WHERE user_id = $1`, [userId])).rowCount;
+    }
+    await client.query('COMMIT');
+    // Rendered resume/cover-letter files hold personal data too; best-effort after commit.
+    const fs = require('fs');
+    for (const f of files) {
+      for (const p of [f.file_path, f.cover_letter_file_path]) if (p) fs.promises.unlink(p).catch(() => {});
+    }
+    return counts;
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
+  deleteAllUserData,
   saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored, saveUserApiKey, getUserApiKey, deleteUserApiKey,
   pool, initSchema, getProfile, saveProfile, getProfileVersion, profileEvents,
   getUserSkills, setUserSkillStatus, saveUserSkill, saveUserSkillNotes,

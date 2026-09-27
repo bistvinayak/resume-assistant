@@ -157,6 +157,7 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 | PUT | /api/skills/:skill/notes | JWT | Save user corrections (win over generated text), regenerates that skill |
 | POST | /api/skills/regenerate | JWT | Regenerate all skills |
 | GET | /api/skills/export | JWT | Download skills as Claude SKILL.md folders (.zip) |
+| DELETE | /api/account | JWT | User deletes own account: all per-user rows (`deleteAllUserData`, db.js) + Firebase sign-in; body `{confirm:"DELETE"}` |
 | GET | /api/admin/* | JWT+admin | Admin endpoints |
 | GET | /health | none | Health check |
 

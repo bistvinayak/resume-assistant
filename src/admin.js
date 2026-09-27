@@ -1,6 +1,6 @@
 'use strict';
 
-const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob, getExtensionEvents } = require('./db');
+const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob, getExtensionEvents, deleteAllUserData } = require('./db');
 const { runBatch } = require('./cron');
 const { queueJob } = require('./pipeline');
 const { scrapeLinkedInJob } = require('./scraper');
@@ -178,34 +178,15 @@ async function updateUser(req, res) {
 }
 
 // DELETE /api/admin/users/:userId
-// Every table that stores per-user rows. tailored_resume is also cleared by job_id: older rows
-// can reference this user's jobs under a different user_id, and the job_id foreign key then
-// blocked deleting the jobs ("violates foreign key constraint tailored_resume_job_id_fkey").
-const PER_USER_TABLES = ['user_skills', 'pending_ingestions', 'resume_format', 'gmail_forwarding', 'uncategorized_facts', 'chat_feedback', 'extension_events'];
-
 async function deleteUser(req, res) {
   const { userId } = req.params;
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
-    const counts = {};
-    counts.tailored_resume = (await client.query(
-      'DELETE FROM tailored_resume WHERE user_id = $1 OR job_id IN (SELECT job_id FROM jobs WHERE user_id = $1)', [userId]
-    )).rowCount;
-    counts.jobs = (await client.query('DELETE FROM jobs WHERE user_id = $1', [userId])).rowCount;
-    counts.master_profile = (await client.query('DELETE FROM master_profile WHERE user_id = $1', [userId])).rowCount;
-    for (const table of PER_USER_TABLES) {
-      counts[table] = (await client.query(`DELETE FROM ${table} WHERE user_id = $1`, [userId])).rowCount;
-    }
-    await client.query('COMMIT');
+    const counts = await deleteAllUserData(userId);
     console.log(`✓ admin deleted user ${userId}: ${JSON.stringify(counts)}`);
     res.json({ ok: true, deleted: counts });
   } catch (e) {
-    await client.query('ROLLBACK').catch(() => {});
     console.error(`✗ admin delete user ${userId} failed: ${e.message}`);
     res.status(500).json({ error: e.message });
-  } finally {
-    client.release();
   }
 }
 

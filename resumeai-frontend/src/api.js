@@ -135,6 +135,17 @@ export const api = {
     return body;
   },
 
+  async deleteAccount() {
+    const res = await checkedFetch(`${BASE}/account`, {
+      method: 'DELETE',
+      headers: await getHeaders(),
+      body: JSON.stringify({ confirm: 'DELETE' }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error === 'sign_in_required' ? 'Please sign in again, then retry.' : 'Could not delete your account. Please try again.');
+    return body;
+  },
+
   async deleteJevKey() {
     const res = await checkedFetch(`${BASE}/settings/jev-key`, { method: 'DELETE', headers: await getHeaders() });
     return res.json();

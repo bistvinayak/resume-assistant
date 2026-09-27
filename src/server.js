@@ -7,6 +7,7 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
+const { deleteAllUserData } = require('./db');
 const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent, addPendingIngestion, getPendingIngestionCount, getProfileVersion, saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored, saveUserApiKey, getUserApiKey, deleteUserApiKey } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile, combineTexts } = require('./profile');
 const { queueJob, getQueueStats } = require('./pipeline');
@@ -648,6 +649,28 @@ app.put('/api/settings/jev-key', async (req, res, next) => {
 
 app.delete('/api/settings/jev-key', async (req, res, next) => {
   try { await deleteUserApiKey(req.userId, 'typesafe'); res.json({ ok: true }); } catch (e) { next(e); }
+});
+
+// ── ACCOUNT DELETION ─────────────────────────────────────────────────────
+// Permanently removes all of the signed-in user's data and their Firebase sign-in record.
+// Firebase-token users only: the legacy x-api-key path maps to the shared system user.
+app.delete('/api/account', async (req, res, next) => {
+  try {
+    if (!req.userEmail) return res.status(403).json({ error: 'sign_in_required' });
+    if (req.body?.confirm !== 'DELETE') return res.status(400).json({ error: 'confirmation_required' });
+
+    const counts = await deleteAllUserData(req.userId);
+    let signInDeleted = true;
+    try {
+      await require('firebase-admin').auth().deleteUser(req.userId);
+    } catch (e) {
+      // Data is already gone; a leftover sign-in record just gets an empty profile next time.
+      signInDeleted = false;
+      console.error(`⚠ account ${req.userId}: data deleted but Firebase user removal failed: ${e.message}`);
+    }
+    console.log(`✓ user deleted own account ${req.userId}: ${JSON.stringify(counts)}`);
+    res.json({ ok: true, signInDeleted });
+  } catch (e) { next(e); }
 });
 
 // ── EXTENSION: JOB INSIGHTS (side panel) ────────────────────────────────
