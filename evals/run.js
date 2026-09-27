@@ -53,6 +53,9 @@ require.cache[dbPath] = {
 const { extractFacts, tailorResume, calculateAtsScore, improveResume, coverLetter, createJobTrace, mapFormFields, generateSkill, langfuse } = require('../src/llm');
 const { assessJobFit } = require('../src/jev');
 const { analyzeJob, chatAboutJob } = require('../src/insights');
+const { assessFit } = require('../src/fitEngine');
+// --fit=free runs job fit + requirement matching on the free OpenRouter engine instead of Jev.
+const FIT_ENGINE = args.fit === 'free' ? { engine: 'openrouter' } : { engine: 'jev', apiKey: process.env.TYPESAFE_API_KEY };
 const { ingestText } = require('../src/profile');
 const { dropUntraceableBullets } = require('../src/pipeline');
 const { profileForSkill, composeSkill, SKILL_NAMES } = require('../src/skills');
@@ -94,7 +97,7 @@ async function pool(items, limit, fn) {
 }
 
 (async () => {
-  console.log(`Arjun eval ${RUN_ID} · models: ${MODELS === 'free' ? 'free (Nemotron)' : 'production config'}\n`);
+  console.log(`Arjun eval ${RUN_ID} · models: ${MODELS === 'free' ? 'free (Nemotron)' : 'production config'} · fit engine: ${FIT_ENGINE.engine}\n`);
   const t0 = Date.now();
   const profiles = {};
   const skills = {};
@@ -262,10 +265,10 @@ async function pool(items, limit, fn) {
       const job = fx.jobs[kase.job];
       const pair = fx.pairs.find(p => p.candidate === kase.candidate && p.job === kase.job) || {};
       try {
-        const fit = await timed('jev', () => assessJobFit(profile, { ...job, text: job.jd_text }, ctx));
+        const fit = await timed('jev', () => assessFit(profile, { ...job, text: job.jd_text }, ctx, FIT_ENGINE));
         const check = { job_key: `eval-${kase.job}`, url: job.url, title: job.title, company: job.company, description: job.jd_text, fit };
         const t = Date.now();
-        const a = await timed('insights', () => retry(() => analyzeJob(profile, check, ctx)));
+        const a = await timed('insights', () => retry(() => analyzeJob(profile, check, ctx, () => {}, FIT_ENGINE)));
         const ms = Date.now() - t;
         a.fit = fit;
         record('insights', label, [

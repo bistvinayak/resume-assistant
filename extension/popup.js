@@ -110,7 +110,7 @@ function renderFit(r, job) {
     <div class="row"><span>Skills</span><span>${r.skills.percent}% <span class="conf">${esc(r.skills.label)}</span></span></div>
     <div class="row"><span>Domain</span><span>${r.domain.percent}% <span class="conf">${esc(r.domain.label)}</span></span></div>
     <div class="row"><span>Seniority</span><span>${seniority} <span class="conf">${pct(r.seniority.confidence)}</span></span></div>
-    <div class="fit-note">Scored by ${esc(r.model)} in ${r.durationMs} ms. Visa is flagged only when the posting explicitly rules you out.</div>
+    <div class="fit-note">Scored by ${esc(r.model)} in ${r.durationMs} ms. Visa is flagged only when the posting explicitly rules you out.${r.engine === 'openrouter' ? ' For sharper scoring, add your own Jev key in Arjun’s Chrome Extension tab.' : ''}</div>
     ${r.jobKey ? '<button id="insightsBtn" class="secondary">Open full analysis</button>' : ''}`;
   const btn = document.getElementById('insightsBtn');
   if (btn) btn.addEventListener('click', () => openInsights(r, job));

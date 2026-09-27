@@ -193,6 +193,16 @@ async function initSchema() {
       updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
       UNIQUE (user_id, job_key)
     );
+    -- API keys users bring for paid services (TypeSafe Jev). Encrypted with API_KEY_SECRET.
+    CREATE TABLE IF NOT EXISTS user_api_keys (
+      user_id     TEXT NOT NULL,
+      provider    TEXT NOT NULL,
+      key_enc     TEXT NOT NULL,
+      key_last4   TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, provider)
+    );
+
     -- Resume feedback the candidate gave in the side panel chat, applied on every re-tailor.
     ALTER TABLE job_checks ADD COLUMN IF NOT EXISTS resume_feedback JSONB NOT NULL DEFAULT '[]';
 
@@ -883,6 +893,21 @@ async function getJobCheck(userId, jobKey) {
   return rows[0] || null;
 }
 
+async function saveUserApiKey(userId, provider, keyEnc, last4) {
+  await pool.query(
+    `INSERT INTO user_api_keys (user_id, provider, key_enc, key_last4) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (user_id, provider) DO UPDATE SET key_enc = EXCLUDED.key_enc, key_last4 = EXCLUDED.key_last4, created_at = now()`,
+    [userId, provider, keyEnc, last4]
+  );
+}
+async function getUserApiKey(userId, provider) {
+  const { rows } = await pool.query('SELECT key_enc, key_last4, created_at FROM user_api_keys WHERE user_id = $1 AND provider = $2', [userId, provider]);
+  return rows[0] || null;
+}
+async function deleteUserApiKey(userId, provider) {
+  await pool.query('DELETE FROM user_api_keys WHERE user_id = $1 AND provider = $2', [userId, provider]);
+}
+
 async function addResumeFeedback(userId, jobKey, text) {
   const { rows } = await pool.query(
     `UPDATE job_checks SET resume_feedback = resume_feedback || $3::jsonb, updated_at = now()
@@ -985,7 +1010,7 @@ async function getExtensionEvents(filters = {}) {
 }
 
 module.exports = {
-  saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored,
+  saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored, saveUserApiKey, getUserApiKey, deleteUserApiKey,
   pool, initSchema, getProfile, saveProfile, getProfileVersion, profileEvents,
   getUserSkills, setUserSkillStatus, saveUserSkill, saveUserSkillNotes,
   addPendingIngestion, getDuePendingIngestions, getPendingIngestionCount, markPendingIngestion,

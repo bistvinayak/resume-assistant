@@ -7,16 +7,18 @@ const path = require('path');
 const os = require('os');
 const cors = require('cors');
 
-const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent, addPendingIngestion, getPendingIngestionCount, getProfileVersion, saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored } = require('./db');
+const { pool, initSchema, getProfile, getJobsForUser, saveProfile, getProfileVersions, restoreProfileVersion, getJobByJobId, insertJobProcessing, markJobFailed, recoverStaleJobs, saveChatFeedback, getResumeFormat, saveResumeFormat, deleteResumeFormat, requestGmailForwarding, getGmailForwardingStatus, logExtensionEvent, addPendingIngestion, getPendingIngestionCount, getProfileVersion, saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored, saveUserApiKey, getUserApiKey, deleteUserApiKey } = require('./db');
 const { ingestText, ingestPdf, ingestFiles, extractTextFromFile, combineTexts } = require('./profile');
 const { queueJob, getQueueStats } = require('./pipeline');
 const { startCron, runBatch } = require('./cron');
 const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
-const { assessJobFit } = require('./jev');
 const { analyzeJob, chatAboutJob } = require('./insights');
 const { friendlyAiError } = require('./aiErrors');
+const { resolveFitEngine, assessFit } = require('./fitEngine');
+const { encrypt, decrypt, canStoreKeys } = require('./secrets');
+const { callJev, JEV_MODEL } = require('./jev');
 const { getSkillsView, updateSkillNotes, runRefresh, buildSkillsExport } = require('./skills');
 const { renderResumeDocx } = require('./renderDocx');
 const { classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts } = require('./llm');
@@ -600,7 +602,8 @@ app.post('/api/extension/job-fit', async (req, res, next) => {
     }
     const profile = await getProfile(req.userId);
     if (!profile._onboarded) return res.status(400).json({ error: 'no_profile' });
-    const result = await assessJobFit(profile, { url, title, company, text, jobId, source }, langfuseCtx(req));
+    const engine = await resolveFitEngine(req, userJevKey);
+    const result = { ...(await assessFit(profile, { url, title, company, text, jobId, source }, langfuseCtx(req), engine)), engine: engine.engine };
     // Saved so the side panel can build insights without the extension resending the posting.
     const jobKey = String(jobId || url || '').slice(0, 300);
     if (jobKey) {
@@ -609,6 +612,42 @@ app.post('/api/extension/job-fit', async (req, res, next) => {
     }
     res.json({ ...result, jobKey });
   } catch (e) { next(e); }
+});
+
+// ── USER'S OWN JEV (TypeSafe) KEY ──────────────────────────────────────
+// With a key, job-fit checks use Jev billed to the user; without one, a free OpenRouter model.
+async function userJevKey(userId) {
+  const row = await getUserApiKey(userId, 'typesafe');
+  return row ? decrypt(row.key_enc) : null;
+}
+
+app.get('/api/settings/jev-key', async (req, res, next) => {
+  try {
+    const row = await getUserApiKey(req.userId, 'typesafe');
+    const engine = await resolveFitEngine(req, userJevKey);
+    res.json({ hasKey: !!row, last4: row?.key_last4 || null, engine: engine.engine, keySource: engine.keySource || null, canStore: canStoreKeys() });
+  } catch (e) { next(e); }
+});
+
+app.put('/api/settings/jev-key', async (req, res, next) => {
+  try {
+    if (!canStoreKeys()) return res.status(503).json({ error: 'key_storage_unavailable' });
+    const key = String(req.body.key || '').trim();
+    if (key.length < 12 || /\s/.test(key)) return res.status(400).json({ error: 'invalid_key' });
+    // A tiny call proves the key works before we store it.
+    try {
+      await callJev({ state: 'Hello', model: JEV_MODEL, questions: { ok: { type: 'noul', instructions: 'Is `state` a greeting?', criteria: { true: 'yes', false: 'no' } } } }, 0, key);
+    } catch (e) {
+      if (/jev_error_(401|403)/.test(e.message)) return res.status(400).json({ error: 'invalid_key' });
+      throw e;
+    }
+    await saveUserApiKey(req.userId, 'typesafe', encrypt(key), key.slice(-4));
+    res.json({ ok: true, last4: key.slice(-4) });
+  } catch (e) { next(e); }
+});
+
+app.delete('/api/settings/jev-key', async (req, res, next) => {
+  try { await deleteUserApiKey(req.userId, 'typesafe'); res.json({ ok: true }); } catch (e) { next(e); }
 });
 
 // ── EXTENSION: JOB INSIGHTS (side panel) ────────────────────────────────
@@ -639,7 +678,8 @@ app.post('/api/extension/job-insights', async (req, res, next) => {
       const profile = await getProfile(req.userId);
       const run = { stage: 'starting', partial: null, error: null, startedAt: Date.now() };
       insightRuns.set(runKey, run);
-      analyzeJob(profile, check, langfuseCtx(req), (stage, partial) => { run.stage = stage; if (partial) run.partial = partial; })
+      const engine = await resolveFitEngine(req, userJevKey);
+      analyzeJob(profile, check, langfuseCtx(req), (stage, partial) => { run.stage = stage; if (partial) run.partial = partial; }, engine)
         .then(a => saveJobAnalysis(req.userId, jobKey, { ...a, profileVersion: version }))
         .then(() => insightRuns.delete(runKey))
         .catch(e => { console.error('job insights failed:', e.message); run.error = friendlyAiError(e.message)?.code || e.message; });

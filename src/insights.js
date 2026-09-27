@@ -9,7 +9,8 @@
 // Jev's labels are final; the written explanation may only explain them.
 
 const { makeTrace, askJson, getPrompt, langfuse } = require('./llm');
-const { assessRequirements, compactProfile } = require('./jev');
+const { compactProfile } = require('./jev');
+const { assessReqs } = require('./fitEngine');
 
 const MAX_REQUIREMENTS = 8;
 const UNSURE_BELOW = 0.5; // Jev confidence under this → "unsure", the user judges it
@@ -139,7 +140,8 @@ function enforceLabels(rows, x) {
 }
 
 // onStage(stage, partial) lets the caller expose progress while this runs.
-async function analyzeJob(profile, check, ctx = {}, onStage = () => {}) {
+// engine: from fitEngine.resolveFitEngine (Jev with the user's key, or the free model).
+async function analyzeJob(profile, check, ctx = {}, onStage = () => {}, engine = null) {
   const trace = makeTrace('job_insights', ctx, { url: check.url || '', jobKey: check.job_key, title: check.title, company: check.company });
   const job = { title: check.title, company: check.company, url: check.url, text: check.description };
   try {
@@ -147,7 +149,7 @@ async function analyzeJob(profile, check, ctx = {}, onStage = () => {}) {
     const reqs = await extractRequirements(check, trace);
 
     onStage('matching');
-    const assessed = await assessRequirements(profile, job, reqs, trace);
+    const assessed = await assessReqs(profile, job, reqs, trace, engine);
     const profileText = norm(JSON.stringify(compactProfile(profile)));
     const rows = assessed.map(r => {
       const row = { ...r, wording: wording(r, profileText) };

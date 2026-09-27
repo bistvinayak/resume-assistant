@@ -123,6 +123,23 @@ export const api = {
   },
 
   // ── Chrome extension download ──
+  async getJevKey() {
+    const res = await checkedFetch(`${BASE}/settings/jev-key`, { headers: await getHeaders() });
+    return res.json();
+  },
+
+  async saveJevKey(key) {
+    const res = await checkedFetch(`${BASE}/settings/jev-key`, { method: 'PUT', headers: { ...(await getHeaders()), 'Content-Type': 'application/json' }, body: JSON.stringify({ key }) });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error === 'invalid_key' ? 'That key didn’t work. Check it in your TypeSafe account and try again.' : body.error === 'key_storage_unavailable' ? 'Saving keys isn’t available right now.' : (body.error || 'Could not save the key.'));
+    return body;
+  },
+
+  async deleteJevKey() {
+    const res = await checkedFetch(`${BASE}/settings/jev-key`, { method: 'DELETE', headers: await getHeaders() });
+    return res.json();
+  },
+
   async getExtensionInfo() {
     const res = await checkedFetch(`${BASE}/extension/info`, { headers: await getHeaders() });
     return res.json();

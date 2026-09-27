@@ -1021,6 +1021,50 @@ POSTING:
 Return ONLY JSON: {"reply": "your answer", "action": "none | tailor_resume | revise_resume", "feedback": "the change requested, or empty", "cover_letter": false}`,
     config: { model: MODEL, temperature: 0.3 },
   },
+  fit_check_free: {
+    prompt: `You assess how well a candidate fits a job posting by answering a fixed set of questions. You are the free fallback for a scoring model, so answer exactly the questions given, choosing only from each question's allowed answers.
+
+Rules:
+- Judge by meaning, not keyword overlap, using the candidate's roles, bullets, projects and skills.
+- For questions about the posting (sponsorship, citizenship or clearance), use ONLY what the posting explicitly says. If it says nothing, answer accordingly. Never infer from company, location or role type.
+- Ignore visa and citizenship entirely for the fit questions.
+- confidence is "high" when the evidence is clear, "medium" when it leans one way, "low" when you are unsure.
+
+QUESTIONS:
+{{questions}}
+
+CANDIDATE:
+{{candidate_json}}
+
+JOB POSTING:
+{{job_json}}
+
+Return ONLY JSON with one entry per question id:
+{"<score question id>": {"level": <integer index of the chosen level>, "confidence": "low|medium|high"},
+ "<choice question id>": {"choice": "<one of the allowed keys>", "confidence": "low|medium|high"},
+ "<yes/no question id>": {"answer": "yes|no", "confidence": "low|medium|high"}}`,
+    config: { model: MODEL, temperature: 0.1 },
+  },
+
+  requirements_check_free: {
+    prompt: `For each numbered job requirement, judge how strongly the candidate meets it. Judge by meaning, not wording, using the candidate's roles, bullets, projects and skills.
+- "strong": a specific role, bullet, project or skill clearly meets it, whatever words it uses
+- "partial": related or adjacent experience that only partly meets it
+- "none": nothing in the profile supports it
+confidence: "high" when the evidence is clear, "medium" when it leans one way, "low" when you are unsure.
+
+REQUIREMENTS:
+{{requirements}}
+
+CANDIDATE:
+{{candidate_json}}
+
+JOB (for context): {{job_title}} at {{company}}
+
+Return ONLY JSON: {"results": [{"index": <requirement number>, "evidence": "strong|partial|none", "confidence": "low|medium|high"}]}`,
+    config: { model: MODEL, temperature: 0.1 },
+  },
+
 };
 
 // ── SYNC PROMPTS TO LANGFUSE ────────────────────────────────────────────

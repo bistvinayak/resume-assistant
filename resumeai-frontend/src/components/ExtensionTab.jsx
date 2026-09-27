@@ -29,6 +29,56 @@ const Code = ({ children }) => (
   <code style={{ fontFamily: mono, fontSize: '12px', background: '#f5f5f4', borderRadius: '4px', padding: '1px 6px' }}>{children}</code>
 );
 
+function JevKeyCard() {
+  const [info, setInfo] = useState(null);
+  const [key, setKey] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const load = () => api.getJevKey().then(setInfo).catch(() => {});
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    setBusy(true); setMsg('');
+    try { await api.saveJevKey(key.trim()); setKey(''); setMsg('Saved. Job-fit checks now use Jev on your key.'); await load(); }
+    catch (e) { setMsg(e.message); }
+    finally { setBusy(false); }
+  };
+  const remove = async () => {
+    setBusy(true); setMsg('');
+    try { await api.deleteJevKey(); setMsg('Removed. Job-fit checks use the free AI model again.'); await load(); }
+    catch (e) { setMsg(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const usingJev = info?.engine === 'jev';
+  return (
+    <div style={card}>
+      <div style={{ fontSize: '10.5px', fontFamily: mono, letterSpacing: '0.08em', color: '#78716c', marginBottom: '6px' }}>JOB-FIT ENGINE</div>
+      <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '4px' }}>
+        {!info ? 'Checking…' : usingJev ? `Jev (TypeSafe)${info.keySource === 'user' ? ` · your key ····${info.last4}` : ''}` : 'Free AI model (OpenRouter)'}
+      </div>
+      <p style={{ fontSize: '13px', color: '#57534e', lineHeight: 1.6, margin: '0 0 12px' }}>
+        “Check this job” and the side panel analysis run on a free AI model by default. For sharper, more consistent scoring,
+        add your own TypeSafe Jev API key: checks then use Jev and are billed to your TypeSafe account. The key is encrypted and never shown again.
+      </p>
+      {info?.hasKey ? (
+        <button onClick={remove} disabled={busy} style={{ background: '#fff', border: '1px solid #fecaca', color: '#ef4444', padding: '8px 14px', borderRadius: '8px', fontSize: '12.5px', cursor: 'pointer' }}>
+          {busy ? '…' : 'Remove my key'}
+        </button>
+      ) : (
+        <form onSubmit={(e) => { e.preventDefault(); if (key.trim()) save(); }} style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <input id="jev-key" type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} placeholder="Paste your TypeSafe API key"
+            aria-label="TypeSafe API key" style={{ flex: '1 1 260px', border: '1px solid #d6d3d1', borderRadius: '8px', padding: '9px 12px', fontSize: '13px', fontFamily: mono }} />
+          <button type="submit" disabled={busy || !key.trim() || info?.canStore === false} style={{ background: '#f59e0b', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '12.5px', fontWeight: 700, cursor: 'pointer', opacity: busy || !key.trim() ? 0.6 : 1 }}>
+            {busy ? 'Checking key…' : 'Save key'}
+          </button>
+        </form>
+      )}
+      {msg && <div style={{ fontSize: '12.5px', color: /didn|isn|Could/.test(msg) ? '#dc2626' : '#166534', marginTop: '8px' }}>{msg}</div>}
+    </div>
+  );
+}
+
 export default function ExtensionTab() {
   const [latest, setLatest] = useState(null);
   const [installed, setInstalled] = useState(undefined); // undefined = checking, null = not detected
@@ -108,6 +158,8 @@ export default function ExtensionTab() {
           </>
         )}
       </div>
+
+      <JevKeyCard />
 
       <div style={{ ...card, fontSize: '13px', color: '#57534e', lineHeight: 1.6 }}>
         <div style={{ fontSize: '10.5px', fontFamily: mono, letterSpacing: '0.08em', color: '#78716c', marginBottom: '6px' }}>USING IT</div>

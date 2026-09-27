@@ -83,21 +83,22 @@ const QUESTIONS = {
   },
 };
 
-async function callJev(body, attempt = 0) {
+// apiKey: the user's own TypeSafe key when they added one; otherwise the server's key.
+async function callJev(body, attempt = 0, apiKey = process.env.TYPESAFE_API_KEY) {
   let res;
   try {
-    res = await fetchJev(body);
+    res = await fetchJev(body, apiKey);
   } catch (e) {
     throw new Error(`jev_error_${e.name === 'TimeoutError' || /timeout|aborted/i.test(e.message) ? 'timeout' : 'network'}: ${e.message}`);
   }
-  return handleJev(res, body, attempt);
+  return handleJev(res, body, attempt, apiKey);
 }
 
-function fetchJev(body) {
+function fetchJev(body, apiKey) {
   return fetch(JEV_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${process.env.TYPESAFE_API_KEY}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
@@ -105,11 +106,11 @@ function fetchJev(body) {
   });
 }
 
-async function handleJev(res, body, attempt) {
+async function handleJev(res, body, attempt, apiKey) {
   // 429 rate limit / 529 overloaded — docs recommend exponential backoff
   if ((res.status === 429 || res.status === 529) && attempt < 2) {
     await new Promise(r => setTimeout(r, 500 * 2 ** attempt));
-    return callJev(body, attempt + 1);
+    return callJev(body, attempt + 1, apiKey);
   }
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
@@ -150,36 +151,12 @@ function buildJevRequest(profile, job) {
   };
 }
 
-async function assessJobFit(profile, job, ctx = {}) {
-  if (!process.env.TYPESAFE_API_KEY) throw new Error('TYPESAFE_API_KEY not set');
-
-  const body = buildJevRequest(profile, job);
-  // Required lazily: llm.js pulls in the DB layer, which the pure helpers here don't need.
-  const { makeTrace, langfuse } = require('./llm');
-  const trace = makeTrace('job_fit', ctx, {
-    url: job.url || '', jobId: job.jobId || '', source: job.source || 'unknown',
-    descriptionChars: body.state.job_posting.description.length,
-  });
-  // Log the full request body (questions with their instructions, state, model) so the
-  // trace shows exactly what Jev was asked, not only what it read.
-  const generation = trace.generation({ name: 'jev_job_fit', model: JEV_MODEL, input: body });
-
-  const t0 = Date.now();
-  let data;
-  try {
-    data = await callJev(body);
-  } catch (e) {
-    generation.end({ output: { error: e.message }, level: 'ERROR' });
-    await langfuse.flushAsync().catch(() => {});
-    throw e;
-  }
-  const a = data.answers;
-  generation.end({ output: a, model: data.model, metadata: { usage: data.usage } });
-  await langfuse.flushAsync().catch(() => {});
-
+// Jev-shaped answers → what the popup and side panel show. Shared with the free-model engine
+// (fitEngine.js), which converts its answers into the same shape.
+function fitResult(a, model, durationMs, usage) {
   return {
-    model: data.model,
-    durationMs: Date.now() - t0,
+    model,
+    durationMs,
     // score answers are probability-weighted level indices; normalize to 0–100 for the UI
     overallFit: {
       percent: Math.round((a.overall_fit.score / (QUESTIONS.overall_fit.criteria.length - 1)) * 100),
@@ -204,8 +181,38 @@ async function assessJobFit(profile, job, ctx = {}) {
     },
     citizenshipRequired: a.citizenship_or_clearance_required.noul,
     visa: visaVerdict(a),
-    usage: data.usage,
+    usage,
   };
+}
+
+async function assessJobFit(profile, job, ctx = {}, { apiKey = process.env.TYPESAFE_API_KEY } = {}) {
+  if (!apiKey) throw new Error('TYPESAFE_API_KEY not set');
+
+  const body = buildJevRequest(profile, job);
+  // Required lazily: llm.js pulls in the DB layer, which the pure helpers here don't need.
+  const { makeTrace, langfuse } = require('./llm');
+  const trace = makeTrace('job_fit', ctx, {
+    url: job.url || '', jobId: job.jobId || '', source: job.source || 'unknown',
+    descriptionChars: body.state.job_posting.description.length,
+  });
+  // Log the full request body (questions with their instructions, state, model) so the
+  // trace shows exactly what Jev was asked, not only what it read.
+  const generation = trace.generation({ name: 'jev_job_fit', model: JEV_MODEL, input: body });
+
+  const t0 = Date.now();
+  let data;
+  try {
+    data = await callJev(body, 0, apiKey);
+  } catch (e) {
+    generation.end({ output: { error: e.message }, level: 'ERROR' });
+    await langfuse.flushAsync().catch(() => {});
+    throw e;
+  }
+  const a = data.answers;
+  generation.end({ output: a, model: data.model, metadata: { usage: data.usage } });
+  await langfuse.flushAsync().catch(() => {});
+
+  return fitResult(a, data.model, Date.now() - t0, data.usage);
 }
 
 // Per-requirement evidence: one choice question per extracted requirement, judged by meaning.
@@ -216,8 +223,8 @@ const EVIDENCE = {
   none: 'Nothing in the profile supports this requirement',
 };
 
-async function assessRequirements(profile, job, requirements, trace) {
-  if (!process.env.TYPESAFE_API_KEY) throw new Error('TYPESAFE_API_KEY not set');
+async function assessRequirements(profile, job, requirements, trace, { apiKey = process.env.TYPESAFE_API_KEY } = {}) {
+  if (!apiKey) throw new Error('TYPESAFE_API_KEY not set');
   const { state } = buildJevRequest(profile, job);
   const questions = {};
   requirements.forEach((r, i) => {
@@ -233,7 +240,7 @@ async function assessRequirements(profile, job, requirements, trace) {
   const generation = trace.generation({ name: 'jev_requirements', model: JEV_MODEL, input: body });
   let data;
   try {
-    data = await callJev(body);
+    data = await callJev(body, 0, apiKey);
   } catch (e) {
     generation.end({ output: { error: e.message }, level: 'ERROR' });
     await langfuse.flushAsync().catch(() => {});
@@ -248,4 +255,4 @@ async function assessRequirements(profile, job, requirements, trace) {
   });
 }
 
-module.exports = { assessJobFit, assessRequirements, buildJevRequest, compactProfile };
+module.exports = { assessJobFit, assessRequirements, buildJevRequest, compactProfile, callJev, fitResult, QUESTIONS, EVIDENCE, JEV_MODEL };
