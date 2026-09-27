@@ -34,6 +34,28 @@
     return '';
   }
 
+  // For a radio/checkbox group the field's label is the question ("Will you require
+  // sponsorship?"), not the first option's own label ("Yes").
+  function groupLabel(el) {
+    const set = el.closest('fieldset');
+    const legend = set?.querySelector('legend')?.innerText.trim();
+    if (legend) return legend;
+    const group = el.closest('[role="radiogroup"], [role="group"]');
+    if (group) {
+      const by = group.getAttribute('aria-labelledby');
+      const text = (by && by.split(' ').map(id => document.getElementById(id)?.innerText.trim()).filter(Boolean).join(' '))
+        || group.getAttribute('aria-label');
+      if (text) return text.trim();
+    }
+    // Nearest block above the options whose text isn't just one option.
+    const optionTexts = new Set((el.name ? Array.from(document.querySelectorAll(`input[name="${CSS.escape(el.name)}"]`)) : [el]).map(g => labelFor(g)));
+    for (let n = el.parentElement, i = 0; n && i < 5; n = n.parentElement, i++) {
+      const first = n.innerText?.trim().split('\n')[0];
+      if (first && !optionTexts.has(first) && first.length < 160) return first;
+    }
+    return '';
+  }
+
   function optionsFor(el) {
     if (el.tagName === 'SELECT') {
       return Array.from(el.options).map(o => ({ value: o.value, text: o.textContent.trim() }));
@@ -80,9 +102,10 @@
       }
       const fieldId = `f${i}`;
       el.dataset.arjunFieldId = fieldId;
+      const isChoice = el.type === 'radio' || el.type === 'checkbox';
       fields.push({
         field_id: fieldId,
-        label: labelFor(el),
+        label: (isChoice && el.name && groupLabel(el)) || labelFor(el),
         placeholder: el.placeholder || '',
         name: el.name || '',
         id: el.id || '',
@@ -221,10 +244,17 @@
     document.body.appendChild(host);
 
     const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let collapsed = false;
     const render = () => {
       const filled = results.filter(r => r.state === 'filled');
       const check = results.filter(r => r.state === 'check');
       const empty = fields.filter(f => !results.some(r => r.field.field_id === f.field_id));
+      if (collapsed) {
+        root.innerHTML = `
+          <style>.pill { background: #1c1917; color: #fff; border: none; border-left: 3px solid #f59e0b; border-radius: 999px; padding: 8px 14px; font: 600 12.5px system-ui, sans-serif; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.25); } .pill:focus-visible { outline: 2px solid #f59e0b; outline-offset: 2px; }</style>
+          <button class="pill" data-act="expand">Arjun: ${filled.length} filled${check.length ? ` · ${check.length} to check` : ''} · Show</button>`;
+        return;
+      }
       root.innerHTML = `
         <style>
           .card { width: 340px; max-height: 70vh; display: flex; flex-direction: column; background: #fff; color: #1c1917; border: 1px solid #e7e5e4; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.18); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
@@ -249,7 +279,7 @@
         </style>
         <div class="card" role="dialog" aria-label="Arjun autofill summary">
           <div class="head">
-            <div class="title"><span>Arjun filled ${filled.length} of ${fields.length} field${fields.length === 1 ? '' : 's'}</span><button class="x" data-act="close" aria-label="Close">×</button></div>
+            <div class="title"><span>Arjun filled ${filled.length} of ${fields.length} field${fields.length === 1 ? '' : 's'}</span><span><button class="x" data-act="collapse" aria-label="Minimize" title="Minimize">–</button><button class="x" data-act="close" aria-label="Close" title="Close">×</button></span></div>
             <div class="legend"><span><span class="dot" style="background:${GREEN}"></span>Filled from your profile</span>${check.length ? `<span><span class="dot" style="background:${AMBER}"></span>Check these</span>` : ''}</div>
           </div>
           <div class="body">
@@ -277,6 +307,8 @@
       const t = ev.target.closest('[data-act], .row');
       if (!t) return;
       const act = t.dataset.act;
+      if (act === 'collapse') { collapsed = true; render(); return; }
+      if (act === 'expand') { collapsed = false; render(); return; }
       if (act === 'close') { clearHighlights(); host.remove(); return; }
       if (act === 'undo') {
         for (const r of results.filter(x => x.state === 'filled')) restore(r.el, r.snap);
