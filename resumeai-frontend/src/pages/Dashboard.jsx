@@ -231,6 +231,7 @@ export default function Dashboard() {
   const [submitMsg, setSubmitMsg] = useState('');
   const [loading, setLoading] = useState(true);
   const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [infoTab, setInfoTab] = useState(null);
   const [downloading, setDownloading] = useState(null);
   const [chatMessages, setChatMessages] = useState([]);
   const [chatInput, setChatInput] = useState('');
@@ -1236,26 +1237,41 @@ export default function Dashboard() {
 
           {/* Nav tabs */}
           {[
-            { id: 'start', label: 'Get started', desc: 'Setup steps & what Arjun does' },
-            { id: 'profile', label: 'My Profile', desc: 'Your career snapshot' },
-            { id: 'chat', label: 'Chat with Arjun', desc: 'Add info via chat or file upload' },
-            { id: 'submit', label: 'Apply to Job', desc: 'Paste a job URL → get a tailored resume' },
-            { id: 'jobs', label: 'My Applications', desc: 'Track all your tailored resumes' },
-            { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords' },
-            { id: 'skills', label: 'My Skills', desc: 'Your writing playbooks' },
-            { id: 'extension', label: 'Chrome Extension', desc: 'Job fit, analysis & autofill' },
-          ].map(({ id, label, desc }) => (
-            <button key={id} onClick={() => setTab(id)} style={{
-              width: '100%', textAlign: 'left',
-              background: tab === id ? '#ffffff' : 'transparent',
-              border: `1px solid ${tab === id ? '#d6d3d1' : 'transparent'}`,
-              borderRadius: '6px', padding: '9px 12px', marginBottom: '3px',
-              color: tab === id ? '#1c1917' : '#57534e', fontSize: '13px',
-              transition: 'all 0.15s',
-            }}>
-              {label}
-              <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '2px' }}>{desc}</div>
-            </button>
+            { id: 'start', label: 'Get started', desc: 'Setup steps & what Arjun does', info: 'Your setup checklist. Steps tick off as you finish them.' },
+            { id: 'profile', label: 'My Profile', desc: 'Your career snapshot', info: 'Everything Arjun knows about you. Edit details, restore versions, set your resume layout.' },
+            { id: 'chat', label: 'Chat with Arjun', desc: 'Add info via chat or file upload', info: 'Upload resumes or tell Arjun about new work. Nothing is saved until you confirm.' },
+            { id: 'submit', label: 'Apply to Job', desc: 'Paste a job URL → get a tailored resume', info: 'Paste a job link to get a tailored resume, ATS score and optional cover letter.' },
+            { id: 'jobs', label: 'My Applications', desc: 'Track all your tailored resumes', info: 'Every resume Arjun made for you, with its score. Download them here.' },
+            { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords', info: 'Skills jobs keep asking for that your profile lacks. Add them only if you have them.' },
+            { id: 'skills', label: 'My Skills', desc: 'Your writing playbooks', info: 'Writing guides built from your profile that shape how Arjun writes for you.' },
+            { id: 'extension', label: 'Chrome Extension', desc: 'Job fit, analysis & autofill', info: 'Check job fit and autofill applications on job sites. Add your Jev key here.' },
+          ].map(({ id, label, desc, info }) => (
+            <div key={id} style={{ position: 'relative', marginBottom: '3px' }}>
+              <button onClick={() => setTab(id)} style={{
+                width: '100%', textAlign: 'left',
+                background: tab === id ? '#ffffff' : 'transparent',
+                border: `1px solid ${tab === id ? '#d6d3d1' : 'transparent'}`,
+                borderRadius: '6px', padding: '9px 30px 9px 12px',
+                color: tab === id ? '#1c1917' : '#57534e', fontSize: '13px',
+                transition: 'all 0.15s',
+              }}>
+                {label}
+                <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '2px' }}>{desc}</div>
+              </button>
+              <button
+                aria-label={`About ${label}`}
+                aria-expanded={infoTab === id}
+                onMouseEnter={() => setInfoTab(id)} onMouseLeave={() => setInfoTab(null)}
+                onFocus={() => setInfoTab(id)} onBlur={() => setInfoTab(null)}
+                onClick={(e) => { e.stopPropagation(); setInfoTab(infoTab === id ? null : id); }}
+                style={{ position: 'absolute', top: '10px', right: '8px', width: 16, height: 16, borderRadius: '50%', border: '1px solid #d6d3d1', background: '#fff', color: '#78716c', fontSize: '10px', fontFamily: 'Georgia, serif', fontStyle: 'italic', lineHeight: '14px', padding: 0, cursor: 'help' }}
+              >i</button>
+              {infoTab === id && (
+                <div role="tooltip" style={{ position: 'absolute', top: '30px', right: '4px', left: '12px', zIndex: 20, background: '#1c1917', color: '#fafaf9', fontSize: '11.5px', lineHeight: 1.5, borderRadius: '6px', padding: '8px 10px', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                  {info}
+                </div>
+              )}
+            </div>
           ))}
 
           {/* Quick stats */}
