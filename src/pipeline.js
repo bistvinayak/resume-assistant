@@ -375,7 +375,12 @@ function expandResume(resume, profile, aggression) {
     if (profileProj) {
       const desc = (profileProj.description || '').replace(/[.\s]+$/, '');
       const outcome = (profileProj.outcome || '').replace(/[.\s]+$/, '');
-      const parts = [desc, outcome].filter(Boolean);
+      // Outcomes often restate the description ("…in under 60 seconds. AI solution design
+      // generation in under 60 seconds."); only append one that adds something new.
+      const words = (t) => new Set(t.toLowerCase().match(/[a-z0-9$%+]+/g) || []);
+      const dw = words(desc), ow = [...words(outcome)];
+      const novel = ow.filter(w => !dw.has(w)).length / Math.max(1, ow.length);
+      const parts = [desc, novel >= 0.5 ? outcome : ''].filter(Boolean);
       const fullDesc = parts.join('. ') + '.';
       if (fullDesc.length > (resumeProj.description || '').length) {
         resumeProj.description = fullDesc;

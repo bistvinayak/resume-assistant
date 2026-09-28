@@ -1,5 +1,6 @@
 'use strict';
 
+const { skillGroups: resumeSkillGroups } = require('./resumeSkills');
 const fs = require('fs');
 const path = require('path');
 const {
@@ -119,11 +120,7 @@ const SECTION_RENDERERS = {
   },
 
   skills(resume, ctx) {
-    const skillGroups = [
-      { label: 'AI & Automation', items: resume.skills_ai_tools },
-      { label: 'Product & Delivery', items: resume.skills_product },
-      { label: 'Technical', items: resume.skills_technical },
-    ].filter(g => Array.isArray(g.items) && g.items.length);
+    const skillGroups = resumeSkillGroups(resume);
 
     const out = [];
     if (skillGroups.length) {

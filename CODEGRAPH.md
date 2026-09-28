@@ -129,10 +129,10 @@ applyPartial(partial, userId) [profile.js:433]
   → returns merged (with _conflicts if any)
 ```
 
-## Job Processing Pipeline (pipeline.js:509)
+## Job Processing Pipeline (pipeline.js:514)
 
 ```
-processJob(job, userId) [pipeline.js:509]
+processJob(job, userId) [pipeline.js:514]
   → seenJobBefore(job) [db.js:509]
   → getProfile(userId) [db.js:277]
   → tailorResume(profile, job, trace) [llm.js:1483]  — LLM
@@ -140,7 +140,7 @@ processJob(job, userId) [pipeline.js:509]
   → if ats < 95:
        → improveResume(resume, job, ats, trace) [llm.js:1513]  — LLM
        → calculateAtsScore again
-  → renderResumeDocx(resume, filePath) [renderDocx.js:254]
+  → renderResumeDocx(resume, filePath) [renderDocx.js:251]
   → saveTailored(jobId, resume, filePath) [db.js:525]
   → markDelivered(tailoredId, jobId, atsData) [db.js:534]
   → sendResumeEmail (if source=cron) [mailer.js:60]
@@ -154,7 +154,7 @@ startCron() [cron.js:119]  — runs every 2 hours
   → runBatch(userId) [cron.js:10]
        → fetchLinkedInJobs() [gmail.js:33]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
-       → per job: processJob(job, userId) [pipeline.js:509]
+       → per job: processJob(job, userId) [pipeline.js:514]
 ```
 
 ## Merge Logic (profile.js:764)
@@ -625,13 +625,13 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | validateResumeContent | 282 | no |
 | dedupBullets | 306 | no |
 | expandResume | 343 | no |
-| relWords | 411 | no |
-| jdRelevance | 416 | no |
-| tightenResume | 421 | yes |
-| pickLayoutOpts | 483 | no |
-| withRetry | 496 | no |
-| processJob | 509 | yes |
-| buildEmailBody | 927 | no |
+| relWords | 416 | no |
+| jdRelevance | 421 | no |
+| tightenResume | 426 | yes |
+| pickLayoutOpts | 488 | no |
+| withRetry | 501 | no |
+| processJob | 514 | yes |
+| buildEmailBody | 932 | no |
 
 ### profile.js
 
@@ -692,32 +692,38 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 
 | Function | Line | Exported |
 |----------|------|----------|
-| scaledFonts | 33 | no |
-| parseBoldSegments | 48 | no |
-| bulletRuns | 66 | no |
-| orderLinks | 73 | no |
-| normalizeLinks | 78 | no |
-| heading | 87 | no |
-| splitLine | 97 | no |
-| renderResumeDocx | 254 | yes |
+| scaledFonts | 34 | no |
+| parseBoldSegments | 49 | no |
+| bulletRuns | 67 | no |
+| orderLinks | 74 | no |
+| normalizeLinks | 79 | no |
+| heading | 88 | no |
+| splitLine | 98 | no |
+| renderResumeDocx | 251 | yes |
 
 ### renderPdf.js
 
 | Function | Line | Exported |
 |----------|------|----------|
-| ensureResumeFonts | 18 | no |
-| getBrowser | 33 | no |
-| scaledFonts | 73 | no |
-| parseBoldSegments | 87 | no |
-| escapeHtml | 105 | no |
-| bulletHtml | 110 | no |
-| orderLinks | 118 | no |
-| normalizeLinks | 123 | no |
-| sectionHeadingHtml | 132 | no |
-| buildResumeHtml | 249 | yes |
-| withPage | 335 | no |
-| renderResumePdf | 345 | yes |
-| measureResumePdf | 360 | yes |
+| ensureResumeFonts | 19 | no |
+| getBrowser | 34 | no |
+| scaledFonts | 74 | no |
+| parseBoldSegments | 88 | no |
+| escapeHtml | 106 | no |
+| bulletHtml | 111 | no |
+| orderLinks | 119 | no |
+| normalizeLinks | 124 | no |
+| sectionHeadingHtml | 133 | no |
+| buildResumeHtml | 246 | yes |
+| withPage | 332 | no |
+| renderResumePdf | 342 | yes |
+| measureResumePdf | 357 | yes |
+
+### resumeSkills.js
+
+| Function | Line | Exported |
+|----------|------|----------|
+| skillGroups | 11 | yes |
 
 ### scraper.js
 
@@ -889,6 +895,14 @@ profile.js
   ├── llm.js (extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts)
   ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched)
   └── llm.js (extractFacts, smartMerge, scoreIngestionCoverage, classifyCustomFacts)
+
+renderDocx.js
+  ├── resumeSkills.js (skillGroups)
+  └── resumeSkills.js (skillGroups)
+
+renderPdf.js
+  ├── resumeSkills.js (skillGroups)
+  └── resumeSkills.js (skillGroups)
 
 server.js
   ├── db.js (deleteAllUserData)
