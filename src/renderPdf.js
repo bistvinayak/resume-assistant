@@ -52,7 +52,7 @@ function getBrowser() {
 const BASE_FONTS = {
   name: 16,
   contact: 9,
-  sectionHeading: 10.5,
+  sectionHeading: 10,
   roleTitle: 10,
   roleDates: 9.5,
   tagline: 9,
@@ -182,7 +182,7 @@ const SECTION_RENDERERS = {
       if (job.tagline) html += `<div class="tagline">${escapeHtml(job.tagline)}</div>`;
       for (const b of job.bullets || []) {
         const text = typeof b === 'string' ? b : (b.text || '');
-        html += `<div class="bullet" style="padding-left:${ctx.bulletIndent}pt"><span class="bullet-dot">•</span><span>${bulletHtml(text)}</span></div>`;
+        html += `<div class="bullet" style="padding-left:${ctx.bulletIndent}pt"><span class="bullet-dot">●</span><span>${bulletHtml(text)}</span></div>`;
       }
       html += `</div>`;
     }
@@ -197,7 +197,7 @@ const SECTION_RENDERERS = {
       const stack = Array.isArray(p.tech_stack) && p.tech_stack.length ? p.tech_stack.join(', ') : '';
       html += `<div class="role-header"><span class="project-name">${escapeHtml(p.name || '')}</span>${stack ? `<span class="tech-stack">${escapeHtml(stack)}</span>` : ''}</div>`;
       if (p.url) html += `<div class="project-url">${escapeHtml(p.url)}</div>`;
-      if (p.description) html += `<div class="bullet" style="padding-left:${ctx.bulletIndent}pt"><span class="bullet-dot">•</span><span>${bulletHtml(p.description)}</span></div>`;
+      if (p.description) html += `<div class="bullet" style="padding-left:${ctx.bulletIndent}pt"><span class="bullet-dot">●</span><span>${bulletHtml(p.description)}</span></div>`;
       html += `</div>`;
     }
     return html;
@@ -215,7 +215,7 @@ const SECTION_RENDERERS = {
         const degree = [e.degree, e.major].filter(Boolean).join(', ');
         html += `<div class="role-header"><span class="role-title-plain">${escapeHtml(degree)}</span>${e.dates ? `<span class="role-dates">${escapeHtml(e.dates)}</span>` : ''}</div>`;
         for (const line of [e.honors, e.gpa ? `GPA: ${e.gpa}` : ''].filter(Boolean)) {
-          html += `<div class="bullet" style="padding-left:${ctx.bulletIndent}pt"><span class="bullet-dot">•</span><span>${bulletHtml(String(line))}</span></div>`;
+          html += `<div class="bullet" style="padding-left:${ctx.bulletIndent}pt"><span class="bullet-dot">●</span><span>${bulletHtml(String(line))}</span></div>`;
         }
       } else {
         html += `<div class="role-header"><span class="role-title">${escapeHtml(e.degree || '')}</span>${e.dates ? `<span class="role-dates">${escapeHtml(e.dates)}</span>` : ''}</div>`;
@@ -231,7 +231,7 @@ const SECTION_RENDERERS = {
     let html = sectionHeadingHtml('Certifications', ctx.headingCase);
     for (const cert of resume.certifications) {
       const label = cert.issuer ? `${cert.name} — ${cert.issuer}` : cert.name;
-      html += `<div class="bullet" style="padding-left:12pt"><span class="bullet-dot">•</span><span>${escapeHtml(label)}</span></div>`;
+      html += `<div class="bullet" style="padding-left:12pt"><span class="bullet-dot">●</span><span>${escapeHtml(label)}</span></div>`;
     }
     return html;
   },
@@ -240,7 +240,7 @@ const SECTION_RENDERERS = {
     if (!Array.isArray(resume.activities) || !resume.activities.length) return '';
     let html = sectionHeadingHtml('Activities', ctx.headingCase);
     for (const a of resume.activities) {
-      html += `<div class="bullet" style="padding-left:12pt"><span class="bullet-dot">•</span><span>${escapeHtml(a)}</span></div>`;
+      html += `<div class="bullet" style="padding-left:12pt"><span class="bullet-dot">●</span><span>${escapeHtml(a)}</span></div>`;
     }
     return html;
   },
@@ -307,7 +307,7 @@ function buildResumeHtml(resume, opts = {}) {
   .role-dates { font-size: ${f.roleDates}pt; }
   .tagline { font-size: ${f.tagline}pt; font-style: italic; color: #333; }
   .bullet { display: flex; gap: 4pt; break-inside: avoid; font-size: ${f.bullet}pt; margin-top: 2pt; }
-  .bullet-dot { flex-shrink: 0; }
+  .bullet-dot { flex-shrink: 0; font-family: 'Times New Roman', serif; font-size: 0.8em; line-height: 1.6; }
   .skill-line { font-size: ${f.skillValue}pt; margin: 3pt 0; }
   .project-name { font-size: ${f.projectName}pt; font-weight: bold; break-after: avoid; }
   .project-desc { font-size: ${f.projectDesc}pt; margin: 2pt 0; }
@@ -325,7 +325,8 @@ function buildResumeHtml(resume, opts = {}) {
 </body></html>`;
 }
 
-const PAGE_MARGIN_PT = { top: 50, bottom: 50, left: 55, right: 55 };
+// Margins from the owner's approved resume skill: 400 DXA top/bottom (20pt), 580 DXA sides (29pt).
+const PAGE_MARGIN_PT = { top: 20, bottom: 20, left: 29, right: 29 };
 const PAGE_HEIGHT_PT = 792; // US Letter, 11in * 72pt/in
 const PAGE_WIDTH_PT = 612;  // 8.5in * 72pt/in
 

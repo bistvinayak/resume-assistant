@@ -13,7 +13,7 @@ const {
 const BASE_FONTS = {
   name: 32,
   contact: 18,
-  sectionHeading: 21,
+  sectionHeading: 20,
   roleTitle: 20,
   roleDates: 19,
   tagline: 18,
@@ -87,8 +87,8 @@ function normalizeLinks(links) {
   return links.map(l => (typeof l === 'string' ? l : (l?.url || l?.href || ''))).filter(Boolean);
 }
 
-// US Letter with the PDF renderer's margins (50pt top/bottom, 55pt sides), in twips.
-const PAGE = { width: 12240, height: 15840, marginTB: 1000, marginLR: 1100 };
+// US Letter with the approved resume skill's margins: 400 DXA top/bottom, 580 DXA sides.
+const PAGE = { width: 12240, height: 15840, marginTB: 400, marginLR: 580 };
 const RIGHT_TAB = [{ type: TabStopType.RIGHT, position: PAGE.width - 2 * PAGE.marginLR }];
 
 function heading(text, headingCase, sectionGap) {

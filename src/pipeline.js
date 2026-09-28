@@ -442,7 +442,7 @@ function tightenResume(resume, jdText = '') {
   // 1. Patched/filler bullets
   for (const r of older) {
     const i = (r.bullets || []).findIndex(b => ['additional role detail', 'role coverage (patched)'].includes(b?.serves));
-    if (i >= 0 && r.bullets.length > 1) return drop(r.bullets, i);
+    if (i >= 0 && r.bullets.length > 2) return drop(r.bullets, i);
   }
   // 2. Bullets without numbers, beyond 2 per role, older roles first
   for (const r of older) {
@@ -464,6 +464,7 @@ function tightenResume(resume, jdText = '') {
   // 6. Any bullet beyond 3 per role, then beyond 2, older roles first
   for (const cap of [3, 2]) {
     for (const r of older) if ((r.bullets || []).length > cap) return drop(r.bullets, leastRelevant(r.bullets, 0, text));
+    // (cap never goes below 2)
   }
   // 7. Education honors/GPA lines
   for (const e of resume.education || []) {
@@ -474,7 +475,7 @@ function tightenResume(resume, jdText = '') {
   for (const r of older.slice(0, -1)) if (r.tagline) { r.tagline = ''; return true; }
   // 9. Projects down to one, then the oldest roles down to one bullet
   if ((resume.projects || []).length > 1) return drop(resume.projects, leastRelevant(resume.projects, 0, projText));
-  for (const r of older.slice(0, -1)) if ((r.bullets || []).length > 1) return drop(r.bullets, leastRelevant(r.bullets, 0, text));
+  // Never below 2 bullets per role (the approved resume skill's floor).
   if ((resume.certifications || []).length) { resume.certifications = []; return true; }
   return false;
 }
@@ -688,8 +689,8 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
       // Pull it in a few bullets at a time, only keeping each step if it doesn't
       // push the page count past the target — this never invents anything, it
       // only surfaces real profile content expandResume() already knows is there.
-      const TARGET_FILL_FLOOR = 85;
-      const MAX_FILL_ITERATIONS = 3;
+      const TARGET_FILL_FLOOR = 93; // skill: fill until bottom whitespace is under ~35pt
+      const MAX_FILL_ITERATIONS = 8;
       if (m.pages === targetPages && m.lastPageFill < TARGET_FILL_FLOOR) {
         let fillIterations = 0;
         while (m.lastPageFill < TARGET_FILL_FLOOR && fillIterations < MAX_FILL_ITERATIONS) {
