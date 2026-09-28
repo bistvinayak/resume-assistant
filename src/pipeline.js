@@ -399,44 +399,54 @@ function expandResume(resume, profile, aggression) {
   return changed;
 }
 
-function tightenResume(resume, targetPages) {
-  let changed = false;
-  const experience = resume.experience || [];
+// Removes ONE piece of content per call, least valuable first, so the page-fit loop can
+// re-measure after each cut and stop as soon as the resume fits. Returns false when there is
+// nothing left it is willing to cut. Order: filler bullets, bullets without numbers (older
+// roles first), extra projects, optional sections, long skill lists, older roles' extra
+// bullets, education details, older company descriptions, the last project.
+const HAS_METRIC = /\$[\d,.]+|\d+%|\d+[KMB]\+|\d{2,}/;
+function tightenResume(resume) {
+  const roles = resume.experience || [];
+  const older = [...roles].reverse(); // resumes list newest first
+  const text = (b) => (typeof b === 'string' ? b : (b?.text || ''));
+  const drop = (arr, i) => { arr.splice(i, 1); return true; };
 
-  const removable = [];
-  for (const exp of experience) {
-    const bullets = exp.bullets || [];
-    for (let i = bullets.length - 1; i >= 0; i--) {
-      const b = bullets[i];
-      const serves = typeof b === 'object' ? b.serves : '';
-      if (serves === 'additional role detail' || serves === 'role coverage (patched)') {
-        removable.push({ exp, idx: i, priority: 0 });
-      }
-    }
+  // 1. Patched/filler bullets
+  for (const r of older) {
+    const i = (r.bullets || []).findIndex(b => ['additional role detail', 'role coverage (patched)'].includes(b?.serves));
+    if (i >= 0 && r.bullets.length > 1) return drop(r.bullets, i);
   }
-
-  for (const exp of [...experience].reverse()) {
-    const bullets = exp.bullets || [];
-    if (bullets.length <= 2) continue;
-    for (let i = bullets.length - 1; i >= 2; i--) {
-      const b = bullets[i];
-      const text = typeof b === 'string' ? b : (b.text || '');
-      const hasMetric = /\$[\d,.]+|\d+%|\d+[KMB]\+/.test(text);
-      if (!hasMetric && !removable.some(r => r.exp === exp && r.idx === i)) {
-        removable.push({ exp, idx: i, priority: 1 });
-      }
-    }
+  // 2. Bullets without numbers, beyond 2 per role, older roles first
+  for (const r of older) {
+    const bs = r.bullets || [];
+    if (bs.length <= 2) continue;
+    for (let i = bs.length - 1; i >= 2; i--) if (!HAS_METRIC.test(text(bs[i]))) return drop(bs, i);
   }
-
-  removable.sort((a, b) => a.priority - b.priority);
-
-  for (const { exp, idx } of removable) {
-    if ((exp.bullets || []).length <= 2) continue;
-    exp.bullets.splice(idx, 1);
-    changed = true;
+  // 3. Projects beyond 2
+  if ((resume.projects || []).length > 2) return drop(resume.projects, resume.projects.length - 1);
+  // 4. Optional sections
+  for (const k of ['interests', 'activities']) if ((resume[k] || []).length) { resume[k] = []; return true; }
+  if ((resume.certifications || []).length > 2) return drop(resume.certifications, resume.certifications.length - 1);
+  // 5. Long skill lists (keep the first, most relevant, 8 per group)
+  for (const k of ['skills_technical', 'skills_product', 'skills_ai_tools']) {
+    if ((resume[k] || []).length > 8) { resume[k] = resume[k].slice(0, resume[k].length - 2); return true; }
   }
-
-  return changed;
+  // 6. Any bullet beyond 3 per role, then beyond 2, older roles first
+  for (const cap of [3, 2]) {
+    for (const r of older) if ((r.bullets || []).length > cap) return drop(r.bullets, r.bullets.length - 1);
+  }
+  // 7. Education honors/GPA lines
+  for (const e of resume.education || []) {
+    if (e.gpa) { delete e.gpa; return true; }
+    if (e.honors) { delete e.honors; return true; }
+  }
+  // 8. Company descriptions, oldest role first (keep the most recent one)
+  for (const r of older.slice(0, -1)) if (r.tagline) { r.tagline = ''; return true; }
+  // 9. Projects down to one, then the oldest roles down to one bullet
+  if ((resume.projects || []).length > 1) return drop(resume.projects, resume.projects.length - 1);
+  for (const r of older.slice(0, -1)) if ((r.bullets || []).length > 1) return drop(r.bullets, r.bullets.length - 1);
+  if ((resume.certifications || []).length) { resume.certifications = []; return true; }
+  return false;
 }
 
 function pickLayoutOpts(pages, lastPageFill) {
@@ -612,7 +622,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
       // reactive fill-based heuristic below. Bounded iterations since expand/tighten
       // can run out of profile content to add/remove before hitting the exact target.
       let iterations = 0;
-      const MAX_TARGET_ITERATIONS = 4;
+      const MAX_TARGET_ITERATIONS = 25; // tightenResume removes one small piece per call
       while (m.pages !== targetPages && iterations < MAX_TARGET_ITERATIONS) {
         const changed = m.pages < targetPages
           ? expandResume(resume, profile, (targetPages - m.pages) >= 2 ? 'heavy' : 'medium')
@@ -900,4 +910,4 @@ Generated by Resume Assistant`;
   return body.trim();
 }
 
-module.exports = { pagesFromFeedback, ensureBulletLabels, restoreBulletLabels, ensureResumeCompleteness, applyBulletLabels, cleanSummary, yearsOf, processJob, queueJob, getQueueStats, dropUntraceableBullets };
+module.exports = { tightenResume, pagesFromFeedback, ensureBulletLabels, restoreBulletLabels, ensureResumeCompleteness, applyBulletLabels, cleanSummary, yearsOf, processJob, queueJob, getQueueStats, dropUntraceableBullets };
