@@ -617,11 +617,14 @@ async function markJobFailed(jobId, reason) {
     if (rows.length) return 'waiting';
   }
   // Shown in My Applications and the side panel: say "free models are busy" instead of a raw 429.
-  await pool.query(
+  const exhausted = friendly?.code === 'ai_busy'
+    ? "The free AI models stayed busy for about an hour, so Arjun stopped retrying. Ask for the resume again in a little while."
+    : null;
+  const { rowCount } = await pool.query(
     `UPDATE jobs SET status = 'failed', error_reason = $2 WHERE job_id = $1 AND status <> 'waiting'`,
-    [jobId, friendly?.message || reason || 'Scraping failed']
+    [jobId, exhausted || friendly?.message || reason || 'Scraping failed']
   );
-  return 'failed';
+  return rowCount ? 'failed' : 'waiting';
 }
 
 async function saveJobOptions(jobId, options) {

@@ -150,7 +150,7 @@ processJob(job, userId) [pipeline.js:468]
 
 ```
 startCron() [cron.js:119]  — runs every 2 hours
-  → recoverStaleJobs(10) [db.js:655]
+  → recoverStaleJobs(10) [db.js:658]
   → runBatch(userId) [cron.js:10]
        → fetchLinkedInJobs() [gmail.js:33]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
@@ -245,42 +245,42 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | getMostRecentDeliveredJob | 577 |  |
 | insertJobProcessing | 590 | Insert job with status=processing |
 | markJobFailed | 605 | Mark job as failed with reason |
-| saveJobOptions | 627 |  |
-| claimDueWaitingJobs | 633 |  |
-| forceRequeueJob | 647 |  |
-| recoverStaleJobs | 655 | Find jobs stuck in processing > N minutes |
-| getJobsForUser | 665 | List jobs for user |
-| upsertSchemaProposal | 684 |  |
-| getSchemaProposals | 717 |  |
-| getApprovedCategories | 724 |  |
-| updateSchemaProposalStatus | 731 |  |
-| setBackfillStatus | 780 |  |
-| getUnplacedFacts | 788 |  |
-| recordUncategorizedFacts | 801 |  |
-| getUnmatchedFactsByUser | 819 |  |
-| saveChatFeedback | 827 |  |
-| getChatFeedback | 835 |  |
-| updateChatFeedbackStatus | 842 |  |
-| markFactsMatched | 849 |  |
-| requestGmailForwarding | 857 |  |
-| getGmailForwardingStatus | 868 |  |
-| getGmailForwardingRequests | 873 |  |
-| reviewGmailForwarding | 880 |  |
-| getApprovedForwardingMap | 888 |  |
-| getResumeFormat | 895 |  |
-| saveResumeFormat | 903 |  |
-| deleteResumeFormat | 914 |  |
-| logExtensionEvent | 918 |  |
-| saveJobCheck | 929 |  |
-| getJobCheck | 941 |  |
-| saveUserApiKey | 946 |  |
-| getUserApiKey | 953 |  |
-| deleteUserApiKey | 957 |  |
-| addResumeFeedback | 961 |  |
-| getLatestTailored | 971 |  |
-| saveJobAnalysis | 986 |  |
-| getExtensionEvents | 992 |  |
-| deleteAllUserData | 1071 |  |
+| saveJobOptions | 630 |  |
+| claimDueWaitingJobs | 636 |  |
+| forceRequeueJob | 650 |  |
+| recoverStaleJobs | 658 | Find jobs stuck in processing > N minutes |
+| getJobsForUser | 668 | List jobs for user |
+| upsertSchemaProposal | 687 |  |
+| getSchemaProposals | 720 |  |
+| getApprovedCategories | 727 |  |
+| updateSchemaProposalStatus | 734 |  |
+| setBackfillStatus | 783 |  |
+| getUnplacedFacts | 791 |  |
+| recordUncategorizedFacts | 804 |  |
+| getUnmatchedFactsByUser | 822 |  |
+| saveChatFeedback | 830 |  |
+| getChatFeedback | 838 |  |
+| updateChatFeedbackStatus | 845 |  |
+| markFactsMatched | 852 |  |
+| requestGmailForwarding | 860 |  |
+| getGmailForwardingStatus | 871 |  |
+| getGmailForwardingRequests | 876 |  |
+| reviewGmailForwarding | 883 |  |
+| getApprovedForwardingMap | 891 |  |
+| getResumeFormat | 898 |  |
+| saveResumeFormat | 906 |  |
+| deleteResumeFormat | 917 |  |
+| logExtensionEvent | 921 |  |
+| saveJobCheck | 932 |  |
+| getJobCheck | 944 |  |
+| saveUserApiKey | 949 |  |
+| getUserApiKey | 956 |  |
+| deleteUserApiKey | 960 |  |
+| addResumeFeedback | 964 |  |
+| getLatestTailored | 974 |  |
+| saveJobAnalysis | 989 |  |
+| getExtensionEvents | 995 |  |
+| deleteAllUserData | 1074 |  |
 
 ## Frontend Pages
 
@@ -446,44 +446,44 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | getMostRecentDeliveredJob | 577 | yes |
 | insertJobProcessing | 590 | yes |
 | markJobFailed | 605 | yes |
-| saveJobOptions | 627 | yes |
-| claimDueWaitingJobs | 633 | yes |
-| forceRequeueJob | 647 | yes |
-| recoverStaleJobs | 655 | yes |
-| getJobsForUser | 665 | yes |
-| normalizeCategory | 680 | no |
-| upsertSchemaProposal | 684 | yes |
-| getSchemaProposals | 717 | yes |
-| getApprovedCategories | 724 | yes |
-| updateSchemaProposalStatus | 731 | yes |
-| enforceApprovedCustomSections | 744 | no |
-| setBackfillStatus | 780 | yes |
-| getUnplacedFacts | 788 | yes |
-| recordUncategorizedFacts | 801 | yes |
-| getUnmatchedFactsByUser | 819 | yes |
-| saveChatFeedback | 827 | yes |
-| getChatFeedback | 835 | yes |
-| updateChatFeedbackStatus | 842 | yes |
-| markFactsMatched | 849 | yes |
-| requestGmailForwarding | 857 | yes |
-| getGmailForwardingStatus | 868 | yes |
-| getGmailForwardingRequests | 873 | yes |
-| reviewGmailForwarding | 880 | yes |
-| getApprovedForwardingMap | 888 | yes |
-| getResumeFormat | 895 | yes |
-| saveResumeFormat | 903 | yes |
-| deleteResumeFormat | 914 | yes |
-| logExtensionEvent | 918 | yes |
-| saveJobCheck | 929 | yes |
-| getJobCheck | 941 | yes |
-| saveUserApiKey | 946 | yes |
-| getUserApiKey | 953 | yes |
-| deleteUserApiKey | 957 | yes |
-| addResumeFeedback | 961 | yes |
-| getLatestTailored | 971 | yes |
-| saveJobAnalysis | 986 | yes |
-| getExtensionEvents | 992 | yes |
-| deleteAllUserData | 1071 | yes |
+| saveJobOptions | 630 | yes |
+| claimDueWaitingJobs | 636 | yes |
+| forceRequeueJob | 650 | yes |
+| recoverStaleJobs | 658 | yes |
+| getJobsForUser | 668 | yes |
+| normalizeCategory | 683 | no |
+| upsertSchemaProposal | 687 | yes |
+| getSchemaProposals | 720 | yes |
+| getApprovedCategories | 727 | yes |
+| updateSchemaProposalStatus | 734 | yes |
+| enforceApprovedCustomSections | 747 | no |
+| setBackfillStatus | 783 | yes |
+| getUnplacedFacts | 791 | yes |
+| recordUncategorizedFacts | 804 | yes |
+| getUnmatchedFactsByUser | 822 | yes |
+| saveChatFeedback | 830 | yes |
+| getChatFeedback | 838 | yes |
+| updateChatFeedbackStatus | 845 | yes |
+| markFactsMatched | 852 | yes |
+| requestGmailForwarding | 860 | yes |
+| getGmailForwardingStatus | 871 | yes |
+| getGmailForwardingRequests | 876 | yes |
+| reviewGmailForwarding | 883 | yes |
+| getApprovedForwardingMap | 891 | yes |
+| getResumeFormat | 898 | yes |
+| saveResumeFormat | 906 | yes |
+| deleteResumeFormat | 917 | yes |
+| logExtensionEvent | 921 | yes |
+| saveJobCheck | 932 | yes |
+| getJobCheck | 944 | yes |
+| saveUserApiKey | 949 | yes |
+| getUserApiKey | 956 | yes |
+| deleteUserApiKey | 960 | yes |
+| addResumeFeedback | 964 | yes |
+| getLatestTailored | 974 | yes |
+| saveJobAnalysis | 989 | yes |
+| getExtensionEvents | 995 | yes |
+| deleteAllUserData | 1074 | yes |
 
 ### fitEngine.js
 
