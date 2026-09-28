@@ -5,7 +5,7 @@ const { queueJob } = require('./pipeline');
 const { fetchLinkedInJobs } = require('./gmail');
 const { scrapeLinkedInJob } = require('./scraper');
 const { sendAcknowledgmentEmail } = require('./mailer');
-const { recoverStaleJobs, insertJobProcessing, getApprovedForwardingMap, getProfile } = require('./db');
+const { markJobFailed, recoverStaleJobs, insertJobProcessing, getApprovedForwardingMap, getProfile } = require('./db');
 
 async function runBatch() {
   console.log(`⏱  cron: checking forwarded job alert emails...`);
@@ -160,7 +160,18 @@ function startCron() {
       }
     }
   });
-  console.log('✓ cron scheduled (jobs every 2h, stale recovery every 5min)');
+  // Resumes parked as 'waiting' because the free AI models were busy.
+  cron.schedule('*/5 * * * *', async () => {
+    const due = await require('./db').claimDueWaitingJobs(5).catch(() => []);
+    for (const j of due) {
+      const o = j.job_options || {};
+      console.log(`↻ retrying waiting resume ${j.company} - ${j.title} (attempt ${j.retry_count + 1})`);
+      queueJob({ job_id: j.job_id, title: j.title, company: j.company, url: j.url, jd_text: j.jd_text, candidate_feedback: o.candidate_feedback || [] },
+        j.user_id, { force: true, source: o.source || 'retry', wantCoverLetter: !!o.wantCoverLetter })
+        .catch(e => markJobFailed(j.job_id, e.message).catch(() => {}));
+    }
+  });
+  console.log('✓ cron scheduled (jobs every 2h, stale recovery + busy-model retries every 5min)');
 }
 
 module.exports = { processPendingIngestions, startCron, runBatch };

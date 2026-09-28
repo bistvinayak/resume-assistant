@@ -72,6 +72,9 @@ async function initSchema() {
       ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS cover_letter_text TEXT;
       ALTER TABLE tailored_resume ADD COLUMN IF NOT EXISTS cover_letter_file_path TEXT;
       ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error_reason TEXT;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS retry_count INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS next_retry_at TIMESTAMPTZ;
+      ALTER TABLE jobs ADD COLUMN IF NOT EXISTS job_options JSONB;
     EXCEPTION WHEN others THEN NULL; END $$;
 
     CREATE INDEX IF NOT EXISTS idx_master_profile_user ON master_profile(user_id);
@@ -588,21 +591,53 @@ async function insertJobProcessing(job, userId = 'me') {
   const res = await pool.query(
     `INSERT INTO jobs (job_id, user_id, title, company, url, status)
      VALUES ($1, $2, $3, $4, $5, 'processing')
-     ON CONFLICT (job_id) DO UPDATE SET status = 'processing', seen_at = now()
-     WHERE jobs.status IN ('failed', 'delivered')
+     ON CONFLICT (job_id) DO UPDATE SET status = 'processing', seen_at = now(), retry_count = 0, next_retry_at = NULL
+     WHERE jobs.status IN ('failed', 'delivered', 'waiting')
      RETURNING job_id`,
     [job.job_id, userId, job.title || null, job.company || null, job.url || null]
   );
   return res.rowCount > 0;
 }
 
+// Busy free models are temporary: park the job as 'waiting' and let the retry cron run it
+// again later (2, 5, 10, 20, 30 min). Anything else, or after the last retry, is 'failed'.
+const RETRY_DELAYS_MIN = [2, 5, 10, 20, 30];
 async function markJobFailed(jobId, reason) {
+  const { friendlyAiError, FREE_MODEL_WAITING } = require('./aiErrors');
+  const friendly = friendlyAiError(reason);
+  if (friendly?.code === 'ai_busy') {
+    // Only a job that is still processing moves on, so a failure reported twice counts once.
+    const { rows } = await pool.query(
+      `UPDATE jobs SET status = 'waiting', error_reason = $2, retry_count = retry_count + 1,
+              next_retry_at = now() + make_interval(mins => (ARRAY[${RETRY_DELAYS_MIN.join(',')}])[LEAST(retry_count + 1, ${RETRY_DELAYS_MIN.length})])
+        WHERE job_id = $1 AND status = 'processing' AND retry_count < ${RETRY_DELAYS_MIN.length}
+        RETURNING retry_count`,
+      [jobId, FREE_MODEL_WAITING]
+    );
+    if (rows.length) return 'waiting';
+  }
   // Shown in My Applications and the side panel: say "free models are busy" instead of a raw 429.
-  reason = require('./aiErrors').friendlyAiError(reason)?.message || reason;
   await pool.query(
-    `UPDATE jobs SET status = 'failed', error_reason = $2 WHERE job_id = $1`,
-    [jobId, reason || 'Scraping failed']
+    `UPDATE jobs SET status = 'failed', error_reason = $2 WHERE job_id = $1 AND status <> 'waiting'`,
+    [jobId, friendly?.message || reason || 'Scraping failed']
   );
+  return 'failed';
+}
+
+async function saveJobOptions(jobId, options) {
+  await pool.query('UPDATE jobs SET job_options = $2 WHERE job_id = $1', [jobId, options]);
+}
+
+// Waiting jobs whose retry time has come; claims each (waiting -> processing) so two cron
+// runs can't pick the same job.
+async function claimDueWaitingJobs(limit = 5) {
+  const { rows } = await pool.query(
+    `UPDATE jobs SET status = 'processing', seen_at = now()
+      WHERE job_id IN (SELECT job_id FROM jobs WHERE status = 'waiting' AND next_retry_at <= now() ORDER BY next_retry_at LIMIT $1)
+      RETURNING job_id, user_id, title, company, url, jd_text, job_options, retry_count`,
+    [limit]
+  );
+  return rows;
 }
 
 // Admin override — force a job (regardless of current status) back into
@@ -935,7 +970,7 @@ async function addResumeFeedback(userId, jobKey, text) {
 // Latest tailored resume for a job (a job can be re-tailored several times).
 async function getLatestTailored(jobId, userId) {
   const { rows } = await pool.query(
-    `SELECT j.status, j.ats_score, j.error_reason, j.title, j.company, t.resume_json, t.created_at, t.cover_letter_text
+    `SELECT j.job_id, j.status, j.ats_score, j.error_reason, j.title, j.company, t.resume_json, t.created_at, t.cover_letter_text
      FROM jobs j
      LEFT JOIN LATERAL (
        SELECT resume_json, created_at, cover_letter_text FROM tailored_resume
@@ -1065,6 +1100,7 @@ async function deleteAllUserData(userId) {
 }
 
 module.exports = {
+  saveJobOptions, claimDueWaitingJobs,
   deleteAllUserData, getUnplacedFacts,
   saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored, saveUserApiKey, getUserApiKey, deleteUserApiKey,
   pool, initSchema, getProfile, saveProfile, getProfileVersion, profileEvents,

@@ -129,20 +129,20 @@ applyPartial(partial, userId) [profile.js:433]
   → returns merged (with _conflicts if any)
 ```
 
-## Job Processing Pipeline (pipeline.js:463)
+## Job Processing Pipeline (pipeline.js:468)
 
 ```
-processJob(job, userId) [pipeline.js:463]
-  → seenJobBefore(job) [db.js:506]
-  → getProfile(userId) [db.js:274]
+processJob(job, userId) [pipeline.js:468]
+  → seenJobBefore(job) [db.js:509]
+  → getProfile(userId) [db.js:277]
   → tailorResume(profile, job, trace) [llm.js:1483]  — LLM
   → calculateAtsScore(resume, job, trace) [llm.js:1586]  — LLM
   → if ats < 95:
        → improveResume(resume, job, ats, trace) [llm.js:1513]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:260]
-  → saveTailored(jobId, resume, filePath) [db.js:522]
-  → markDelivered(tailoredId, jobId, atsData) [db.js:531]
+  → saveTailored(jobId, resume, filePath) [db.js:525]
+  → markDelivered(tailoredId, jobId, atsData) [db.js:534]
   → sendResumeEmail (if source=cron) [mailer.js:60]
 ```
 
@@ -150,11 +150,11 @@ processJob(job, userId) [pipeline.js:463]
 
 ```
 startCron() [cron.js:119]  — runs every 2 hours
-  → recoverStaleJobs(10) [db.js:620]
+  → recoverStaleJobs(10) [db.js:655]
   → runBatch(userId) [cron.js:10]
        → fetchLinkedInJobs() [gmail.js:33]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
-       → per job: processJob(job, userId) [pipeline.js:463]
+       → per job: processJob(job, userId) [pipeline.js:468]
 ```
 
 ## Merge Logic (profile.js:764)
@@ -214,71 +214,73 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | Function | Line | Purpose |
 |----------|------|---------|
 | initSchema | 25 | Create tables on startup |
-| getProfile | 274 | Get latest profile (adds _onboarded flag) |
-| saveProfile | 284 | Upsert profile, increments version |
-| getProfileVersion | 319 |  |
-| addPendingIngestion | 325 |  |
-| getDuePendingIngestions | 333 |  |
-| getPendingIngestionCount | 342 |  |
-| markPendingIngestion | 347 |  |
-| insertProposal | 356 |  |
-| listProposals | 366 |  |
-| getProposal | 375 |  |
-| setProposalStatus | 380 |  |
-| addPromptRule | 389 |  |
-| listPromptRules | 397 |  |
-| getActivePromptRules | 402 |  |
-| setPromptRuleActive | 407 |  |
-| getUnanalyzedNegativeFeedback | 412 |  |
-| markFeedbackAnalyzed | 419 |  |
-| getExtensionProblemsBySite | 425 |  |
-| getUserSkills | 445 |  |
-| setUserSkillStatus | 454 |  |
-| saveUserSkill | 462 |  |
-| saveUserSkillNotes | 473 |  |
-| getProfileVersions | 481 | List profile version history |
-| restoreProfileVersion | 496 | Restore a previous version |
-| seenJobBefore | 506 | Dedup check by job_id |
-| saveTailored | 522 | Save rendered resume |
-| markDelivered | 531 | Mark resume delivered + store ATS metadata |
-| getJobByJobId | 557 | Get single job |
-| getMostRecentDeliveredJob | 574 |  |
-| insertJobProcessing | 587 | Insert job with status=processing |
-| markJobFailed | 599 | Mark job as failed with reason |
-| forceRequeueJob | 612 |  |
-| recoverStaleJobs | 620 | Find jobs stuck in processing > N minutes |
-| getJobsForUser | 630 | List jobs for user |
-| upsertSchemaProposal | 649 |  |
-| getSchemaProposals | 682 |  |
-| getApprovedCategories | 689 |  |
-| updateSchemaProposalStatus | 696 |  |
-| setBackfillStatus | 745 |  |
-| getUnplacedFacts | 753 |  |
-| recordUncategorizedFacts | 766 |  |
-| getUnmatchedFactsByUser | 784 |  |
-| saveChatFeedback | 792 |  |
-| getChatFeedback | 800 |  |
-| updateChatFeedbackStatus | 807 |  |
-| markFactsMatched | 814 |  |
-| requestGmailForwarding | 822 |  |
-| getGmailForwardingStatus | 833 |  |
-| getGmailForwardingRequests | 838 |  |
-| reviewGmailForwarding | 845 |  |
-| getApprovedForwardingMap | 853 |  |
-| getResumeFormat | 860 |  |
-| saveResumeFormat | 868 |  |
-| deleteResumeFormat | 879 |  |
-| logExtensionEvent | 883 |  |
-| saveJobCheck | 894 |  |
-| getJobCheck | 906 |  |
-| saveUserApiKey | 911 |  |
-| getUserApiKey | 918 |  |
-| deleteUserApiKey | 922 |  |
-| addResumeFeedback | 926 |  |
-| getLatestTailored | 936 |  |
-| saveJobAnalysis | 951 |  |
-| getExtensionEvents | 957 |  |
-| deleteAllUserData | 1036 |  |
+| getProfile | 277 | Get latest profile (adds _onboarded flag) |
+| saveProfile | 287 | Upsert profile, increments version |
+| getProfileVersion | 322 |  |
+| addPendingIngestion | 328 |  |
+| getDuePendingIngestions | 336 |  |
+| getPendingIngestionCount | 345 |  |
+| markPendingIngestion | 350 |  |
+| insertProposal | 359 |  |
+| listProposals | 369 |  |
+| getProposal | 378 |  |
+| setProposalStatus | 383 |  |
+| addPromptRule | 392 |  |
+| listPromptRules | 400 |  |
+| getActivePromptRules | 405 |  |
+| setPromptRuleActive | 410 |  |
+| getUnanalyzedNegativeFeedback | 415 |  |
+| markFeedbackAnalyzed | 422 |  |
+| getExtensionProblemsBySite | 428 |  |
+| getUserSkills | 448 |  |
+| setUserSkillStatus | 457 |  |
+| saveUserSkill | 465 |  |
+| saveUserSkillNotes | 476 |  |
+| getProfileVersions | 484 | List profile version history |
+| restoreProfileVersion | 499 | Restore a previous version |
+| seenJobBefore | 509 | Dedup check by job_id |
+| saveTailored | 525 | Save rendered resume |
+| markDelivered | 534 | Mark resume delivered + store ATS metadata |
+| getJobByJobId | 560 | Get single job |
+| getMostRecentDeliveredJob | 577 |  |
+| insertJobProcessing | 590 | Insert job with status=processing |
+| markJobFailed | 605 | Mark job as failed with reason |
+| saveJobOptions | 627 |  |
+| claimDueWaitingJobs | 633 |  |
+| forceRequeueJob | 647 |  |
+| recoverStaleJobs | 655 | Find jobs stuck in processing > N minutes |
+| getJobsForUser | 665 | List jobs for user |
+| upsertSchemaProposal | 684 |  |
+| getSchemaProposals | 717 |  |
+| getApprovedCategories | 724 |  |
+| updateSchemaProposalStatus | 731 |  |
+| setBackfillStatus | 780 |  |
+| getUnplacedFacts | 788 |  |
+| recordUncategorizedFacts | 801 |  |
+| getUnmatchedFactsByUser | 819 |  |
+| saveChatFeedback | 827 |  |
+| getChatFeedback | 835 |  |
+| updateChatFeedbackStatus | 842 |  |
+| markFactsMatched | 849 |  |
+| requestGmailForwarding | 857 |  |
+| getGmailForwardingStatus | 868 |  |
+| getGmailForwardingRequests | 873 |  |
+| reviewGmailForwarding | 880 |  |
+| getApprovedForwardingMap | 888 |  |
+| getResumeFormat | 895 |  |
+| saveResumeFormat | 903 |  |
+| deleteResumeFormat | 914 |  |
+| logExtensionEvent | 918 |  |
+| saveJobCheck | 929 |  |
+| getJobCheck | 941 |  |
+| saveUserApiKey | 946 |  |
+| getUserApiKey | 953 |  |
+| deleteUserApiKey | 957 |  |
+| addResumeFeedback | 961 |  |
+| getLatestTailored | 971 |  |
+| saveJobAnalysis | 986 |  |
+| getExtensionEvents | 992 |  |
+| deleteAllUserData | 1071 |  |
 
 ## Frontend Pages
 
@@ -392,7 +394,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 
 | Function | Line | Exported |
 |----------|------|----------|
-| friendlyAiError | 13 | yes |
+| friendlyAiError | 14 | yes |
 
 ### auth.js
 
@@ -413,73 +415,75 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | Function | Line | Exported |
 |----------|------|----------|
 | initSchema | 25 | yes |
-| getProfile | 274 | yes |
-| saveProfile | 284 | yes |
-| getProfileVersion | 319 | yes |
-| addPendingIngestion | 325 | yes |
-| getDuePendingIngestions | 333 | yes |
-| getPendingIngestionCount | 342 | yes |
-| markPendingIngestion | 347 | yes |
-| insertProposal | 356 | yes |
-| listProposals | 366 | yes |
-| getProposal | 375 | yes |
-| setProposalStatus | 380 | yes |
-| addPromptRule | 389 | yes |
-| listPromptRules | 397 | yes |
-| getActivePromptRules | 402 | yes |
-| setPromptRuleActive | 407 | yes |
-| getUnanalyzedNegativeFeedback | 412 | yes |
-| markFeedbackAnalyzed | 419 | yes |
-| getExtensionProblemsBySite | 425 | yes |
-| getUserSkills | 445 | yes |
-| setUserSkillStatus | 454 | yes |
-| saveUserSkill | 462 | yes |
-| saveUserSkillNotes | 473 | yes |
-| getProfileVersions | 481 | yes |
-| restoreProfileVersion | 496 | yes |
-| seenJobBefore | 506 | yes |
-| saveTailored | 522 | yes |
-| markDelivered | 531 | yes |
-| getJobByJobId | 557 | yes |
-| getMostRecentDeliveredJob | 574 | yes |
-| insertJobProcessing | 587 | yes |
-| markJobFailed | 599 | yes |
-| forceRequeueJob | 612 | yes |
-| recoverStaleJobs | 620 | yes |
-| getJobsForUser | 630 | yes |
-| normalizeCategory | 645 | no |
-| upsertSchemaProposal | 649 | yes |
-| getSchemaProposals | 682 | yes |
-| getApprovedCategories | 689 | yes |
-| updateSchemaProposalStatus | 696 | yes |
-| enforceApprovedCustomSections | 709 | no |
-| setBackfillStatus | 745 | yes |
-| getUnplacedFacts | 753 | yes |
-| recordUncategorizedFacts | 766 | yes |
-| getUnmatchedFactsByUser | 784 | yes |
-| saveChatFeedback | 792 | yes |
-| getChatFeedback | 800 | yes |
-| updateChatFeedbackStatus | 807 | yes |
-| markFactsMatched | 814 | yes |
-| requestGmailForwarding | 822 | yes |
-| getGmailForwardingStatus | 833 | yes |
-| getGmailForwardingRequests | 838 | yes |
-| reviewGmailForwarding | 845 | yes |
-| getApprovedForwardingMap | 853 | yes |
-| getResumeFormat | 860 | yes |
-| saveResumeFormat | 868 | yes |
-| deleteResumeFormat | 879 | yes |
-| logExtensionEvent | 883 | yes |
-| saveJobCheck | 894 | yes |
-| getJobCheck | 906 | yes |
-| saveUserApiKey | 911 | yes |
-| getUserApiKey | 918 | yes |
-| deleteUserApiKey | 922 | yes |
-| addResumeFeedback | 926 | yes |
-| getLatestTailored | 936 | yes |
-| saveJobAnalysis | 951 | yes |
-| getExtensionEvents | 957 | yes |
-| deleteAllUserData | 1036 | yes |
+| getProfile | 277 | yes |
+| saveProfile | 287 | yes |
+| getProfileVersion | 322 | yes |
+| addPendingIngestion | 328 | yes |
+| getDuePendingIngestions | 336 | yes |
+| getPendingIngestionCount | 345 | yes |
+| markPendingIngestion | 350 | yes |
+| insertProposal | 359 | yes |
+| listProposals | 369 | yes |
+| getProposal | 378 | yes |
+| setProposalStatus | 383 | yes |
+| addPromptRule | 392 | yes |
+| listPromptRules | 400 | yes |
+| getActivePromptRules | 405 | yes |
+| setPromptRuleActive | 410 | yes |
+| getUnanalyzedNegativeFeedback | 415 | yes |
+| markFeedbackAnalyzed | 422 | yes |
+| getExtensionProblemsBySite | 428 | yes |
+| getUserSkills | 448 | yes |
+| setUserSkillStatus | 457 | yes |
+| saveUserSkill | 465 | yes |
+| saveUserSkillNotes | 476 | yes |
+| getProfileVersions | 484 | yes |
+| restoreProfileVersion | 499 | yes |
+| seenJobBefore | 509 | yes |
+| saveTailored | 525 | yes |
+| markDelivered | 534 | yes |
+| getJobByJobId | 560 | yes |
+| getMostRecentDeliveredJob | 577 | yes |
+| insertJobProcessing | 590 | yes |
+| markJobFailed | 605 | yes |
+| saveJobOptions | 627 | yes |
+| claimDueWaitingJobs | 633 | yes |
+| forceRequeueJob | 647 | yes |
+| recoverStaleJobs | 655 | yes |
+| getJobsForUser | 665 | yes |
+| normalizeCategory | 680 | no |
+| upsertSchemaProposal | 684 | yes |
+| getSchemaProposals | 717 | yes |
+| getApprovedCategories | 724 | yes |
+| updateSchemaProposalStatus | 731 | yes |
+| enforceApprovedCustomSections | 744 | no |
+| setBackfillStatus | 780 | yes |
+| getUnplacedFacts | 788 | yes |
+| recordUncategorizedFacts | 801 | yes |
+| getUnmatchedFactsByUser | 819 | yes |
+| saveChatFeedback | 827 | yes |
+| getChatFeedback | 835 | yes |
+| updateChatFeedbackStatus | 842 | yes |
+| markFactsMatched | 849 | yes |
+| requestGmailForwarding | 857 | yes |
+| getGmailForwardingStatus | 868 | yes |
+| getGmailForwardingRequests | 873 | yes |
+| reviewGmailForwarding | 880 | yes |
+| getApprovedForwardingMap | 888 | yes |
+| getResumeFormat | 895 | yes |
+| saveResumeFormat | 903 | yes |
+| deleteResumeFormat | 914 | yes |
+| logExtensionEvent | 918 | yes |
+| saveJobCheck | 929 | yes |
+| getJobCheck | 941 | yes |
+| saveUserApiKey | 946 | yes |
+| getUserApiKey | 953 | yes |
+| deleteUserApiKey | 957 | yes |
+| addResumeFeedback | 961 | yes |
+| getLatestTailored | 971 | yes |
+| saveJobAnalysis | 986 | yes |
+| getExtensionEvents | 992 | yes |
+| deleteAllUserData | 1071 | yes |
 
 ### fitEngine.js
 
@@ -606,26 +610,26 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 |----------|------|----------|
 | withTimeout | 25 | no |
 | queueJob | 36 | yes |
-| drainQueue | 48 | no |
-| getQueueStats | 81 | yes |
-| traceScore | 91 | no |
-| parseMonth | 110 | no |
-| yearsOf | 120 | yes |
-| cleanSummary | 138 | yes |
-| applyBulletLabels | 164 | yes |
-| restoreBulletLabels | 179 | yes |
-| ensureResumeCompleteness | 201 | yes |
-| ensureBulletLabels | 224 | yes |
-| pagesFromFeedback | 245 | yes |
-| dropUntraceableBullets | 255 | yes |
-| validateResumeContent | 277 | no |
-| dedupBullets | 301 | no |
-| expandResume | 338 | no |
-| tightenResume | 397 | no |
-| pickLayoutOpts | 437 | no |
-| withRetry | 450 | no |
-| processJob | 463 | yes |
-| buildEmailBody | 865 | no |
+| drainQueue | 53 | no |
+| getQueueStats | 86 | yes |
+| traceScore | 96 | no |
+| parseMonth | 115 | no |
+| yearsOf | 125 | yes |
+| cleanSummary | 143 | yes |
+| applyBulletLabels | 169 | yes |
+| restoreBulletLabels | 184 | yes |
+| ensureResumeCompleteness | 206 | yes |
+| ensureBulletLabels | 229 | yes |
+| pagesFromFeedback | 250 | yes |
+| dropUntraceableBullets | 260 | yes |
+| validateResumeContent | 282 | no |
+| dedupBullets | 306 | no |
+| expandResume | 343 | no |
+| tightenResume | 402 | no |
+| pickLayoutOpts | 442 | no |
+| withRetry | 455 | no |
+| processJob | 468 | yes |
+| buildEmailBody | 870 | no |
 
 ### profile.js
 
@@ -802,22 +806,24 @@ cron.js
   ├── gmail.js (fetchLinkedInJobs)
   ├── scraper.js (scrapeLinkedInJob)
   ├── mailer.js (sendAcknowledgmentEmail)
-  ├── db.js (recoverStaleJobs, insertJobProcessing, getApprovedForwardingMap, getProfile)
+  ├── db.js (markJobFailed, recoverStaleJobs, insertJobProcessing, getApprovedForwardingMap, getProfile)
   ├── db.js (getDuePendingIngestions, markPendingIngestion)
   ├── profile.js (ingestText)
   ├── healing.js
+  ├── db.js
   ├── pipeline.js (queueJob)
   ├── gmail.js (fetchLinkedInJobs)
   ├── scraper.js (scrapeLinkedInJob)
   ├── mailer.js (sendAcknowledgmentEmail)
-  ├── db.js (recoverStaleJobs, insertJobProcessing, getApprovedForwardingMap, getProfile)
+  ├── db.js (markJobFailed, recoverStaleJobs, insertJobProcessing, getApprovedForwardingMap, getProfile)
   ├── db.js (getDuePendingIngestions, markPendingIngestion)
   ├── profile.js (ingestText)
-  └── healing.js
+  ├── healing.js
+  └── db.js
 
 db.js
-  ├── aiErrors.js
-  └── aiErrors.js
+  ├── aiErrors.js (friendlyAiError, FREE_MODEL_WAITING)
+  └── aiErrors.js (friendlyAiError, FREE_MODEL_WAITING)
 
 fitEngine.js
   ├── llm.js (makeTrace, askJson, getPrompt, langfuse)
@@ -863,13 +869,15 @@ pipeline.js
   ├── renderCoverLetter.js (renderCoverLetterDocx)
   ├── renderPdf.js (measureResumePdf)
   ├── mailer.js (sendResumeEmail)
+  ├── db.js
   ├── db.js (getProfile, getResumeFormat, seenJobBefore, saveTailored, markDelivered, markJobFailed)
   ├── llm.js (labelBullets, tailorResume, calculateAtsScore, improveResume, coverLetter, createJobTrace, langfuse)
   ├── skills.js (getSkillsForWriting)
   ├── renderDocx.js (renderResumeDocx)
   ├── renderCoverLetter.js (renderCoverLetterDocx)
   ├── renderPdf.js (measureResumePdf)
-  └── mailer.js (sendResumeEmail)
+  ├── mailer.js (sendResumeEmail)
+  └── db.js
 
 profile.js
   ├── db.js (getProfile, saveProfile, recordUncategorizedFacts, getUnmatchedFactsByUser, markFactsMatched)

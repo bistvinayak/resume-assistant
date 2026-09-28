@@ -36,6 +36,11 @@ function withTimeout(promise, ms, onTimeout) {
 function queueJob(job, userId, opts = {}) {
   const jobId = job.job_id || `${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
+  // Remembered so a background retry (busy AI models) runs the same request.
+  if (job.job_id) {
+    require('./db').saveJobOptions(job.job_id, { source: opts.source || 'app', wantCoverLetter: !!opts.wantCoverLetter, candidate_feedback: job.candidate_feedback || [] })
+      .catch(() => {});
+  }
   return new Promise((resolve, reject) => {
     const entry = { job, userId, opts, resolve, reject, jobId, enqueuedAt: Date.now() };
     jobStatus.set(jobId, { status: 'queued', position: queue.length + 1, enqueuedAt: entry.enqueuedAt });

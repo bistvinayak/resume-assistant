@@ -5,6 +5,7 @@
 // separate paid service, so its slowness gets its own message.
 
 const FREE_MODEL_BUSY = "Arjun runs on free AI models, and they're busy right now because many people are using them, so this can be slow or fail. Please try again in a minute.";
+const FREE_MODEL_WAITING = "The free AI models are busy right now. Arjun keeps trying in the background, and your resume will appear in My Applications as soon as it's ready. You don't need to do anything.";
 const FIT_SERVICE_BUSY = 'The job-fit service is slow to respond right now. Please try again in a minute.';
 
 const JEV = /jev_|typesafe/i;
@@ -17,4 +18,4 @@ function friendlyAiError(message) {
   return null;
 }
 
-module.exports = { friendlyAiError, FREE_MODEL_BUSY, FIT_SERVICE_BUSY };
+module.exports = { friendlyAiError, FREE_MODEL_BUSY, FREE_MODEL_WAITING, FIT_SERVICE_BUSY };

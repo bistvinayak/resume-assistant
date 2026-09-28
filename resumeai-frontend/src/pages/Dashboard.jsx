@@ -587,6 +587,7 @@ export default function Dashboard() {
             const allJobs = jobsRes.jobs || [];
             const deliveredJobs = allJobs.filter(j => j.status === 'delivered');
             const failedNew = allJobs.find(j => j.status === 'failed' && !jobs.some(ej => ej.job_id === j.job_id));
+            const waitingNew = allJobs.find(j => j.status === 'waiting' && !jobs.some(ej => ej.job_id === j.job_id && ej.status === 'waiting'));
 
             if (deliveredJobs.length > deliveredCountAtStart) {
               clearInterval(pollJobs);
@@ -597,13 +598,21 @@ export default function Dashboard() {
                 ...prev.filter(m => m.id !== progressId),
                 { role: 'arjun', type: 'jobResult', job: latest },
               ]);
+            } else if (waitingNew) {
+              clearInterval(pollJobs);
+              clearInterval(elapsedTimer);
+              setJobs(allJobs);
+              setChatMessages(prev => [
+                ...prev.filter(m => m.id !== progressId),
+                { role: 'arjun', text: waitingNew.error_reason || "The free AI models are busy right now. Arjun keeps trying in the background, and your resume will appear in My Applications as soon as it's ready." },
+              ]);
             } else if (failedNew) {
               clearInterval(pollJobs);
               clearInterval(elapsedTimer);
               setJobs(allJobs);
               setChatMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: `Scraping failed for this job — the page may require login or the URL couldn't be read. Try a different URL or paste the job description directly.` },
+                { role: 'arjun', text: failedNew.error_reason && !/scrap/i.test(failedNew.error_reason) ? `Couldn't make this resume: ${failedNew.error_reason}` : `Scraping failed for this job — the page may require login or the URL couldn't be read. Try a different URL or paste the job description directly.` },
               ]);
             } else if (pollCount >= 48) {
               clearInterval(pollJobs);
@@ -991,6 +1000,7 @@ export default function Dashboard() {
             const allJobs = jobsRes.jobs || [];
             const deliveredJobs = allJobs.filter(j => j.status === 'delivered');
             const failedNew = allJobs.find(j => j.status === 'failed' && !jobs.some(ej => ej.job_id === j.job_id));
+            const waitingNew = allJobs.find(j => j.status === 'waiting' && !jobs.some(ej => ej.job_id === j.job_id && ej.status === 'waiting'));
 
             if (deliveredJobs.length > deliveredCountAtStart) {
               clearInterval(pollJobs);
@@ -1001,13 +1011,21 @@ export default function Dashboard() {
                 ...prev.filter(m => m.id !== progressId),
                 { role: 'arjun', type: 'jobResult', job: latest },
               ]);
+            } else if (waitingNew) {
+              clearInterval(pollJobs);
+              clearInterval(elapsedTimer);
+              setJobs(allJobs);
+              setTailorMessages(prev => [
+                ...prev.filter(m => m.id !== progressId),
+                { role: 'arjun', text: waitingNew.error_reason || "The free AI models are busy right now. Arjun keeps trying in the background, and your resume will appear in My Applications as soon as it's ready." },
+              ]);
             } else if (failedNew) {
               clearInterval(pollJobs);
               clearInterval(elapsedTimer);
               setJobs(allJobs);
               setTailorMessages(prev => [
                 ...prev.filter(m => m.id !== progressId),
-                { role: 'arjun', text: `Scraping failed for this job — the page may require login or the URL couldn't be read. Try a different URL or paste the job description directly.` },
+                { role: 'arjun', text: failedNew.error_reason && !/scrap/i.test(failedNew.error_reason) ? `Couldn't make this resume: ${failedNew.error_reason}` : `Scraping failed for this job — the page may require login or the URL couldn't be read. Try a different URL or paste the job description directly.` },
               ]);
             } else if (pollCount >= 48) {
               clearInterval(pollJobs);
@@ -2523,6 +2541,10 @@ export default function Dashboard() {
                           <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#f59e0b', background: '#f59e0b11', border: '1px solid #f59e0b33', borderRadius: '4px', padding: '2px 8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
                             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#f59e0b', display: 'inline-block', animation: 'pulse 2s infinite' }} />
                             processing
+                          </span>
+                        ) : job.status === 'waiting' ? (
+                          <span title={job.error_reason || ''} style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#b45309', background: '#fef3c7', border: '1px solid #f59e0b55', borderRadius: '4px', padding: '2px 8px' }}>
+                            retrying soon
                           </span>
                         ) : job.status === 'failed' ? (
                           <span style={{ fontSize: '10px', fontFamily: "'DM Mono', monospace", color: '#ef4444', background: '#ef444411', border: '1px solid #ef444433', borderRadius: '4px', padding: '2px 8px' }}>failed</span>

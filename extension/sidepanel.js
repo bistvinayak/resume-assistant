@@ -145,6 +145,8 @@ function renderResume(v) {
   let html = '';
   if (v.status === 'processing') {
     html = `<div class="r-status"><span class="spinner"></span>Making your resume from your profile… usually about a minute.</div>`;
+  } else if (v.status === 'waiting') {
+    html = `<div class="r-status">${esc(v.error || 'The free AI models are busy. Arjun keeps trying in the background, and your resume will appear in My Applications as soon as it’s ready.')}</div>`;
   } else if (v.status === 'failed') {
     html = `<div class="error">Couldn’t make the resume this time${v.error ? ` (${esc(v.error)})` : ''}. Ask again in the chat to retry.</div>`;
   } else if (v.preview) {
@@ -173,6 +175,11 @@ function renderResumeInChat(v) {
     m.innerHTML = '<div class="r-status"><span class="spinner"></span>Making your resume from your profile… usually about a minute.</div>';
     return;
   }
+  if (v.status === 'waiting') {
+    // Keep this message: the server retries in the background and polling continues.
+    m.innerHTML = `<div class="r-status">${esc(v.error || 'The free AI models are busy. Arjun keeps trying in the background, and your resume will appear in My Applications as soon as it’s ready.')} You can close this panel.</div>`;
+    return;
+  }
   awaitingResume = false;
   chatResumeMsg = null;
   if (v.status === 'failed') {
@@ -199,6 +206,8 @@ async function pollResume(jobKey, startedAt = Date.now()) {
     if (awaitingResume && chatResumeMsg) renderResumeInChat(v);
     else renderResume(v);
     if (v.status === 'processing' && Date.now() - startedAt < 300000) resumeTimer = setTimeout(() => pollResume(jobKey, startedAt), 4000);
+    // Background retries can take up to about an hour; check less often.
+    else if (v.status === 'waiting' && Date.now() - startedAt < 3600000) resumeTimer = setTimeout(() => pollResume(jobKey, startedAt), 30000);
   } catch { /* the card just stays as it was */ }
 }
 
