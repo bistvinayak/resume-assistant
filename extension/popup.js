@@ -12,12 +12,23 @@ chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }, (state) => {
     setStatus(`Signed in as ${state.userEmail || 'you'}`, 'ok');
     fillBtn.disabled = false;
     fitBtn.disabled = false;
-  } else if (state?.stale) {
-    setStatus('Session expired — reopen Arjun to refresh', 'warn');
   } else {
-    setStatus('Not signed in — open vinayakbist.com/projects/arjun first');
+    setStatus(state?.stale ? 'Session expired. Reconnect to keep using Arjun.' : 'Not connected to your Arjun account yet.', 'warn');
+    showConnect();
   }
 });
+
+// The extension gets its sign-in from an open Arjun page. Opening the dashboard sends it
+// right away, so "not signed in" is one click to fix even if you are already logged in.
+function showConnect() {
+  if (document.getElementById('connectBtn')) return;
+  const btn = document.createElement('button');
+  btn.id = 'connectBtn';
+  btn.textContent = 'Connect to Arjun';
+  btn.style.cssText = 'display:block;width:100%;margin-top:8px;padding:8px 12px;border:none;border-radius:6px;background:#f59e0b;color:#fff;font-weight:600;cursor:pointer;';
+  btn.addEventListener('click', () => chrome.tabs.create({ url: 'https://vinayakbist.com/projects/arjun/dashboard' }));
+  statusEl.insertAdjacentElement('afterend', btn);
+}
 
 fillBtn.addEventListener('click', async () => {
   fillBtn.disabled = true;
@@ -131,7 +142,7 @@ function openInsights(r, job) {
 }
 
 const FIT_ERRORS = {
-  not_logged_in: 'Not signed in — open vinayakbist.com/projects/arjun first.',
+  not_logged_in: 'Not connected to your Arjun account. Click Connect to Arjun above.',
   no_job_text: 'Couldn’t find a job description on this page. Open the full job posting and try again.',
   no_profile: 'Your Arjun profile is empty — upload your resume first.',
   ai_busy: 'Arjun runs on free AI models, and they’re busy right now because many people are using them. Please try again in a minute.',
