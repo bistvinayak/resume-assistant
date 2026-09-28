@@ -78,7 +78,6 @@ function scaledFonts(fontScale) {
   return s;
 }
 
-const METRIC_RE = /(\$[\d,.]+[KMB]?\+?|[+~]?\d[\d,.]*[–-]\d[\d,.]*%|[+~]?\d[\d,.]*%\+?|\d[\d,.]*[KMB]\+|\d[\d,.]*\+)/g;
 // Matches a bold "label" prefix on a bullet, either dash-separated ("Root Cause — did X")
 // or colon-separated ("Root-Cause Analysis: did X") — the latter is common in
 // uploaded resume templates that use functional/skill-labeled bullets.
@@ -96,20 +95,9 @@ function parseBoldSegments(text) {
     startIdx = subMatch[0].length;
   }
 
+  // Only the label is bold, as in the approved resume skill; metrics stay regular weight.
   const rest = text.slice(startIdx);
-  let lastIdx = 0;
-
-  for (const m of rest.matchAll(METRIC_RE)) {
-    if (m.index > lastIdx) {
-      segments.push({ text: rest.slice(lastIdx, m.index), bold: false });
-    }
-    segments.push({ text: m[0], bold: true });
-    lastIdx = m.index + m[0].length;
-  }
-
-  if (lastIdx < rest.length) {
-    segments.push({ text: rest.slice(lastIdx), bold: false });
-  }
+  if (rest) segments.push({ text: rest, bold: false });
 
   return segments.length ? segments : [{ text, bold: false }];
 }
@@ -126,6 +114,12 @@ function bulletHtml(text) {
 
 // tailorResume's LLM output occasionally returns links as {url, name} objects
 // instead of plain strings — normalize either shape to a URL string.
+// Header order from the approved resume skill: LinkedIn, GitHub, then anything else.
+function orderLinks(links) {
+  const rank = (l) => (/linkedin\.com/i.test(l) ? 0 : /github\.com/i.test(l) ? 1 : 2);
+  return [...links].sort((a, b) => rank(a) - rank(b));
+}
+
 function normalizeLinks(links) {
   if (!Array.isArray(links)) return [];
   return links.map(l => (typeof l === 'string' ? l : (l?.url || l?.href || ''))).filter(Boolean);
@@ -149,18 +143,18 @@ const SECTION_RENDERERS = {
 
   skills(resume, ctx) {
     const skillGroups = [
-      { label: 'Product', items: resume.skills_product },
-      { label: 'Technical & Analytics', items: resume.skills_technical },
-      { label: 'AI & Tools', items: resume.skills_ai_tools },
+      { label: 'AI & Automation', items: resume.skills_ai_tools },
+      { label: 'Product & Delivery', items: resume.skills_product },
+      { label: 'Technical', items: resume.skills_technical },
     ].filter(g => Array.isArray(g.items) && g.items.length);
 
     if (skillGroups.length) {
       return sectionHeadingHtml('Skills', ctx.headingCase) +
-        skillGroups.map(g => `<p class="skill-line"><strong>${escapeHtml(g.label)}:</strong> ${escapeHtml(g.items.join('  •  '))}</p>`).join('');
+        skillGroups.map(g => `<p class="skill-line"><strong>${escapeHtml(g.label)}:</strong> ${escapeHtml(g.items.join(', '))}</p>`).join('');
     }
     if (Array.isArray(resume.skills_ranked) && resume.skills_ranked.length) {
       return sectionHeadingHtml('Skills', ctx.headingCase) +
-        `<p class="skill-line">${escapeHtml(resume.skills_ranked.join('  •  '))}</p>`;
+        `<p class="skill-line">${escapeHtml(resume.skills_ranked.join(', '))}</p>`;
     }
     return '';
   },
@@ -269,7 +263,7 @@ function buildResumeHtml(resume, opts = {}) {
   const ctx = { f, lineGap, sectionGap, roleGap, headingCase, bulletIndent, roleHeaderStyle, companyCase };
 
   // One centered line: location | phone | email | links (links shown without https://)
-  const links = normalizeLinks(c.links).map(l => l.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
+  const links = orderLinks(normalizeLinks(c.links)).map(l => l.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
   const contactParts = [c.location, c.phone, c.email, ...links].filter(Boolean);
 
   const body = sectionOrder.map(s => SECTION_RENDERERS[s](resume, ctx)).join('');

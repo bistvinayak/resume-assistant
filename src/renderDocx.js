@@ -42,8 +42,6 @@ function scaledFonts(fontScale) {
 // and .pdf outputs match: bolds metrics ($1M+, 20%, 10K+) and bold "label"
 // prefixes on bullets, either dash-separated ("Root Cause — did X") or
 // colon-separated ("Root-Cause Analysis: did X"), the latter being common in
-// uploaded resume templates with functional/skill-labeled bullets.
-const METRIC_RE = /(\$[\d,.]+[KMB]?\+?|[+~]?\d[\d,.]*[–-]\d[\d,.]*%|[+~]?\d[\d,.]*%\+?|\d[\d,.]*[KMB]\+|\d[\d,.]*\+)/g;
 // Also matches lowercase words ("Throughput & cycle time: …"), up to 6 words before the colon.
 const SUBPOINT_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){0,5})(\s[—–]\s|:\s)/;
 
@@ -58,20 +56,9 @@ function parseBoldSegments(text) {
     startIdx = subMatch[0].length;
   }
 
+  // Only the label is bold, as in the approved resume skill; metrics stay regular weight.
   const rest = text.slice(startIdx);
-  let lastIdx = 0;
-
-  for (const m of rest.matchAll(METRIC_RE)) {
-    if (m.index > lastIdx) {
-      segments.push({ text: rest.slice(lastIdx, m.index), bold: false });
-    }
-    segments.push({ text: m[0], bold: true });
-    lastIdx = m.index + m[0].length;
-  }
-
-  if (lastIdx < rest.length) {
-    segments.push({ text: rest.slice(lastIdx), bold: false });
-  }
+  if (rest) segments.push({ text: rest, bold: false });
 
   return segments.length ? segments : [{ text, bold: false }];
 }
@@ -82,6 +69,12 @@ function bulletRuns(text, size) {
 
 // tailorResume's LLM output occasionally returns links as {url, name} objects
 // instead of plain strings — normalize either shape to a URL string.
+// Header order from the approved resume skill: LinkedIn, GitHub, then anything else.
+function orderLinks(links) {
+  const rank = (l) => (/linkedin\.com/i.test(l) ? 0 : /github\.com/i.test(l) ? 1 : 2);
+  return [...links].sort((a, b) => rank(a) - rank(b));
+}
+
 function normalizeLinks(links) {
   if (!Array.isArray(links)) return [];
   return links.map(l => (typeof l === 'string' ? l : (l?.url || l?.href || ''))).filter(Boolean);
@@ -127,9 +120,9 @@ const SECTION_RENDERERS = {
 
   skills(resume, ctx) {
     const skillGroups = [
-      { label: 'Product', items: resume.skills_product },
-      { label: 'Technical & Analytics', items: resume.skills_technical },
-      { label: 'AI & Tools', items: resume.skills_ai_tools },
+      { label: 'AI & Automation', items: resume.skills_ai_tools },
+      { label: 'Product & Delivery', items: resume.skills_product },
+      { label: 'Technical', items: resume.skills_technical },
     ].filter(g => Array.isArray(g.items) && g.items.length);
 
     const out = [];
@@ -138,12 +131,12 @@ const SECTION_RENDERERS = {
       for (const g of skillGroups) {
         out.push(new Paragraph({ children: [
           new TextRun({ text: `${g.label}: `, bold: true, size: ctx.f.skillLabel }),
-          new TextRun({ text: g.items.join('  •  '), size: ctx.f.skillValue }),
+          new TextRun({ text: g.items.join(', '), size: ctx.f.skillValue }),
         ]}));
       }
     } else if (Array.isArray(resume.skills_ranked) && resume.skills_ranked.length) {
       out.push(heading('Skills', ctx.headingCase, ctx.sectionGap));
-      out.push(new Paragraph({ children: [new TextRun({ text: resume.skills_ranked.join('  •  '), size: ctx.f.skillValue })] }));
+      out.push(new Paragraph({ children: [new TextRun({ text: resume.skills_ranked.join(', '), size: ctx.f.skillValue })] }));
     }
     return out;
   },
@@ -285,7 +278,7 @@ async function renderResumeDocx(resume, outPath, opts = {}) {
     children: [new TextRun({ text: (c.name || 'Candidate').toUpperCase(), bold: true, size: f.name })],
   }));
   // One centered line: location | phone | email | links (links shown without https://)
-  const links = normalizeLinks(c.links).map(l => l.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
+  const links = orderLinks(normalizeLinks(c.links)).map(l => l.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
   const line = [c.location, c.phone, c.email, ...links].filter(Boolean).join('  |  ');
   if (line) children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: line, size: f.contact, color: '222222' })] }));
 

@@ -140,7 +140,7 @@ processJob(job, userId) [pipeline.js:509]
   → if ats < 95:
        → improveResume(resume, job, ats, trace) [llm.js:1513]  — LLM
        → calculateAtsScore again
-  → renderResumeDocx(resume, filePath) [renderDocx.js:261]
+  → renderResumeDocx(resume, filePath) [renderDocx.js:254]
   → saveTailored(jobId, resume, filePath) [db.js:525]
   → markDelivered(tailoredId, jobId, atsData) [db.js:534]
   → sendResumeEmail (if source=cron) [mailer.js:60]
@@ -693,12 +693,13 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | Function | Line | Exported |
 |----------|------|----------|
 | scaledFonts | 33 | no |
-| parseBoldSegments | 50 | no |
-| bulletRuns | 79 | no |
-| normalizeLinks | 85 | no |
-| heading | 94 | no |
-| splitLine | 104 | no |
-| renderResumeDocx | 261 | yes |
+| parseBoldSegments | 48 | no |
+| bulletRuns | 66 | no |
+| orderLinks | 73 | no |
+| normalizeLinks | 78 | no |
+| heading | 87 | no |
+| splitLine | 97 | no |
+| renderResumeDocx | 254 | yes |
 
 ### renderPdf.js
 
@@ -707,15 +708,16 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | ensureResumeFonts | 18 | no |
 | getBrowser | 33 | no |
 | scaledFonts | 73 | no |
-| parseBoldSegments | 88 | no |
-| escapeHtml | 117 | no |
-| bulletHtml | 122 | no |
-| normalizeLinks | 129 | no |
-| sectionHeadingHtml | 138 | no |
-| buildResumeHtml | 255 | yes |
-| withPage | 341 | no |
-| renderResumePdf | 351 | yes |
-| measureResumePdf | 366 | yes |
+| parseBoldSegments | 87 | no |
+| escapeHtml | 105 | no |
+| bulletHtml | 110 | no |
+| orderLinks | 118 | no |
+| normalizeLinks | 123 | no |
+| sectionHeadingHtml | 132 | no |
+| buildResumeHtml | 249 | yes |
+| withPage | 335 | no |
+| renderResumePdf | 345 | yes |
+| measureResumePdf | 360 | yes |
 
 ### scraper.js
 
