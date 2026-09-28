@@ -100,9 +100,8 @@ export default function GettingStarted({ profile, jobs, gmailStatus, goTo }) {
           Arjun reads it and builds your profile: each role, the impact behind every bullet, projects, skills and education.
           Upload it (PDF or text) in <b>Chat with Arjun</b>. You can upload more files later and Arjun merges them without duplicates.
         </Step>
-        <Step n="2" done={done.format} optional title="Pick your resume style" action="Choose style" onAction={() => goTo('profile', 'resume-format')}>
-          Upload a resume whose layout you like and every tailored resume will follow its section order, heading style and page count.
-          Skip this and Arjun uses its default format.
+        <Step n="2" done={done.format} optional title="Match your resume layout" action="Set layout" onAction={() => goTo('profile', 'resume-format')}>
+          Want your usual layout and page count? Upload a resume in that format. Only the layout is used; your content comes from step 1.
         </Step>
         <Step n="3" done={done.chat} optional title="Fill in what your resume leaves out" action="Chat with Arjun" onAction={() => goTo('chat')}>
           Tell Arjun about projects, results or tools that aren’t on your resume, in plain words. It proposes the changes and nothing is saved until you confirm.
