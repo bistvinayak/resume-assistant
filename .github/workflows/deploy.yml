@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
 
+# One deploy at a time. Two overlapping deploys ran `npm ci` together on the server, the second
+# failed (ENOTEMPTY) and left node_modules empty, taking the app down for ~3 minutes (2026-09-28).
+concurrency:
+  group: deploy-ec2
+  cancel-in-progress: false
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -36,6 +42,7 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            set -e
             cd /home/ec2-user/arjun
             mkdir -p logs
             npm ci --omit=dev
