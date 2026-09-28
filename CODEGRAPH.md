@@ -283,6 +283,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 |------|------|-----------|
 | Admin | pages/Admin.jsx | api.adminGetStats, api.adminGetUsers, api.adminGetJobs, api.adminGetSettings, api.adminGetSchemaProposals, api.adminGetFeedback, api.adminGetGmailForwarding, api.adminGetExtensionEvents, api.adminApproveSchemaProposal, api.adminRejectSchemaProposal, api.adminApproveGmailForwarding, api.adminRejectGmailForwarding, api.adminRetryJob, api.adminReviewFeedback, api.adminUpdateUser, api.adminDeleteUser, api.adminTriggerCron, api.adminUpdateSettings |
 | Dashboard | pages/Dashboard.jsx | api.sendFeedback, api.downloadResume, api.getProfile, api.getGmailForwardingStatus, api.updateProfile, api.getProfileVersions, api.restoreProfileVersion, api.addKeywordToProfile, api.submitJobUrl, api.confirmChanges, api.chat, api.getJobs, api.ingestFiles, api.getIngestionStatus, api.confirmIngestion, api.rejectIngestion, api.resolveConflicts, api.resolveAmbiguities, api.getResumeFormat, api.uploadResumeFormat, api.requestGmailForwarding, api.deleteResumeFormat |
+| Features | pages/Features.jsx | — |
 | GmailOAuthCallback | pages/GmailOAuthCallback.jsx | api.connectGmail, api.verifyGmailFilter |
 | Landing | pages/Landing.jsx | api.getProfile |
 | Onboarding | pages/Onboarding.jsx | api.getGmailForwardingStatus, api.requestGmailForwarding, api.ingestFiles, api.getIngestionStatus, api.confirmIngestion |

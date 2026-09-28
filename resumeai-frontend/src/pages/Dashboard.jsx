@@ -1187,6 +1187,9 @@ export default function Dashboard() {
             <button onClick={async () => { await signOutUser(); navigate('/'); }} style={{ background: 'none', border: 'none', color: '#a8a29e', fontSize: '12px', fontFamily: "'DM Mono', monospace" }}>
               sign out
             </button>
+            <button onClick={() => navigate('/features')} style={{ background: 'none', border: 'none', color: '#78716c', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
+              features
+            </button>
             <button onClick={() => setShowDeleteAccount(true)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
               delete account
             </button>

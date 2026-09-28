@@ -9,6 +9,7 @@ import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
 import Admin from './pages/Admin';
 import GmailOAuthCallback from './pages/GmailOAuthCallback';
+import Features from './pages/Features';
 
 const ADMIN_EMAIL = 'arjun.resumeai@gmail.com';
 
@@ -53,6 +54,7 @@ export default function App() {
       <Route path="/onboarding" element={user ? <Onboarding /> : <Navigate to="/" replace />} />
       <Route path="/dashboard" element={user ? <Dashboard /> : <Navigate to="/" replace />} />
       <Route path="/admin" element={user ? <Admin /> : <Navigate to="/" replace />} />
+      <Route path="/features" element={<Features />} />
       <Route path="/oauth/callback" element={<GmailOAuthCallback />} />
     </Routes>
   );

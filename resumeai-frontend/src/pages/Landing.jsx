@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { signInWithGoogle } from '../firebase';
 import { api } from '../api';
 
@@ -139,6 +139,7 @@ export default function Landing() {
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
         <a href="#chrome-extension" style={{ fontSize: '13px', color: '#57534e', textDecoration: 'none' }}>Chrome extension</a>
+        <Link to="/features" style={{ fontSize: '13px', color: '#57534e', textDecoration: 'none' }}>Features</Link>
         <button
           onClick={() => handleGoogle()}
           disabled={loading}
@@ -519,6 +520,7 @@ export default function Landing() {
         <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: '14px', color: '#a8a29e' }}>
           arjun<span style={{ color: '#f59e0b' }}>.</span>
         </span>
+        <Link to="/features" style={{ fontSize: '11px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>all features</Link>
         <span style={{ fontSize: '11px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>
           built by vinayak bist
         </span>

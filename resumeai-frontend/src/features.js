@@ -1,0 +1,81 @@
+// Every user-facing Arjun feature, shown on the public /features page.
+// When you ship a new feature, add an entry here in the same commit (see CLAUDE.md).
+//   where: where users find it in the app. added: 'YYYY-MM' it shipped (newest get a "New" tag).
+
+export const FEATURE_GROUPS = [
+  {
+    id: 'profile',
+    title: 'Your career profile',
+    intro: 'One lasting record of everything you have done, so no resume ever misses relevant experience.',
+    features: [
+      { title: 'Resume and document upload', where: 'Onboarding, Chat with Arjun', added: '2026-07',
+        what: 'Upload resumes, notes or project write-ups (PDF, DOCX, TXT). Arjun extracts every role, bullet, metric, skill, project and degree into a structured profile.' },
+      { title: 'Smart merge across uploads', where: 'Automatic', added: '2026-08',
+        what: 'Each new upload is merged into your profile without duplicates. When two sources disagree on contact details, Arjun asks which one is right.' },
+      { title: 'Chat with Arjun', where: 'Chat with Arjun tab', added: '2026-08',
+        what: 'Add achievements, skills or certifications by chatting. Arjun proposes the change and you confirm before anything is saved. It asks when it is unclear which role something belongs to.' },
+      { title: 'Profile editor', where: 'My Profile → Edit', added: '2026-07',
+        what: 'Edit contact details, mailing address (including county), roles and bullets directly.' },
+      { title: 'Version history', where: 'My Profile', added: '2026-08',
+        what: 'Every save creates a version you can restore.' },
+      { title: 'Resume format template', where: 'My Profile', added: '2026-09',
+        what: 'Upload your own resume as a style reference. Arjun matches its section order, headings and page count.' },
+    ],
+  },
+  {
+    id: 'apply',
+    title: 'Resumes and applications',
+    intro: 'A tailored, truthful resume for every job.',
+    features: [
+      { title: 'Tailored resume from a job link', where: 'Apply to Job tab', added: '2026-07',
+        what: 'Paste a job URL. Arjun reads the posting, picks the requirements and builds a resume from your real experience only. It never invents experience.' },
+      { title: 'ATS score and improvement', where: 'Apply to Job, My Applications', added: '2026-07',
+        what: 'Scores the resume against the posting. Below 95, it rewords bullets in the posting’s language where your experience supports it, and keeps the new version only if the score rises.' },
+      { title: 'Cover letter', where: 'Apply to Job (optional checkbox)', added: '2026-09',
+        what: 'A matching cover letter built from the same verified facts.' },
+      { title: 'Download as DOCX or PDF', where: 'My Applications', added: '2026-07',
+        what: 'Every tailored resume and cover letter can be downloaded.' },
+      { title: 'Skill gaps', where: 'Skill Gaps tab', added: '2026-08',
+        what: 'The keywords you miss most often across the jobs you applied to.' },
+      { title: 'My Skills', where: 'My Skills tab', added: '2026-09',
+        what: 'Personal writing guides generated from your profile (career profile, cover-letter story, writing voice), used when Arjun writes for you. Downloadable for use with Claude.' },
+    ],
+  },
+  {
+    id: 'extension',
+    title: 'Chrome extension',
+    intro: 'Arjun on every job site.',
+    features: [
+      { title: 'Application form autofill', where: 'Extension popup, or automatic on Workday, Greenhouse, Lever, iCIMS, SmartRecruiters, Ashby', added: '2026-09',
+        what: 'Reads each form field, matches it to your profile by meaning, fills the ones it is confident about and flags the rest for review. Repeated sections (jobs, schools, links) are filled in order, with dates in the form’s format.' },
+      { title: 'Private password fill', where: 'Extension popup', added: '2026-09',
+        what: 'Save a password for job-site account creation. It stays in your browser and is never sent to Arjun or any AI model.' },
+      { title: 'Check this job', where: 'Extension popup', added: '2026-09',
+        what: 'A quick fit score for the job you are viewing, including visa-sponsorship signals.' },
+      { title: 'Full job analysis and chat', where: 'Extension side panel', added: '2026-09',
+        what: 'Requirement by requirement: where your profile is strong, where it only needs rewording, and real gaps. Ask follow-up questions grounded in your profile, and make or refine the resume from the panel.' },
+    ],
+  },
+  {
+    id: 'automation',
+    title: 'Automation',
+    intro: 'Arjun keeps working when you are not.',
+    features: [
+      { title: 'Job alerts to tailored resumes', where: 'Onboarding → Gmail forwarding', added: '2026-08',
+        what: 'Forward LinkedIn job-alert emails to Arjun. Every 2 hours it tailors a resume for each job and emails it to you.' },
+    ],
+  },
+  {
+    id: 'account',
+    title: 'Account and privacy',
+    intro: 'Your data stays yours.',
+    features: [
+      { title: 'Get started guide', where: 'Get started tab', added: '2026-09',
+        what: 'Setup steps that tick themselves off, and a short tour of what Arjun does. Shown on your first login.' },
+      { title: 'Bring your own Jev key', where: 'Extension tab', added: '2026-09',
+        what: 'Job-fit checks run on a free AI model by default. You can add your own TypeSafe Jev key; it is stored encrypted.' },
+      { title: 'Delete account', where: 'Top bar → delete account', added: '2026-09',
+        what: 'Permanently deletes your profile, applications, resumes, skills, saved key, extension history and sign-in record.' },
+    ],
+  },
+];

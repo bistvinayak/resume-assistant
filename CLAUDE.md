@@ -177,6 +177,7 @@ All defined in `src/llm.js` PROMPT_DEFS, synced to Langfuse on startup:
 - Personal site (S3): separate from Arjun, served via CloudFront default behavior
 
 ## Conventions
+- **Feature list:** every new user-facing feature adds an entry to `resumeai-frontend/src/features.js` in the same commit (title, what, where, added `YYYY-MM`). It renders the public `/features` page; changed or removed features update or delete their entry.
 - No CSS framework — all inline styles with design tokens (DM Serif Display, DM Sans, DM Mono; amber #f59e0b accent)
 - No chat message persistence in PostgreSQL (security constraint)
 - All LLM calls use JSON mode (response_format: json_object)
