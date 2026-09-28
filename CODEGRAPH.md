@@ -59,22 +59,23 @@ Quick-lookup graph of the codebase. Check here FIRST before reading files — go
 | GET | /admin/settings | server.js:918 | adminOnly, getSettings, authMiddleware |
 | PATCH | /admin/settings | server.js:919 | adminOnly, updateSettings, authMiddleware |
 | GET | /admin/schema-proposals | server.js:920 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
-| POST | /admin/schema-proposals/:id/approve | server.js:921 | adminOnly, approveSchemaProposal, authMiddleware |
-| POST | /admin/schema-proposals/:id/reject | server.js:922 | adminOnly, rejectSchemaProposal, authMiddleware |
-| GET | /admin/feedback | server.js:923 | adminOnly, getFeedbackHandler, authMiddleware |
-| PATCH | /admin/feedback/:id | server.js:924 | adminOnly, reviewFeedback, authMiddleware |
-| GET | /admin/gmail-forwarding | server.js:925 | adminOnly, getGmailForwardingHandler, authMiddleware |
-| POST | /admin/gmail-forwarding/:userId/approve | server.js:926 | adminOnly, approveGmailForwarding, authMiddleware |
-| POST | /admin/gmail-forwarding/:userId/reject | server.js:927 | adminOnly, rejectGmailForwarding, authMiddleware |
-| GET | /admin/extension-events | server.js:928 | adminOnly, getExtensionEventsHandler, authMiddleware, getExtensionEvents |
-| GET | /admin/proposals | server.js:929 | getProposalsHandler, adminOnly, authMiddleware, getProposal |
-| POST | /admin/proposals/run | server.js:930 | runSelfHealingHandler, adminOnly, authMiddleware, runSelfHealing |
-| POST | /admin/proposals/:id/accept | server.js:931 | acceptProposal, adminOnly, authMiddleware |
-| POST | /admin/proposals/:id/reject | server.js:932 | rejectProposal, adminOnly, authMiddleware |
-| PATCH | /admin/prompt-rules/:id | server.js:933 | togglePromptRule, adminOnly, authMiddleware |
-| GET | /jobs/:jobId/download | server.js:939 | renderCoverLetterDocx, renderResumePdf, renderResumeDocx |
-| POST | /gmail/request-forwarding | server.js:994 | requestGmailForwarding |
-| GET | /gmail/forwarding-status | server.js:1001 | getGmailForwardingStatus |
+| GET | /admin/unplaced-facts | server.js:921 | getUnplacedFactsHandler, adminOnly, authMiddleware, getUnplacedFacts |
+| POST | /admin/schema-proposals/:id/approve | server.js:922 | adminOnly, approveSchemaProposal, authMiddleware |
+| POST | /admin/schema-proposals/:id/reject | server.js:923 | adminOnly, rejectSchemaProposal, authMiddleware |
+| GET | /admin/feedback | server.js:924 | adminOnly, getFeedbackHandler, authMiddleware |
+| PATCH | /admin/feedback/:id | server.js:925 | adminOnly, reviewFeedback, authMiddleware |
+| GET | /admin/gmail-forwarding | server.js:926 | adminOnly, getGmailForwardingHandler, authMiddleware |
+| POST | /admin/gmail-forwarding/:userId/approve | server.js:927 | adminOnly, approveGmailForwarding, authMiddleware |
+| POST | /admin/gmail-forwarding/:userId/reject | server.js:928 | adminOnly, rejectGmailForwarding, authMiddleware |
+| GET | /admin/extension-events | server.js:929 | adminOnly, getExtensionEventsHandler, authMiddleware, getExtensionEvents |
+| GET | /admin/proposals | server.js:930 | getProposalsHandler, adminOnly, authMiddleware, getProposal |
+| POST | /admin/proposals/run | server.js:931 | runSelfHealingHandler, adminOnly, authMiddleware, runSelfHealing |
+| POST | /admin/proposals/:id/accept | server.js:932 | acceptProposal, adminOnly, authMiddleware |
+| POST | /admin/proposals/:id/reject | server.js:933 | rejectProposal, adminOnly, authMiddleware |
+| PATCH | /admin/prompt-rules/:id | server.js:934 | togglePromptRule, adminOnly, authMiddleware |
+| GET | /jobs/:jobId/download | server.js:940 | renderCoverLetterDocx, renderResumePdf, renderResumeDocx |
+| POST | /gmail/request-forwarding | server.js:995 | requestGmailForwarding |
+| GET | /gmail/forwarding-status | server.js:1002 | getGmailForwardingStatus |
 
 ## Chat Flow (server.js:316)
 
@@ -249,31 +250,32 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 | getApprovedCategories | 689 |  |
 | updateSchemaProposalStatus | 696 |  |
 | setBackfillStatus | 745 |  |
-| recordUncategorizedFacts | 751 |  |
-| getUnmatchedFactsByUser | 769 |  |
-| saveChatFeedback | 777 |  |
-| getChatFeedback | 785 |  |
-| updateChatFeedbackStatus | 792 |  |
-| markFactsMatched | 799 |  |
-| requestGmailForwarding | 807 |  |
-| getGmailForwardingStatus | 818 |  |
-| getGmailForwardingRequests | 823 |  |
-| reviewGmailForwarding | 830 |  |
-| getApprovedForwardingMap | 838 |  |
-| getResumeFormat | 845 |  |
-| saveResumeFormat | 853 |  |
-| deleteResumeFormat | 864 |  |
-| logExtensionEvent | 868 |  |
-| saveJobCheck | 879 |  |
-| getJobCheck | 891 |  |
-| saveUserApiKey | 896 |  |
-| getUserApiKey | 903 |  |
-| deleteUserApiKey | 907 |  |
-| addResumeFeedback | 911 |  |
-| getLatestTailored | 921 |  |
-| saveJobAnalysis | 936 |  |
-| getExtensionEvents | 942 |  |
-| deleteAllUserData | 1021 |  |
+| getUnplacedFacts | 753 |  |
+| recordUncategorizedFacts | 766 |  |
+| getUnmatchedFactsByUser | 784 |  |
+| saveChatFeedback | 792 |  |
+| getChatFeedback | 800 |  |
+| updateChatFeedbackStatus | 807 |  |
+| markFactsMatched | 814 |  |
+| requestGmailForwarding | 822 |  |
+| getGmailForwardingStatus | 833 |  |
+| getGmailForwardingRequests | 838 |  |
+| reviewGmailForwarding | 845 |  |
+| getApprovedForwardingMap | 853 |  |
+| getResumeFormat | 860 |  |
+| saveResumeFormat | 868 |  |
+| deleteResumeFormat | 879 |  |
+| logExtensionEvent | 883 |  |
+| saveJobCheck | 894 |  |
+| getJobCheck | 906 |  |
+| saveUserApiKey | 911 |  |
+| getUserApiKey | 918 |  |
+| deleteUserApiKey | 922 |  |
+| addResumeFeedback | 926 |  |
+| getLatestTailored | 936 |  |
+| saveJobAnalysis | 951 |  |
+| getExtensionEvents | 957 |  |
+| deleteAllUserData | 1036 |  |
 
 ## Frontend Pages
 
@@ -338,6 +340,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 | api.adminAcceptProposal() | /api/admin/proposals/:id/accept | — |
 | api.adminRejectProposal() | /api/admin/proposals/:id/reject | — |
 | api.adminTogglePromptRule() | /api/admin/prompt-rules/:id | — |
+| api.adminGetUnplacedFacts() | /api/admin/unplaced-facts | — |
 | api.adminGetSchemaProposals() | /api/admin/schema-proposals | — |
 | api.adminApproveSchemaProposal() | /api/admin/schema-proposals/:id/approve | — |
 | api.adminRejectSchemaProposal() | /api/admin/schema-proposals/:id/reject | — |
@@ -376,6 +379,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 | rejectProposal | 432 | yes |
 | togglePromptRule | 441 | yes |
 | runSelfHealingHandler | 452 | yes |
+| getUnplacedFactsHandler | 460 | yes |
 
 ### aiErrors.js
 
@@ -443,31 +447,32 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 | updateSchemaProposalStatus | 696 | yes |
 | enforceApprovedCustomSections | 709 | no |
 | setBackfillStatus | 745 | yes |
-| recordUncategorizedFacts | 751 | yes |
-| getUnmatchedFactsByUser | 769 | yes |
-| saveChatFeedback | 777 | yes |
-| getChatFeedback | 785 | yes |
-| updateChatFeedbackStatus | 792 | yes |
-| markFactsMatched | 799 | yes |
-| requestGmailForwarding | 807 | yes |
-| getGmailForwardingStatus | 818 | yes |
-| getGmailForwardingRequests | 823 | yes |
-| reviewGmailForwarding | 830 | yes |
-| getApprovedForwardingMap | 838 | yes |
-| getResumeFormat | 845 | yes |
-| saveResumeFormat | 853 | yes |
-| deleteResumeFormat | 864 | yes |
-| logExtensionEvent | 868 | yes |
-| saveJobCheck | 879 | yes |
-| getJobCheck | 891 | yes |
-| saveUserApiKey | 896 | yes |
-| getUserApiKey | 903 | yes |
-| deleteUserApiKey | 907 | yes |
-| addResumeFeedback | 911 | yes |
-| getLatestTailored | 921 | yes |
-| saveJobAnalysis | 936 | yes |
-| getExtensionEvents | 942 | yes |
-| deleteAllUserData | 1021 | yes |
+| getUnplacedFacts | 753 | yes |
+| recordUncategorizedFacts | 766 | yes |
+| getUnmatchedFactsByUser | 784 | yes |
+| saveChatFeedback | 792 | yes |
+| getChatFeedback | 800 | yes |
+| updateChatFeedbackStatus | 807 | yes |
+| markFactsMatched | 814 | yes |
+| requestGmailForwarding | 822 | yes |
+| getGmailForwardingStatus | 833 | yes |
+| getGmailForwardingRequests | 838 | yes |
+| reviewGmailForwarding | 845 | yes |
+| getApprovedForwardingMap | 853 | yes |
+| getResumeFormat | 860 | yes |
+| saveResumeFormat | 868 | yes |
+| deleteResumeFormat | 879 | yes |
+| logExtensionEvent | 883 | yes |
+| saveJobCheck | 894 | yes |
+| getJobCheck | 906 | yes |
+| saveUserApiKey | 911 | yes |
+| getUserApiKey | 918 | yes |
+| deleteUserApiKey | 922 | yes |
+| addResumeFeedback | 926 | yes |
+| getLatestTailored | 936 | yes |
+| saveJobAnalysis | 951 | yes |
+| getExtensionEvents | 957 | yes |
+| deleteAllUserData | 1036 | yes |
 
 ### fitEngine.js
 
@@ -740,7 +745,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 
 ```
 admin.js
-  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob, getExtensionEvents, deleteAllUserData)
+  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob, getExtensionEvents, deleteAllUserData, getUnplacedFacts)
   ├── cron.js (runBatch)
   ├── pipeline.js (queueJob)
   ├── scraper.js (scrapeLinkedInJob)
@@ -753,7 +758,7 @@ admin.js
   ├── db.js (setPromptRuleActive)
   ├── llm.js (invalidateRulesCache)
   ├── healing.js (runSelfHealing)
-  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob, getExtensionEvents, deleteAllUserData)
+  ├── db.js (pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob, getExtensionEvents, deleteAllUserData, getUnplacedFacts)
   ├── cron.js (runBatch)
   ├── pipeline.js (queueJob)
   ├── scraper.js (scrapeLinkedInJob)

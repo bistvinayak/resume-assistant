@@ -748,6 +748,21 @@ async function setBackfillStatus(id, status) {
 
 // ── UNCATEGORIZED FACTS (durable store, independent of profile edits) ──
 
+// Admin: resume facts extraction couldn't place in the profile schema and no approved
+// category has absorbed yet. Newest first, with the owner's email from their latest profile.
+async function getUnplacedFacts(limit = 300) {
+  const { rows } = await pool.query(
+    `SELECT f.id, f.user_id, f.text, f.source, f.created_at,
+            (SELECT mp.profile->'contact'->>'email' FROM master_profile mp
+              WHERE mp.user_id = f.user_id ORDER BY mp.updated_at DESC LIMIT 1) AS user_email
+       FROM uncategorized_facts f
+      WHERE f.matched_category IS NULL
+      ORDER BY f.created_at DESC
+      LIMIT $1`, [limit]
+  );
+  return rows;
+}
+
 async function recordUncategorizedFacts(userId, facts, source = 'ingestion') {
   if (!facts?.length) return;
   for (const f of facts) {
@@ -1050,7 +1065,7 @@ async function deleteAllUserData(userId) {
 }
 
 module.exports = {
-  deleteAllUserData,
+  deleteAllUserData, getUnplacedFacts,
   saveJobCheck, getJobCheck, saveJobAnalysis, addResumeFeedback, getLatestTailored, saveUserApiKey, getUserApiKey, deleteUserApiKey,
   pool, initSchema, getProfile, saveProfile, getProfileVersion, profileEvents,
   getUserSkills, setUserSkillStatus, saveUserSkill, saveUserSkillNotes,

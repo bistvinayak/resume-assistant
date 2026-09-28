@@ -901,7 +901,7 @@ module.exports = app;
 // ── ADMIN ROUTES ──────────────────────────────────────────────────────────
 const {
   adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs: adminGetJobs, retryJob, triggerCron, getSettings, updateSettings,
-  getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
+  getSchemaProposalsHandler, getUnplacedFactsHandler, approveSchemaProposal, rejectSchemaProposal,
   getFeedbackHandler, reviewFeedback,
   getGmailForwardingHandler, approveGmailForwarding, rejectGmailForwarding,
   getExtensionEventsHandler,
@@ -918,6 +918,7 @@ app.post(['/admin/cron/run', '/api/admin/cron/run'], authMiddleware, adminOnly, 
 app.get(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, getSettings);
 app.patch(['/admin/settings', '/api/admin/settings'], authMiddleware, adminOnly, updateSettings);
 app.get(['/admin/schema-proposals', '/api/admin/schema-proposals'], authMiddleware, adminOnly, getSchemaProposalsHandler);
+app.get(['/admin/unplaced-facts', '/api/admin/unplaced-facts'], authMiddleware, adminOnly, getUnplacedFactsHandler);
 app.post(['/admin/schema-proposals/:id/approve', '/api/admin/schema-proposals/:id/approve'], authMiddleware, adminOnly, approveSchemaProposal);
 app.post(['/admin/schema-proposals/:id/reject', '/api/admin/schema-proposals/:id/reject'], authMiddleware, adminOnly, rejectSchemaProposal);
 app.get(['/admin/feedback', '/api/admin/feedback'], authMiddleware, adminOnly, getFeedbackHandler);

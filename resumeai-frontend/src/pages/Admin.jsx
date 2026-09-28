@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import UnplacedFacts from '../components/UnplacedFacts';
 import { useNavigate } from 'react-router-dom';
 import { auth, signOutUser } from '../firebase';
 import { api } from '../api';
@@ -460,6 +461,8 @@ export default function Admin() {
               <p style={{ fontSize: '13px', color: '#78716c', marginBottom: '24px' }}>
                 Arjun flags resume sections it can't fit into the existing profile schema (Publications, Patents, Awards, etc). Approve to make the category permanent — every user's existing uncategorized data is automatically re-scanned and backfilled into it.
               </p>
+
+              <UnplacedFacts />
 
               <FilterBar fields={schemaFields(schemaProposals)} value={schemaF} onChange={setSchemaF} defaults={SCHEMA_DEFAULTS} shown={filterSchema(schemaProposals, schemaF).length} total={schemaProposals.length} noun="proposals" />
               {(() => {

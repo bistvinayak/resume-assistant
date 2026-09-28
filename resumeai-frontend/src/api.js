@@ -448,6 +448,11 @@ export const api = {
     return data;
   },
 
+  async adminGetUnplacedFacts() {
+    const res = await checkedFetch(`${BASE}/admin/unplaced-facts`, { headers: await getHeaders() });
+    return res.json();
+  },
+
   async adminGetSchemaProposals() {
     const res = await checkedFetch(`${BASE}/admin/schema-proposals`, { headers: await getHeaders() });
     return res.json();

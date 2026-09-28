@@ -1,6 +1,6 @@
 'use strict';
 
-const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob, getExtensionEvents, deleteAllUserData } = require('./db');
+const { pool, getSchemaProposals, updateSchemaProposalStatus, setBackfillStatus, getChatFeedback, updateChatFeedbackStatus, getGmailForwardingRequests, reviewGmailForwarding, forceRequeueJob, getExtensionEvents, deleteAllUserData, getUnplacedFacts } = require('./db');
 const { runBatch } = require('./cron');
 const { queueJob } = require('./pipeline');
 const { scrapeLinkedInJob } = require('./scraper');
@@ -456,7 +456,17 @@ async function runSelfHealingHandler(req, res) {
   } catch (e) { res.status(500).json({ error: e.message }); }
 }
 
+// GET /api/admin/unplaced-facts
+async function getUnplacedFactsHandler(req, res) {
+  try {
+    res.json({ facts: await getUnplacedFacts() });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+}
+
 module.exports = {
+  getUnplacedFactsHandler,
   getProposalsHandler, acceptProposal, rejectProposal, togglePromptRule, runSelfHealingHandler,
   adminOnly, getStats, getUsers, updateUser, deleteUser, getJobs, retryJob, triggerCron, getSettings, updateSettings,
   getSchemaProposalsHandler, approveSchemaProposal, rejectSchemaProposal,
