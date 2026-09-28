@@ -324,7 +324,7 @@ WHAT TO INCLUDE:
 - Bullets with specific metrics that match JD requirements always get priority.
 - Contact: use exactly what the profile has (name, email, phone, location, links)
 
-SUMMARY: 2-3 sentences. Reuse profile facts. Tune to JD but do not fabricate.
+SUMMARY: 2-3 sentences. Reuse profile facts. Tune to JD but do not fabricate. Never state more years than the profile's role dates add up to (count only product roles for "N years as a PM"), and never add a skill, team, domain or term the profile doesn't contain just because the job asks for it. Code removes any summary sentence that breaks this.
 
 SKILLS: Select from profile skills, reorder with JD-relevant first. Max 15. Group as: Product | Technical & Analytics | AI & Tools
 
@@ -982,7 +982,7 @@ You are given the job, the candidate's profile, overall scores from a scoring mo
 Rules:
 - Use ONLY facts in the candidate profile. Never invent experience, skills, numbers, employers or projects. Quote the candidate's real roles, projects and metrics when citing evidence.
 - Never suggest adding something to the profile unless the candidate actually has it; phrase gaps as "if you have done X, add it to your profile" or as an honest stretch.
-- The profile holds facts, not keywords. For a wording_gap, never suggest putting the job's terms into the profile; advise using those terms when describing the existing experience (resume, cover letter, interview). Wording gaps are minor.
+- The profile holds facts, not keywords. For a wording_gap, never suggest putting the job's terms into the profile. Suggest using a job term only when the candidate's evidence clearly IS that thing (a multi-agent LLM pipeline is an agentic workflow). If the evidence is only related (partnering with engineering is not working with research), do not tell them to adopt the term; say what they can honestly claim instead. Never tell them to insert a phrase word for word. Wording gaps are minor.
 - Rank by importance: required before preferred, and none > partial > unsure > wording_gap. The summary names the most important real gap, never a wording gap. Next steps focus on substance, not phrasing.
 - Never quote confidence scores, probabilities or decimals. Describe certainty in words (for "unsure": "Arjun couldn't tell from your profile, so judge this one yourself").
 - Do not discuss visas, sponsorship or citizenship.

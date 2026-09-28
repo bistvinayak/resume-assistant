@@ -151,6 +151,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, error: e.message || 'unknown_error' }));
     return true;
   }
+  // Resume/cover-letter file for the side panel's download buttons, returned as base64.
+  if (message.type === 'JOB_FILE') {
+    apiGet(`/jobs/${encodeURIComponent(message.jobId)}/download?format=${encodeURIComponent(message.format)}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`download_failed_${res.status}`);
+        const name = (res.headers.get('Content-Disposition') || '').match(/filename="([^"]+)"/)?.[1] || `arjun_resume.${message.format === 'pdf' ? 'pdf' : 'docx'}`;
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        sendResponse({ ok: true, data: { name, type: res.headers.get('Content-Type') || 'application/octet-stream', base64: btoa(bin) } });
+      })
+      .catch((e) => sendResponse({ ok: false, error: e.message || 'unknown_error' }));
+    return true;
+  }
   if (message.type === 'CHAT_FEEDBACK') {
     apiPost('/feedback', { traceId: message.traceId, score: message.score, comment: message.comment || undefined, userMessage: message.userMessage, arjunReply: message.arjunReply, chatMode: 'job_panel' })
       .then(apiJson)

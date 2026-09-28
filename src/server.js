@@ -754,6 +754,7 @@ function resumeView(row, feedback) {
   const firstRole = (r.experience || [])[0];
   return {
     status: row.status,                          // processing | delivered | failed
+    jobId: row.job_id,
     atsScore: row.ats_score ?? null,
     error: row.status === 'failed' ? row.error_reason : null,
     createdAt: row.created_at,

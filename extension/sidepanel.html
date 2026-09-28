@@ -58,6 +58,10 @@
     .msg { padding: 8px 10px; border-radius: 10px; white-space: pre-wrap; font-size: 13px; }
     .msg.user { background: var(--amber-soft); justify-self: end; max-width: 90%; }
     .msg.assistant { background: var(--soft); max-width: 95%; }
+    .dl { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .dl button { background: #f59e0b; color: #fff; border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .dl button:disabled { opacity: 0.6; }
+    .linkbtn { background: none; border: 1px solid #e7e5e4; border-radius: 6px; padding: 3px 8px; font-size: 12px; color: #57534e; cursor: pointer; }
     .fb { display: flex; gap: 6px; align-items: center; font-size: 12px; color: #78716c; margin: -2px 0 4px; }
     .fb button { background: none; border: 1px solid #e7e5e4; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 12px; }
     .fb input { flex: 1; min-width: 0; border: 1px solid #d6d3d1; border-radius: 6px; padding: 3px 8px; font-size: 12px; }
@@ -124,7 +128,10 @@
     </section>
 
     <section id="chatSection" class="chat" hidden>
-      <h2>Ask Arjun about this job</h2>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+        <h2>Ask Arjun about this job</h2>
+        <button type="button" id="copyChat" class="linkbtn">Copy chat</button>
+      </div>
       <div class="msgs" id="msgs"></div>
       <form class="compose" id="chatForm">
         <textarea id="chatInput" rows="2" placeholder="Ask about this job, or say &quot;make my resume for this job&quot;"></textarea>

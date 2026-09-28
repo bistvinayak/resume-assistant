@@ -66,6 +66,7 @@ function renderFit(job) {
 }
 
 function setStatus(stage) {
+  if (current?.analysisShown) return; // a late poll must not bring back "Writing the analysis…"
   $('statusText').textContent = STAGES[stage] || 'Working…';
   show('status');
 }
@@ -86,6 +87,8 @@ function renderRequirements(reqs, counts) {
 }
 
 function renderAnalysis(a) {
+  clearTimeout(pollTimer);
+  if (current) current.analysisShown = true;
   renderRequirements(a.requirements || [], a.counts);
   const x = a.explanation || {};
   if (x.summary) { $('summary').textContent = x.summary; show('analysisSection'); }
@@ -107,6 +110,35 @@ function renderAnalysis(a) {
 }
 
 // ── Resume card ────────────────────────────────────────────────────────
+// Download buttons (PDF, Word, cover letter) used in the resume card and in the chat.
+async function downloadFile(jobId, format, btn) {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Downloading…';
+  try {
+    const f = await send({ type: 'JOB_FILE', jobId, format });
+    const bytes = Uint8Array.from(atob(f.base64), (c) => c.charCodeAt(0));
+    const url = URL.createObjectURL(new Blob([bytes], { type: f.type }));
+    const a = document.createElement('a');
+    a.href = url; a.download = f.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    btn.textContent = label;
+  } catch { btn.textContent = 'Download failed, try again'; }
+  finally { btn.disabled = false; }
+}
+function downloadButtons(v) {
+  const wrap = document.createElement('div');
+  wrap.className = 'dl';
+  const items = [['pdf', 'Download PDF'], ['docx', 'Download Word']];
+  if (v.hasCoverLetter) items.push(['cover_letter', 'Cover letter']);
+  for (const [format, text] of items) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = text;
+    b.addEventListener('click', () => downloadFile(v.jobId, format, b));
+    wrap.appendChild(b);
+  }
+  return wrap;
+}
+
 function renderResume(v) {
   if (!v || v.status === 'none') { show('resumeSection', false); return; }
   const fb = (v.feedback || []).map((f) => `<li>${esc(f.text)}</li>`).join('');
@@ -123,10 +155,11 @@ function renderResume(v) {
   }
   if (fb) html += `<div class="r-fb">Your feedback applied:<ul>${fb}</ul></div>`;
   if (v.status === 'delivered') {
-    html += `<div class="r-actions"><a href="${DASHBOARD_JOBS}" target="_blank" rel="noopener">Download from My Applications →</a>${v.hasCoverLetter ? '<span>Cover letter included</span>' : ''}</div>
-      <div class="hint">Want changes? Tell me in the chat, e.g. “shorter summary” or “lead with my payments work”.</div>`;
+    html += `<div class="r-actions" id="resumeDl"></div>
+      <div class="hint">Want changes? Tell me in the chat, e.g. “shorter summary” or “lead with my payments work”. Also in <a href="${DASHBOARD_JOBS}" target="_blank" rel="noopener">My Applications</a>.</div>`;
   }
   $('resumeBody').innerHTML = html;
+  if (v.status === 'delivered' && v.jobId) $('resumeDl').appendChild(downloadButtons(v));
   show('resumeSection');
 }
 
@@ -137,6 +170,12 @@ async function pollResume(jobKey, startedAt = Date.now()) {
     const v = await send({ type: 'JOB_RESUME_GET', jobKey });
     if (!current || current.jobKey !== jobKey) return;
     renderResume(v);
+    if (v.status === 'delivered' && v.jobId && awaitingResume) {
+      awaitingResume = false;
+      const m = addMsg('assistant', `Your resume is ready${v.atsScore != null ? ` (keyword match ${v.atsScore}%)` : ''}. Download it here:`);
+      m.appendChild(downloadButtons(v));
+      chat.push({ role: 'assistant', content: 'Your resume is ready to download.' });
+    }
     if (v.status === 'processing' && Date.now() - startedAt < 300000) resumeTimer = setTimeout(() => pollResume(jobKey, startedAt), 4000);
   } catch { /* the card just stays as it was */ }
 }
@@ -177,6 +216,8 @@ async function load(job) {
     pollTimer = setTimeout(() => poll(job.jobKey, Date.now()), 2000);
   } catch (e) { fail(e); }
 }
+
+let awaitingResume = false; // set when the chat starts a resume, so the chat announces it once
 
 function addMsg(role, text) {
   const div = document.createElement('div');
@@ -233,7 +274,7 @@ $('chatForm').addEventListener('submit', async (ev) => {
     pending.textContent = r.reply;
     chat.push({ role: 'assistant', content: r.reply });
     if (r.traceId) addFeedback(pending, r.traceId, q, r.reply);
-    if (r.resume) { renderResume({ status: 'processing', feedback: [] }); setTimeout(() => pollResume(current.jobKey), 1500); }
+    if (r.resume) { awaitingResume = true; renderResume({ status: 'processing', feedback: [] }); setTimeout(() => pollResume(current.jobKey), 1500); }
   } catch (e) {
     pending.textContent = errorText(e.message);
     chat.pop(); // drop the unanswered question so it can be asked again
@@ -241,6 +282,15 @@ $('chatForm').addEventListener('submit', async (ev) => {
     $('chatSend').disabled = false;
   }
 });
+$('copyChat').addEventListener('click', async () => {
+  const who = { user: 'You', assistant: 'Arjun' };
+  const head = current ? `${current.title || 'Job'}${current.company ? ` · ${current.company}` : ''}\n\n` : '';
+  const text = head + chat.map((m) => `${who[m.role] || m.role}: ${m.content}`).join('\n\n');
+  try { await navigator.clipboard.writeText(text); $('copyChat').textContent = 'Copied'; }
+  catch { $('copyChat').textContent = 'Copy failed'; }
+  setTimeout(() => { $('copyChat').textContent = 'Copy chat'; }, 1800);
+});
+
 $('chatInput').addEventListener('keydown', (ev) => {
   if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('chatForm').requestSubmit(); }
 });

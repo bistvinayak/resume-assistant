@@ -101,6 +101,64 @@ function traceScore(text, sources) {
 }
 const bulletStr = (b) => (typeof b === 'string' ? b : b?.text || '');
 
+// ── Summary guard ────────────────────────────────────────────────────────
+// The summary is free text, so the model can stretch it toward the posting ("5+ years",
+// "worked with research teams") in ways the bullet check never sees. Drop any sentence that
+// claims more years than the profile's dates support, or that uses posting words the profile
+// never mentions.
+const MONTHS = { jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5, jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11 };
+function parseMonth(str, isEnd) {
+  const t = String(str || '').trim().toLowerCase();
+  if (!t) return null;
+  if (/present|current|now|ongoing/.test(t)) return new Date().getFullYear() * 12 + new Date().getMonth();
+  const m = t.match(/([a-z]{3})[a-z]*\.?\s+(\d{4})/);
+  if (m && m[1] in MONTHS) return Number(m[2]) * 12 + MONTHS[m[1]];
+  const y = t.match(/(\d{4})/);
+  return y ? Number(y[1]) * 12 + (isEnd ? 11 : 0) : null;
+}
+// Years covered by roles (overlaps merged). titleRe limits it to matching titles.
+function yearsOf(profile, titleRe = null) {
+  const spans = [];
+  for (const e of profile.experience || []) {
+    if (titleRe && !titleRe.test(e.title || '')) continue;
+    const [a, b] = String(e.dates || '').split(/\s*(?:–|—|-|to)\s*/i);
+    const start = parseMonth(a, false), end = parseMonth(b || a, true);
+    if (start != null && end != null && end >= start) spans.push([start, end]);
+  }
+  spans.sort((x, y) => x[0] - y[0]);
+  let months = 0, cur = null;
+  for (const sp of spans) {
+    if (cur && sp[0] <= cur[1]) cur[1] = Math.max(cur[1], sp[1]);
+    else { if (cur) months += cur[1] - cur[0] + 1; cur = [...sp]; }
+  }
+  if (cur) months += cur[1] - cur[0] + 1;
+  return months / 12;
+}
+const SUMMARY_GENERIC = new Set('proven track record strong skilled experience experienced passionate driven ability background including across deliver delivering delivered focus focused excellent communication years building shipping product products teams team partner partnering customer customers business drive driving growth impact results complex solutions solution cross functional collaborative collaboration leader leadership hands deep expertise technical strategic roadmap roadmaps'.split(' '));
+function cleanSummary(resume, profile, jdText) {
+  if (!resume.summary) return [];
+  const { summary: _own, ...rest } = profile;
+  const profileText = JSON.stringify(rest).toLowerCase();
+  const jd = String(jdText || '').toLowerCase();
+  const total = yearsOf(profile);
+  const pm = yearsOf(profile, /product/i);
+  const removed = [];
+  const sentences = resume.summary.match(/[^.!?]+[.!?]*/g) || [resume.summary];
+  const kept = sentences.filter(sentence => {
+    const claim = sentence.match(/(\d+)\+?\s*(?:years?|yrs?)/i);
+    if (claim) {
+      const limit = /product manag|\bPM\b/i.test(sentence) ? pm : total;
+      if (Number(claim[1]) > Math.floor(limit + 0.05)) { removed.push(sentence.trim()); return false; }
+    }
+    const stuffed = (sentence.toLowerCase().match(/[a-z][a-z-]{4,}/g) || [])
+      .filter(w => !SUMMARY_GENERIC.has(w) && jd.includes(w) && !profileText.includes(w.replace(/s$/, '')));
+    if (stuffed.length) { removed.push(`${sentence.trim()} [${stuffed.join(', ')}]`); return false; }
+    return true;
+  });
+  if (removed.length) resume.summary = kept.join(' ').trim() || profile.summary || '';
+  return removed;
+}
+
 function dropUntraceableBullets(resume, profile) {
   const sources = (profile.experience || []).flatMap(e => (e.bullets || []).map(bulletStr))
     .concat((profile.projects || []).flatMap(p => [p.description, p.outcome, ...(p.bullets || []).map(bulletStr)]))
@@ -349,6 +407,11 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   }
 
   // Step 1.5: Content integrity — patch any dropped roles
+  const stretched = cleanSummary(resume, profile, job.jd_text);
+  if (stretched.length) {
+    console.warn(`⚠ Dropped ${stretched.length} summary sentence(s) not supported by the profile: ${stretched.map(x => `"${x.slice(0, 80)}"`).join(', ')}`);
+    langfuse.score({ traceId: trace.id, name: 'summary-sentences-dropped', value: stretched.length });
+  }
   const invented = dropUntraceableBullets(resume, profile);
   if (invented.length) {
     console.warn(`⚠ Dropped ${invented.length} bullet(s) not traceable to the profile: ${invented.map(b => `"${b.slice(0, 60)}"`).join(', ')}`);
@@ -580,6 +643,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
       );
       const improvedResume = improveResult.resume || improveResult;
       const inventedByImprove = dropUntraceableBullets(improvedResume, profile);
+      cleanSummary(improvedResume, profile, job.jd_text);
       if (inventedByImprove.length) console.warn(`⚠ Improve pass: dropped ${inventedByImprove.length} untraceable bullet(s)`);
       substitutions = improveResult.substitutions || [];
 
@@ -720,4 +784,4 @@ Generated by Resume Assistant`;
   return body.trim();
 }
 
-module.exports = { processJob, queueJob, getQueueStats, dropUntraceableBullets };
+module.exports = { cleanSummary, yearsOf, processJob, queueJob, getQueueStats, dropUntraceableBullets };
