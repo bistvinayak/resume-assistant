@@ -36,10 +36,17 @@ function Step({ n, done, optional, title, children, action, onAction }) {
         </div>
         <div style={{ fontSize: '13px', color: '#57534e', lineHeight: 1.6, maxWidth: '560px' }}>{children}</div>
       </div>
-      <button onClick={onAction} style={{
-        background: done ? '#fff' : '#f59e0b', color: done ? '#57534e' : '#fff', border: done ? '1px solid #d6d3d1' : 'none',
-        borderRadius: '8px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-      }}>{done ? 'Open' : action}</button>
+      {/* Filled = required and still to do; outlined = optional; green text = already done. */}
+      {done ? (
+        <button onClick={onAction} style={{ background: 'none', border: 'none', color: '#16a34a', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap', padding: '8px 4px' }}>
+          ✓ Done · view
+        </button>
+      ) : (
+        <button onClick={onAction} style={{
+          background: optional ? '#fff' : '#f59e0b', color: optional ? '#1c1917' : '#fff', border: optional ? '1px solid #d6d3d1' : 'none',
+          borderRadius: '8px', padding: '8px 14px', fontSize: '12.5px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+        }}>{action} →</button>
+      )}
     </div>
   );
 }
