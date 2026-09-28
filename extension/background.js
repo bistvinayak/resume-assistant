@@ -151,6 +151,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       .catch((e) => sendResponse({ ok: false, error: e.message || 'unknown_error' }));
     return true;
   }
+  if (message.type === 'CHAT_FEEDBACK') {
+    apiPost('/feedback', { traceId: message.traceId, score: message.score, comment: message.comment || undefined, userMessage: message.userMessage, arjunReply: message.arjunReply, chatMode: 'job_panel' })
+      .then(apiJson)
+      .then((data) => sendResponse({ ok: true, data }))
+      .catch((e) => sendResponse({ ok: false, error: e.message || 'unknown_error' }));
+    return true;
+  }
   if (['JOB_INSIGHTS_START', 'JOB_INSIGHTS_GET', 'JOB_CHAT', 'JOB_RESUME_GET'].includes(message.type)) {
     const jobKey = String(message.jobKey || '');
     const call = message.type === 'JOB_INSIGHTS_START' ? apiPost('/extension/job-insights', { jobKey })

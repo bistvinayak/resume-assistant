@@ -15,7 +15,7 @@ const {
 } = require('./db');
 const { diagnoseChatFeedback, diagnoseExtensionSite } = require('./llm');
 
-const CHAT_TARGETS = new Set(['intent_classify', 'chat_enrich']);
+const CHAT_TARGETS = new Set(['intent_classify', 'chat_enrich', 'job_fit_chat']);
 const RESOLVED_ERROR = /credits|402|billing/i; // pre-free-model billing failures, already fixed
 const AI_PROVIDER_ERROR = /nemotron|gemini|openrouter|:free|overloaded|timed? ?out|timeout|No response from|Cannot read properties|invalid json|Provider returned error|Upstream/i;
 

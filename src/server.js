@@ -807,7 +807,7 @@ app.post('/api/extension/job-chat', async (req, res, next) => {
       const started = await startPanelResume(req, check, { coverLetter: out.coverLetter });
       resume = { status: 'processing', started };
     }
-    res.json({ reply: out.reply, action: out.action, resume });
+    res.json({ reply: out.reply, action: out.action, resume, traceId: out.traceId });
   } catch (e) {
     if (e.message === 'chat_timeout') return res.status(503).json({ error: 'ai_busy', message: friendlyAiError('timeout').message });
     if (e.status === 400) return res.status(400).json({ error: e.message });

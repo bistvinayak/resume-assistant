@@ -195,7 +195,7 @@ async function chatAboutJob(profile, check, analysis, messages, ctx = {}, resume
     const action = ['tailor_resume', 'revise_resume'].includes(out.action) ? out.action : 'none';
     const feedback = String(out.feedback || '').trim().slice(0, 500);
     trace.update({ output: { reply, action, feedback } });
-    return { reply, action, feedback, coverLetter: out.cover_letter === true };
+    return { reply, action, feedback, coverLetter: out.cover_letter === true, traceId: trace.id };
   } finally {
     await langfuse.flushAsync().catch(() => {});
   }

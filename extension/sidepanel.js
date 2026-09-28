@@ -187,6 +187,38 @@ function addMsg(role, text) {
   return div;
 }
 
+// Thumbs up/down under each reply → admin Feedback tab (+ self-healing for thumbs-down).
+function addFeedback(msgEl, traceId, userMessage, arjunReply) {
+  const bar = document.createElement('div');
+  bar.className = 'fb';
+  const done = (text) => { bar.textContent = text; };
+  const submit = async (score, comment) => {
+    done('Sending…');
+    try { await send({ type: 'CHAT_FEEDBACK', traceId, score, comment, userMessage, arjunReply }); done(score ? 'Thanks for the feedback.' : 'Thanks. This helps us fix it.'); }
+    catch { done('Could not send feedback.'); }
+  };
+  const btn = (label, title, onClick) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = label; b.title = title; b.setAttribute('aria-label', title);
+    b.addEventListener('click', onClick);
+    return b;
+  };
+  bar.append(
+    btn('👍', 'Helpful', () => submit(1)),
+    btn('👎', 'Not helpful', () => {
+      bar.textContent = '';
+      const input = document.createElement('input');
+      input.placeholder = 'What went wrong? (optional)';
+      input.setAttribute('aria-label', 'What went wrong? (optional)');
+      const go = btn('Send', 'Send feedback', () => submit(0, input.value.trim()));
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); go.click(); } });
+      bar.append(input, go);
+      input.focus();
+    }),
+  );
+  msgEl.insertAdjacentElement('afterend', bar);
+}
+
 $('chatForm').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const q = $('chatInput').value.trim();
@@ -200,6 +232,7 @@ $('chatForm').addEventListener('submit', async (ev) => {
     const r = await send({ type: 'JOB_CHAT', jobKey: current.jobKey, messages: chat });
     pending.textContent = r.reply;
     chat.push({ role: 'assistant', content: r.reply });
+    if (r.traceId) addFeedback(pending, r.traceId, q, r.reply);
     if (r.resume) { renderResume({ status: 'processing', feedback: [] }); setTimeout(() => pollResume(current.jobKey), 1500); }
   } catch (e) {
     pending.textContent = errorText(e.message);

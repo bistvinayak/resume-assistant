@@ -87,7 +87,7 @@ POST /api/chat { message, mode, history }
   │
   ├─ mode=tailor + URL → scrapeLinkedInJob → processJob (background)
   │
-  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:1579]
+  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:1580]
   │    ├─ URL structural detection (no LLM)
   │    │    ├─ url_job → "switch to Tailor tab" response
   │    │    └─ url_profile → save to contact field → done
@@ -97,7 +97,7 @@ POST /api/chat { message, mode, history }
   │         ├─ question → reply from intent gate using profile, done
   │         └─ add_info/delete/clarify → in_scope=true, continue ↓
   │
-  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:1631]
+  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:1632]
        └─ Returns { reply, extracted, deletions }
             → frontend shows pendingChanges for confirm/reject
 ```
@@ -106,7 +106,7 @@ POST /api/chat { message, mode, history }
 
 ```
 ingestText(text, userId) [profile.js:181]
-  → extractFacts(text) [llm.js:1409]  — LLM extracts structured profile
+  → extractFacts(text) [llm.js:1410]  — LLM extracts structured profile
   → applyPartial(partial, userId) [profile.js:433]
 
 ingestPdf(filePath, userId) [profile.js:186]
@@ -114,7 +114,7 @@ ingestPdf(filePath, userId) [profile.js:186]
        ├─ .pdf → pdf-parse + pdfjs hyperlink extraction
        ├─ .docx/.doc → mammoth (text + HTML hyperlink extraction)
        └─ .txt → fs.readFile
-  → extractFacts(text) [llm.js:1409]
+  → extractFacts(text) [llm.js:1410]
   → applyPartial(partial, userId) [profile.js:433]
 
 ingestFiles(files[], userId) [profile.js:197]
@@ -123,7 +123,7 @@ ingestFiles(files[], userId) [profile.js:197]
 applyPartial(partial, userId) [profile.js:433]
   → getProfile(userId)
   → if empty profile: mergeProfile (programmatic)
-  → if existing profile: smartMerge (LLM) [llm.js:1643]
+  → if existing profile: smartMerge (LLM) [llm.js:1644]
        └─ fallback: mergeProfile + detectConflicts
   → saveProfile(merged, userId)
   → returns merged (with _conflicts if any)
@@ -135,10 +135,10 @@ applyPartial(partial, userId) [profile.js:433]
 processJob(job, userId) [pipeline.js:312]
   → seenJobBefore(job) [db.js:506]
   → getProfile(userId) [db.js:274]
-  → tailorResume(profile, job, trace) [llm.js:1461]  — LLM
-  → calculateAtsScore(resume, job, trace) [llm.js:1564]  — LLM
+  → tailorResume(profile, job, trace) [llm.js:1462]  — LLM
+  → calculateAtsScore(resume, job, trace) [llm.js:1565]  — LLM
   → if ats < 95:
-       → improveResume(resume, job, ats, trace) [llm.js:1491]  — LLM
+       → improveResume(resume, job, ats, trace) [llm.js:1492]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:260]
   → saveTailored(jobId, resume, filePath) [db.js:522]
@@ -177,15 +177,15 @@ mergeProfile(base, incoming, conflicts) [profile.js:764]
 
 | Function | Line | Purpose |
 |----------|------|---------|
-| extractFacts | 1409 | Parse raw text → structured profile JSON |
-| tailorResume | 1461 | Rewrite profile into job-tailored resume |
-| improveResume | 1491 | Rewrite bullets with missing JD keywords |
-| calculateAtsScore | 1564 | Score resume vs JD |
-| classifyIntent | 1579 | Intent gate: scope check + direct reply for questions |
-| chatEnrich | 1631 | Extract profile data from conversation |
-| smartMerge | 1643 | LLM-powered merge of existing + new profile |
+| extractFacts | 1410 | Parse raw text → structured profile JSON |
+| tailorResume | 1462 | Rewrite profile into job-tailored resume |
+| improveResume | 1492 | Rewrite bullets with missing JD keywords |
+| calculateAtsScore | 1565 | Score resume vs JD |
+| classifyIntent | 1580 | Intent gate: scope check + direct reply for questions |
+| chatEnrich | 1632 | Extract profile data from conversation |
+| smartMerge | 1644 | LLM-powered merge of existing + new profile |
 
-All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1245] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
+All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1246] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
 
 ## Database (db.js)
 
@@ -553,43 +553,43 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1245] — 
 | userClientFor | 41 | no |
 | invalidateUserClient | 56 | yes |
 | formatApprovedCategories | 58 | no |
-| syncPrompts | 1093 | yes |
-| learnedRules | 1117 | no |
-| invalidateRulesCache | 1129 | yes |
-| getPrompt | 1131 | yes |
-| evalExtraction | 1147 | no |
-| evalAtsScore | 1175 | no |
-| evalTailoring | 1187 | no |
-| evalImprovement | 1204 | no |
-| countProfileBullets | 1210 | no |
-| evalSmartMerge | 1214 | no |
-| askJson | 1245 | yes |
-| askJsonOnce | 1280 | no |
-| makeTrace | 1356 | yes |
-| createJobTrace | 1371 | yes |
-| recordSchemaSuggestions | 1380 | no |
-| looksLikeResume | 1400 | yes |
-| isNearlyEmpty | 1404 | yes |
-| extractFacts | 1409 | yes |
-| skillsBlock | 1444 | no |
-| feedbackBlock | 1454 | no |
-| tailorResume | 1461 | yes |
-| improveResume | 1491 | yes |
-| buildPersonalContext | 1516 | no |
-| coverLetter | 1530 | yes |
-| calculateAtsScore | 1564 | yes |
-| classifyIntent | 1579 | yes |
-| chatEnrich | 1631 | yes |
-| smartMerge | 1643 | yes |
-| classifyCustomFacts | 1656 | yes |
-| mapFormFieldsBatch | 1681 | no |
-| mapFormFields | 1713 | yes |
-| analyzeResumeFormat | 1757 | yes |
-| diagnoseChatFeedback | 1781 | yes |
-| diagnoseExtensionSite | 1788 | yes |
-| generateSkill | 1796 | yes |
-| attempt | 1804 | no |
-| scoreIngestionCoverage | 1847 | yes |
+| syncPrompts | 1094 | yes |
+| learnedRules | 1118 | no |
+| invalidateRulesCache | 1130 | yes |
+| getPrompt | 1132 | yes |
+| evalExtraction | 1148 | no |
+| evalAtsScore | 1176 | no |
+| evalTailoring | 1188 | no |
+| evalImprovement | 1205 | no |
+| countProfileBullets | 1211 | no |
+| evalSmartMerge | 1215 | no |
+| askJson | 1246 | yes |
+| askJsonOnce | 1281 | no |
+| makeTrace | 1357 | yes |
+| createJobTrace | 1372 | yes |
+| recordSchemaSuggestions | 1381 | no |
+| looksLikeResume | 1401 | yes |
+| isNearlyEmpty | 1405 | yes |
+| extractFacts | 1410 | yes |
+| skillsBlock | 1445 | no |
+| feedbackBlock | 1455 | no |
+| tailorResume | 1462 | yes |
+| improveResume | 1492 | yes |
+| buildPersonalContext | 1517 | no |
+| coverLetter | 1531 | yes |
+| calculateAtsScore | 1565 | yes |
+| classifyIntent | 1580 | yes |
+| chatEnrich | 1632 | yes |
+| smartMerge | 1644 | yes |
+| classifyCustomFacts | 1657 | yes |
+| mapFormFieldsBatch | 1682 | no |
+| mapFormFields | 1714 | yes |
+| analyzeResumeFormat | 1758 | yes |
+| diagnoseChatFeedback | 1782 | yes |
+| diagnoseExtensionSite | 1789 | yes |
+| generateSkill | 1797 | yes |
+| attempt | 1805 | no |
+| scoreIngestionCoverage | 1848 | yes |
 
 ### mailer.js
 

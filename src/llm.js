@@ -900,6 +900,7 @@ Three examples. Each: a bland generic sentence about one of their real achieveme
 The chat has two prompts you may target:
 - intent_classify: decides what the user wants (question, profile update, job URL, etc.) and may answer simple questions
 - chat_enrich: extracts profile facts from the conversation and writes Arjun's reply
+- job_fit_chat: the Chrome extension side-panel chat about one job posting (chat_mode "job_panel"). Feedback with chat_mode "job_panel" always targets this prompt.
 
 Rules for your proposal:
 - The fix is a single, general rule appended to one prompt. It must help future users in similar situations, not just this one message.

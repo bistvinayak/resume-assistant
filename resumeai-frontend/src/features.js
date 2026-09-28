@@ -55,7 +55,7 @@ export const FEATURE_GROUPS = [
       { title: 'How well do I fit this job?', where: 'Extension popup (top button)', added: '2026-09',
         what: 'A quick fit score for the job you are viewing, including visa-sponsorship signals.' },
       { title: 'Full job analysis and chat', where: 'Extension side panel', added: '2026-09',
-        what: 'Requirement by requirement: where your profile is strong, where it only needs rewording, and real gaps. Ask follow-up questions grounded in your profile, and make or refine the resume from the panel.' },
+        what: 'Requirement by requirement: where your profile is strong, where it only needs rewording, and real gaps. Ask follow-up questions grounded in your profile, and make or refine the resume from the panel. Rate any reply with a thumbs up or down.' },
     ],
   },
   {
