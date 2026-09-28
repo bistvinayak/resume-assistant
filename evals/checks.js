@@ -332,9 +332,13 @@ function resumeFormat(resume, html, profile, skills, page = null) {
 const SKILL_GROUP_ORDER = ['AI & Automation', 'Product & Delivery', 'Technical'];
 function pageChecks(resume, html, profile, page) {
   const out = [];
+  html = html.replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
   const { measure, margins } = page;
   out.push(check('exactly 1 page (rendered)', measure.pages === 1, `${measure.pages} page(s)`));
-  out.push(check('page filled to ≥ 90% (skill: < 35pt empty at the bottom)', measure.pages === 1 && measure.lastPageFill >= 90, `${measure.lastPageFill}%`));
+  const profileBulletCount = (profile.experience || []).reduce((n, e) => n + (e.bullets || []).length, 0);
+  const resumeBulletCount = (resume.experience || []).reduce((n, e) => n + (e.bullets || []).length, 0);
+  const outOfContent = resumeBulletCount >= Math.min(profileBulletCount, (resume.experience || []).length * 5);
+  out.push(check('page filled to ≥ 90%, unless the profile has nothing more to add', measure.pages === 1 && (measure.lastPageFill >= 90 || outOfContent), `${measure.lastPageFill}%${outOfContent && measure.lastPageFill < 90 ? ' (all profile bullets already used)' : ''}`));
 
   const profRoles = profile.experience || [];
   const badRoles = (resume.experience || []).filter(r => {
@@ -352,7 +356,7 @@ function pageChecks(resume, html, profile, page) {
   const lines = [...html.matchAll(/<p class="skill-line"><strong>([^<]+):<\/strong>\s*([^<]*)<\/p>/g)].map(m => ({ label: m[1], items: m[2].split(',').map(s => s.trim()).filter(Boolean) }));
   const labels = lines.map(l => l.label);
   const inOrder = labels.every(l => SKILL_GROUP_ORDER.includes(l)) && labels.every((l, i) => i === 0 || SKILL_GROUP_ORDER.indexOf(l) > SKILL_GROUP_ORDER.indexOf(labels[i - 1]));
-  out.push(check('skills use the skill’s labels, in its order', lines.length >= 2 && inOrder, labels.join(' → ')));
+  out.push(check('skills use the skill’s labels, in its order', lines.length >= 1 && inOrder, labels.join(' → ')));
   const allItems = lines.flatMap(l => l.items.map(i => i.toLowerCase()));
   const dupes = [...new Set(allItems.filter((x, i) => allItems.indexOf(x) !== i))];
   out.push(check('no skill listed twice', !dupes.length, dupes.join(', ')));

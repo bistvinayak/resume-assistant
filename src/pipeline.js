@@ -343,7 +343,9 @@ function dedupBullets(resume) {
 function expandResume(resume, profile, aggression) {
   let changed = false;
   const maxAdd = aggression === 'heavy' ? 6 : aggression === 'medium' ? 4 : 3;
-  const maxBullets = aggression === 'heavy' ? 99 : aggression === 'medium' ? 10 : 7;
+  // One-page fills stop at 5 bullets per role (the resume skill's maximum); 'heavy' is only
+  // used when growing toward a multi-page target.
+  const maxBullets = aggression === 'heavy' ? 99 : 5;
 
   for (const resumeExp of (resume.experience || [])) {
     const profileExp = (profile.experience || []).find(p =>
@@ -359,7 +361,19 @@ function expandResume(resume, profile, aggression) {
       norm(typeof b === 'string' ? b : b.text || '')
     ));
 
-    const missing = profileBullets.filter(bt => !resumeBulletTexts.has(norm(bt)));
+    // Tailored bullets are reworded and labeled, so exact text never matches. Treat a profile
+    // bullet as already present when a resume bullet shares most of its words, or all of its
+    // numbers (tailoring keeps metrics). Otherwise the fill step re-added near-duplicates.
+    const resumeTexts = (resumeExp.bullets || []).map(b => (typeof b === 'string' ? b : b.text || '').replace(/^[^:]{1,60}:\s/, ''));
+    const wordSet = (t) => new Set(String(t).toLowerCase().match(/[a-z0-9]{3,}/g) || []);
+    const nums = (t) => (String(t).match(/\d[\d,.]*/g) || []).map(n => n.replace(/[,.]+$/, '').replace(/,/g, ''));
+    const alreadyThere = (bt) => resumeTexts.some(rt => {
+      const a = wordSet(bt), b = wordSet(rt);
+      const shared = [...a].filter(w => b.has(w)).length / Math.max(1, Math.min(a.size, b.size));
+      const bn = nums(bt), rn = new Set(nums(rt));
+      return shared >= 0.6 || (bn.length > 0 && bn.every(n => rn.has(n)));
+    });
+    const missing = profileBullets.filter(bt => !resumeBulletTexts.has(norm(bt)) && !alreadyThere(bt));
     const slotsAvailable = Math.min(maxAdd, maxBullets - currentCount);
     if (missing.length > 0 && slotsAvailable > 0) {
       const toAdd = missing.slice(0, slotsAvailable);
@@ -514,7 +528,7 @@ async function withRetry(fn, label, retries = MAX_RETRIES) {
 // Step 1.6 of processJob, exported so the eval scores the same final resume users download:
 // measure → trim or fill toward the page target → shrink font slightly as a last resort.
 // Mutates `resume`; returns the layout options to render it with.
-async function fitToPage(resume, profile, job, { resumeFormat = null, targetPages = null } = {}) {
+async function fitToPage(resume, profile, job, { resumeFormat = null, targetPages = null, labelBullets = null } = {}) {
   let layoutOpts = { fontScale: 1.0, lineGap: 1.5, sectionGap: 0.6, roleGap: 0.3 };
   if (resumeFormat?.style_profile?.section_order) layoutOpts.sectionOrder = resumeFormat.style_profile.section_order;
   if (resumeFormat?.style_profile?.heading_case) layoutOpts.headingCase = resumeFormat.style_profile.heading_case;
@@ -572,6 +586,22 @@ async function fitToPage(resume, profile, job, { resumeFormat = null, targetPage
           m = trial;
           fillIterations++;
           console.log(`📐 [fill-up ${fillIterations}] ${m.pages} page(s), ${m.lastPageFill}% filled`);
+        }
+      }
+
+      // Bullets the fill step pulled from the profile arrive without the "Label: " prefix the
+      // default layout uses. Label them, de-duplicate, and trim back if that pushed past the target.
+      if (labelBullets) {
+        const labeled = await labelBullets(resume);
+        const deduped = dedupBullets(resume);
+        if (labeled || deduped) {
+          m = await measureResumePdf(resume, layoutOpts);
+          let trims = 0;
+          while (m.pages > targetPages && trims < 10 && tightenResume(resume, job.jd_text)) {
+            m = await measureResumePdf(resume, layoutOpts);
+            trims++;
+          }
+          console.log(`📐 [labels] ${labeled} labeled, ${deduped} duplicate(s) removed → ${m.pages} page(s), ${m.lastPageFill}% filled`);
         }
       }
 
@@ -650,49 +680,10 @@ async function fitToPage(resume, profile, job, { resumeFormat = null, targetPage
   return layoutOpts;
 }
 
-async function processJob(job, userId = 'me', { source = 'app', sessionId, userEmail, userName, force = false, wantCoverLetter = false } = {}) {
-  const t0 = Date.now();
-  const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
-
-  if (!force) {
-    const alreadySeen = await seenJobBefore(job, userId);
-    if (alreadySeen) return { skipped: true };
-  }
-
-  if (!job.jd_text || job.jd_text.trim().length < 50) {
-    console.log(`· Skipping ${job.job_id} — no JD`);
-    return { skipped: true };
-  }
-
-  const trace = createJobTrace(job, { userId, sessionId, userEmail, userName });
-  const profile = await getProfile(userId);
-  const resumeFormat = await getResumeFormat(userId).catch(() => null);
-  // Per-user playbooks (career profile, cover-letter story, writing voice); null until generated.
-  const skills = await getSkillsForWriting(userId).catch(() => null);
-
-  const askedPages = pagesFromFeedback(job.candidate_feedback);
-  const formatForJob = { ...(resumeFormat || {}), target_pages: askedPages || resumeFormat?.target_pages || 1 };
-  if (askedPages) console.log(`📄 Candidate asked for ${askedPages} page(s)`);
-
-  // Step 1: Tailor resume — LLM selects + reframes all relevant bullets
-  let resume, tailoringNotes, jdRequirements;
-  try {
-    console.log(`⏱ [${elapsed()}] Starting tailor...`);
-    const tailorResult = await withRetry(
-      () => tailorResume(profile, job, trace, formatForJob, skills),
-      `tailor:${job.company}`
-    );
-    console.log(`⏱ [${elapsed()}] Tailor complete`);
-    tailoringNotes = tailorResult.tailoring_notes || [];
-    jdRequirements = tailorResult.jd_requirements || [];
-    delete tailorResult.tailoring_notes;
-    delete tailorResult.jd_requirements;
-    resume = tailorResult;
-  } catch (e) {
-    await markJobFailed(job.job_id, `Tailoring failed after retries: ${e.message}`);
-    throw e;
-  }
-
+// Steps 1.5–1.57 of processJob, exported so the eval runs exactly what production runs:
+// clean the summary, drop untraceable bullets, patch dropped roles, label and de-duplicate
+// bullets, and carry project/education details over from the profile. Mutates `resume`.
+async function prepareResume(resume, profile, job, { resumeFormat = null, trace } = {}) {
   // Step 1.5: Content integrity — patch any dropped roles
   const stretched = cleanSummary(resume, profile, job.jd_text);
   if (stretched.length) {
@@ -791,11 +782,61 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     if (!src) continue;
     for (const k of ['major', 'honors', 'gpa', 'location']) if (!e[k] && src[k]) e[k] = src[k];
   }
+}
+
+async function processJob(job, userId = 'me', { source = 'app', sessionId, userEmail, userName, force = false, wantCoverLetter = false } = {}) {
+  const t0 = Date.now();
+  const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
+
+  if (!force) {
+    const alreadySeen = await seenJobBefore(job, userId);
+    if (alreadySeen) return { skipped: true };
+  }
+
+  if (!job.jd_text || job.jd_text.trim().length < 50) {
+    console.log(`· Skipping ${job.job_id} — no JD`);
+    return { skipped: true };
+  }
+
+  const trace = createJobTrace(job, { userId, sessionId, userEmail, userName });
+  const profile = await getProfile(userId);
+  const resumeFormat = await getResumeFormat(userId).catch(() => null);
+  // Per-user playbooks (career profile, cover-letter story, writing voice); null until generated.
+  const skills = await getSkillsForWriting(userId).catch(() => null);
+
+  const askedPages = pagesFromFeedback(job.candidate_feedback);
+  const formatForJob = { ...(resumeFormat || {}), target_pages: askedPages || resumeFormat?.target_pages || 1 };
+  if (askedPages) console.log(`📄 Candidate asked for ${askedPages} page(s)`);
+
+  // Step 1: Tailor resume — LLM selects + reframes all relevant bullets
+  let resume, tailoringNotes, jdRequirements;
+  try {
+    console.log(`⏱ [${elapsed()}] Starting tailor...`);
+    const tailorResult = await withRetry(
+      () => tailorResume(profile, job, trace, formatForJob, skills),
+      `tailor:${job.company}`
+    );
+    console.log(`⏱ [${elapsed()}] Tailor complete`);
+    tailoringNotes = tailorResult.tailoring_notes || [];
+    jdRequirements = tailorResult.jd_requirements || [];
+    delete tailorResult.tailoring_notes;
+    delete tailorResult.jd_requirements;
+    resume = tailorResult;
+  } catch (e) {
+    await markJobFailed(job.job_id, `Tailoring failed after retries: ${e.message}`);
+    throw e;
+  }
+
+  await prepareResume(resume, profile, job, { resumeFormat, trace });
 
   // Step 1.6: Measure → expand/tighten → pick layout
   // Page target: what the candidate asked for in the chat, else their uploaded layout's
   // count, else 1 page (the default layout is a one-pager).
-  let layoutOpts = await fitToPage(resume, profile, job, { resumeFormat, targetPages: formatForJob.target_pages });
+  const wantsLabels = !resumeFormat?.style_profile || resumeFormat.style_profile.bold_label_bullets;
+  let layoutOpts = await fitToPage(resume, profile, job, {
+    resumeFormat, targetPages: formatForJob.target_pages,
+    labelBullets: wantsLabels ? (r) => ensureBulletLabels(r, trace).catch(() => 0) : null,
+  });
 
   // Step 2: ATS score
   let ats;
@@ -969,4 +1010,4 @@ Generated by Resume Assistant`;
   return body.trim();
 }
 
-module.exports = { tightenResume, pagesFromFeedback, ensureBulletLabels, restoreBulletLabels, ensureResumeCompleteness, applyBulletLabels, cleanSummary, yearsOf, processJob, queueJob, getQueueStats, dropUntraceableBullets, fitToPage };
+module.exports = { tightenResume, pagesFromFeedback, ensureBulletLabels, restoreBulletLabels, ensureResumeCompleteness, applyBulletLabels, cleanSummary, yearsOf, processJob, queueJob, getQueueStats, dropUntraceableBullets, fitToPage, prepareResume, expandResume };

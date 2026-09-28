@@ -58,7 +58,7 @@ const { assessFit } = require('../src/fitEngine');
 const FIT_ENGINE = args.fit === 'free' ? { engine: 'openrouter' } : { engine: 'jev', apiKey: process.env.TYPESAFE_API_KEY };
 const { ingestText, mergeProfile, applyDeletions } = require('../src/profile');
 const { classifyIntent, chatEnrich } = require('../src/llm');
-const { dropUntraceableBullets, cleanSummary, applyBulletLabels, restoreBulletLabels, ensureResumeCompleteness, ensureBulletLabels, fitToPage } = require('../src/pipeline');
+const { dropUntraceableBullets, cleanSummary, applyBulletLabels, restoreBulletLabels, ensureResumeCompleteness, ensureBulletLabels, fitToPage, prepareResume } = require('../src/pipeline');
 const { buildResumeHtml, measureResumePdf, PAGE_MARGIN_PT } = require('../src/renderPdf');
 const { profileForSkill, composeSkill, SKILL_NAMES } = require('../src/skills');
 const fx = require('./fixtures');
@@ -212,14 +212,11 @@ async function pool(items, limit, fn) {
         // Default layout + skill usage, after the same post-steps production applies.
         if (want('format')) {
           const final = JSON.parse(JSON.stringify(resume));
-          cleanSummary(final, profile, job.jd_text);
-          for (const e of final.education || []) {
-            const src = (profile.education || []).find(pe => (pe.school || '').toLowerCase() === (e.school || '').toLowerCase());
-            for (const k of ['major', 'honors', 'gpa', 'location']) if (src && !e[k] && src[k]) e[k] = src[k];
-          }
+          // Exactly production's post-tailor steps, then its page fit (with labels for filled bullets).
+          await prepareResume(final, profile, job, { trace });
           final.contact = final.contact || profile.contact;
           // Same page-fit step as production (trim/fill toward 1 page), then vet the rendered page.
-          const layoutOpts = await timed('page_fit', () => fitToPage(final, profile, { ...job, jd_text: job.jd_text }, { targetPages: 1 }));
+          const layoutOpts = await timed('page_fit', () => fitToPage(final, profile, job, { targetPages: 1, labelBullets: (res) => ensureBulletLabels(res, trace).catch(() => 0) }));
           const measure = await measureResumePdf(final, layoutOpts);
           const html = buildResumeHtml(final, layoutOpts);
           record('format', label, C.resumeFormat(final, html, profile, userSkills, { measure, margins: PAGE_MARGIN_PT }), { debug: { roles: (final.experience || []).length, keys: Object.keys(final) }, sample: (final.experience?.[0]?.bullets || []).slice(0, 2).map(b => (typeof b === 'string' ? b : b.text)).join(' || ').slice(0, 300) });
