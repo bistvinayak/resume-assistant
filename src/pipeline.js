@@ -182,7 +182,7 @@ function applyBulletLabels(resume) {
 // The improve pass rewrites bullets and can drop their "Label: " prefix. Put each role's
 // original label back on the rewritten bullet it most resembles.
 function restoreBulletLabels(before, after) {
-  const labelOf = (t) => (String(t).match(/^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5}):\s/) || [])[1];
+  const labelOf = (t) => (String(t).match(/^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){0,5}):\s/) || [])[1];
   const words = (t) => new Set(String(t).toLowerCase().match(/[a-z0-9%$]+/g) || []);
   const sim = (a, b) => { const A = words(a), B = words(b); let n = 0; for (const w of A) if (B.has(w)) n++; return n / Math.max(1, Math.min(A.size, B.size)); };
   for (const role of after.experience || []) {
@@ -225,7 +225,7 @@ function ensureResumeCompleteness(resume, profile) {
 
 // Default layout expects "Label: text" on every experience bullet. If the model skipped any,
 // ask for them in one short call (labels only, text untouched).
-const HAS_LABEL = /^[A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5}:\s/;
+const HAS_LABEL = /^[A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){0,5}:\s/;
 async function ensureBulletLabels(resume, trace) {
   const refs = [];
   for (const role of resume.experience || []) (role.bullets || []).forEach((b, i) => refs.push({ role, i, text: bulletStr(b) }));

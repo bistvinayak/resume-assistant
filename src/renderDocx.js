@@ -45,7 +45,7 @@ function scaledFonts(fontScale) {
 // uploaded resume templates with functional/skill-labeled bullets.
 const METRIC_RE = /(\$[\d,.]+[KMB]?\+?|[+~]?\d[\d,.]*[–-]\d[\d,.]*%|[+~]?\d[\d,.]*%\+?|\d[\d,.]*[KMB]\+|\d[\d,.]*\+)/g;
 // Also matches lowercase words ("Throughput & cycle time: …"), up to 6 words before the colon.
-const SUBPOINT_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5})(\s[—–]\s|:\s)/;
+const SUBPOINT_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){0,5})(\s[—–]\s|:\s)/;
 
 function parseBoldSegments(text) {
   const segments = [];

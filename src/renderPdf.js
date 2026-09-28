@@ -83,7 +83,7 @@ const METRIC_RE = /(\$[\d,.]+[KMB]?\+?|[+~]?\d[\d,.]*[–-]\d[\d,.]*%|[+~]?\d[\d
 // or colon-separated ("Root-Cause Analysis: did X") — the latter is common in
 // uploaded resume templates that use functional/skill-labeled bullets.
 // Also matches lowercase words ("Throughput & cycle time: …"), up to 6 words before the colon.
-const SUBPOINT_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5})(\s[—–]\s|:\s)/;
+const SUBPOINT_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){0,5})(\s[—–]\s|:\s)/;
 
 function parseBoldSegments(text) {
   const segments = [];

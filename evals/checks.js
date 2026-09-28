@@ -290,7 +290,7 @@ function guards({ enforceLabels, statusFor, looksLikeResume, isNearlyEmpty }, fx
 
 // Default layout (owner's reference resume) + how well Arjun Skills shaped the output.
 // `html` is the default-layout render (renderPdf.buildResumeHtml with no uploaded format).
-const LABEL_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5})(\s[—–]\s|:\s)/;
+const LABEL_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){0,5})(\s[—–]\s|:\s)/;
 function resumeFormat(resume, html, profile, skills) {
   const text = html.replace(/<[^>]+>/g, '\n').replace(/&amp;/g, '&');
   const pos = (h) => text.indexOf(`\n${h}\n`);
