@@ -10,13 +10,69 @@ function setStatus(text, cls) {
 chrome.runtime.sendMessage({ type: 'GET_AUTH_STATE' }, (state) => {
   if (state?.loggedIn) {
     setStatus(`Signed in as ${state.userEmail || 'you'}`, 'ok');
-    fillBtn.disabled = false;
-    fitBtn.disabled = false;
+    checkApplicable();
   } else {
     setStatus(state?.stale ? 'Session expired. Reconnect to keep using Arjun.' : 'Not connected to your Arjun account yet.', 'warn');
     showConnect();
   }
 });
+
+// ── Where Arjun applies ─────────────────────────────────────────────────
+// Runs inside the page (every frame: Greenhouse and others put the form in an iframe).
+// job = a job posting; form = a job application form. Heuristics, so the popup offers
+// "Use anyway" when it says no.
+function detectPage() {
+  const host = location.hostname.toLowerCase();
+  const url = location.href.toLowerCase();
+  const ATS = /greenhouse\.io|lever\.co|myworkdayjobs\.com|myworkdaysite\.com|icims\.com|smartrecruiters\.com|ashbyhq\.com|workable\.com|jobvite\.com|bamboohr\.com|taleo\.net|successfactors\.|oraclecloud\.com|eightfold\.ai|recruitee\.com|breezy\.hr|teamtailor\.com|applytojob\.com|rippling-ats\.com|ats\.rippling\.com|dayforcehcm\.com|paylocity\.com|ultipro\.com|jobs\.amazon\.com|hiring\.amazon\.com/;
+  const JOB_URL = /linkedin\.com\/jobs|indeed\.[a-z.]+\/(viewjob|jobs|rc\/clk|m\/viewjob)|glassdoor\.[a-z.]+\/(job-listing|job)|wellfound\.com\/(jobs|l\/)|ziprecruiter\.com\/(c\/|jobs|k\/)|dice\.com\/job|builtin[a-z]*\.com\/job|monster\.[a-z.]+\/job|simplyhired|handshake|\/careers?\/|\/jobs?\/|\/job-|\/positions?\/|\/openings?\/|\/vacanc|\/apply/;
+  let job = ATS.test(host) || JOB_URL.test(url);
+  for (const s of document.querySelectorAll('script[type="application/ld+json"]')) {
+    if (/"@type"\s*:\s*"JobPosting"/.test(s.textContent || '')) job = true;
+  }
+  const text = (document.body?.innerText || '').slice(0, 30000).toLowerCase();
+  if (!job) {
+    const hits = ['responsibilities', 'qualifications', 'requirements', "what you'll do", 'about the role', 'apply now', 'years of experience', 'benefits', 'job description', 'preferred qualifications']
+      .filter(k => text.includes(k)).length;
+    job = hits >= 3;
+  }
+  const fields = [...document.querySelectorAll('input, select, textarea')]
+    .filter(el => !['hidden', 'submit', 'button', 'search', 'image', 'reset'].includes(el.type) && el.getClientRects().length);
+  const labels = fields.map(el => [el.labels?.[0]?.innerText, el.getAttribute('aria-label'), el.name, el.placeholder, el.id].filter(Boolean).join(' ')).join(' | ').toLowerCase();
+  const formHits = ['first name', 'last name', 'firstname', 'lastname', 'email', 'phone', 'resume', 'cv', 'cover letter', 'linkedin', 'authoriz', 'sponsor', 'address', 'school', 'employer', 'job title', 'degree']
+    .filter(k => labels.includes(k)).length;
+  const form = fields.length >= 3 && (formHits >= 3 || (ATS.test(host) && formHits >= 1));
+  return { job, form };
+}
+
+async function checkApplicable() {
+  let job = false, form = false;
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const results = await chrome.scripting.executeScript({ target: { tabId: tab.id, allFrames: true }, func: detectPage });
+    for (const r of results || []) { job = job || !!r.result?.job; form = form || !!r.result?.form; }
+  } catch { /* chrome:// pages, the web store, etc. can't be read: not applicable */ }
+  applyAvailability(job, form);
+}
+
+function applyAvailability(job, form) {
+  fitBtn.disabled = !job;
+  fillBtn.disabled = !form;
+  const note = document.getElementById('applyNote') || Object.assign(document.createElement('div'), { id: 'applyNote' });
+  note.style.cssText = 'font-size:12px;color:#57534e;background:#f5f5f4;border-radius:6px;padding:8px 10px;margin-top:8px;line-height:1.45;';
+  note.textContent = '';
+  if (job && form) { note.remove(); return; }
+  note.append(!job && !form
+    ? 'Arjun isn’t needed on this page. Open a job posting to check your fit, or a job application form to fill it.'
+    : job ? 'This is a job posting. “Fill this page” works once you open the application form.'
+    : 'This looks like an application form. Open the job posting to check your fit.');
+  const any = document.createElement('a');
+  any.href = '#'; any.textContent = ' Use anyway';
+  any.style.cssText = 'color:#b45309;';
+  any.addEventListener('click', (e) => { e.preventDefault(); fitBtn.disabled = false; fillBtn.disabled = false; note.remove(); });
+  note.append(any);
+  statusEl.insertAdjacentElement('afterend', note);
+}
 
 // The extension gets its sign-in from an open Arjun page. Opening the dashboard sends it
 // right away, so "not signed in" is one click to fix even if you are already logged in.

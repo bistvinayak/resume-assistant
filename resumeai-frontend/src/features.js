@@ -52,6 +52,8 @@ export const FEATURE_GROUPS = [
     features: [
       { title: 'Application form autofill', where: 'Extension popup, or automatic on Workday, Greenhouse, Lever, iCIMS, SmartRecruiters, Ashby', added: '2026-09',
         what: 'Reads each form field, matches it to your profile by meaning, fills the ones it is confident about and flags the rest for review. Repeated sections (jobs, schools, links) are filled in order, with dates in the form’s format.' },
+      { title: 'Only where it helps', where: 'Extension popup', added: '2026-09',
+        what: 'The popup checks the page first: job-fit is offered on job postings, autofill on application forms, and elsewhere it says Arjun isn’t needed (with a “Use anyway” option).' },
       { title: 'Private password fill', where: 'Extension popup', added: '2026-09',
         what: 'Save a password for job-site account creation. It stays in your browser and is never sent to Arjun or any AI model.' },
       { title: 'How well do I fit this job?', where: 'Extension popup (top button)', added: '2026-09',
