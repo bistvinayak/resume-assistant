@@ -52,6 +52,7 @@ const EXTENSION_FEATURES = [
 ];
 
 export default function GettingStarted({ profile, jobs, gmailStatus, goTo }) {
+  const [jevKey, setJevKey] = useState(false);
   const [resumeFormat, setResumeFormat] = useState(undefined);
   const [extension, setExtension] = useState(undefined);
   const chatOpened = readFlag('arjun_gs_chat');
@@ -59,6 +60,7 @@ export default function GettingStarted({ profile, jobs, gmailStatus, goTo }) {
   useEffect(() => {
     api.getResumeFormat().then(setResumeFormat).catch(() => setResumeFormat(null));
     pingExtension().then(setExtension);
+    api.getJevKey().then(k => setJevKey(!!k?.hasKey)).catch(() => {});
   }, []);
 
   const steps = [
@@ -68,6 +70,7 @@ export default function GettingStarted({ profile, jobs, gmailStatus, goTo }) {
     { key: 'apply', core: true, done: (jobs || []).length > 0 },
     { key: 'extension', core: true, done: !!extension },
     { key: 'gmail', core: false, done: gmailStatus?.status === 'approved' },
+    { key: 'jev', core: false, done: jevKey },
   ];
   const done = Object.fromEntries(steps.map(s => [s.key, s.done]));
   const doneCount = steps.filter(s => s.done).length;
@@ -116,6 +119,9 @@ export default function GettingStarted({ profile, jobs, gmailStatus, goTo }) {
         </Step>
         <Step n="6" done={done.gmail} optional title="Tailor from LinkedIn job alerts automatically" action="Set up" onAction={() => goTo('profile', 'gmail-forwarding')}>
           Forward your LinkedIn job alert emails and Arjun tailors a resume for each new job every 2 hours and emails it to you.
+        </Step>
+        <Step n="7" done={done.jev} optional title="Add your Jev key for sharper job-fit scores" action="Add key" onAction={() => goTo('extension', 'jev-key')}>
+          Job-fit checks use a free AI model by default. Add your TypeSafe Jev key for more consistent scoring, billed to your TypeSafe account.
         </Step>
       </div>
 

@@ -1210,9 +1210,9 @@ export default function Dashboard() {
           <div style={{ background: '#ffffff', border: '1px solid #d6d3d1', borderRadius: '10px', padding: '16px', marginBottom: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
               {user?.photoURL && <img src={user.photoURL} style={{ width: 32, height: 32, borderRadius: '50%' }} />}
-              <div>
-                <div style={{ fontSize: '13px', fontWeight: 500 }}>{user?.displayName}</div>
-                <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace" }}>{user?.email}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '13px', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.displayName}</div>
+                <div title={user?.email} style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</div>
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
