@@ -37,45 +37,48 @@ Quick-lookup graph of the codebase. Check here FIRST before reading files — go
 | GET | /api/settings/jev-key | server.js:625 | getUserApiKey, resolveFitEngine, canStoreKeys |
 | PUT | /api/settings/jev-key | server.js:633 | canStoreKeys, callJev, saveUserApiKey, encrypt |
 | DELETE | /api/settings/jev-key | server.js:650 | deleteUserApiKey |
-| DELETE | /api/account | server.js:657 | deleteAllUserData, deleteUser |
-| POST | /api/extension/job-insights | server.js:690 | getProfile, resolveFitEngine, analyzeJob, saveJobAnalysis, friendlyAiError |
-| POST | /api/extension/job-chat | server.js:762 | getProfile, getLatestTailored, chatAboutJob, addResumeFeedback, friendlyAiError |
-| GET | /api/extension/job-resume | server.js:788 | getJobCheck, getLatestTailored |
-| GET | /api/extension/job-insights | server.js:797 | — |
-| GET | /api/extension/info | server.js:818 | — |
-| GET | /api/extension/download | server.js:821 | zip |
-| GET | /api/skills | server.js:843 | getSkillsView |
-| PUT | /api/skills/:skill/notes | server.js:847 | updateSkillNotes, getSkillsView |
-| POST | /api/skills/regenerate | server.js:857 | getProfile, runRefresh, getSkillsView |
-| GET | /api/skills/export | server.js:866 | buildSkillsExport |
-| GET | /projects/arjun | server.js:876 | — |
-| GET | /admin/stats | server.js:911 | adminOnly, getStats, authMiddleware |
-| GET | /admin/users | server.js:912 | adminOnly, getUsers, authMiddleware |
-| PATCH | /admin/users/:userId | server.js:913 | adminOnly, updateUser, authMiddleware |
-| DELETE | /admin/users/:userId | server.js:914 | adminOnly, deleteUser, authMiddleware |
-| GET | /admin/jobs | server.js:915 | adminOnly, authMiddleware |
-| POST | /admin/jobs/:jobId/retry | server.js:916 | adminOnly, retryJob, authMiddleware |
-| POST | /admin/cron/run | server.js:917 | adminOnly, triggerCron, authMiddleware |
-| GET | /admin/settings | server.js:918 | adminOnly, getSettings, authMiddleware |
-| PATCH | /admin/settings | server.js:919 | adminOnly, updateSettings, authMiddleware |
-| GET | /admin/schema-proposals | server.js:920 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
-| GET | /admin/unplaced-facts | server.js:921 | getUnplacedFactsHandler, adminOnly, authMiddleware, getUnplacedFacts |
-| POST | /admin/schema-proposals/:id/approve | server.js:922 | adminOnly, approveSchemaProposal, authMiddleware |
-| POST | /admin/schema-proposals/:id/reject | server.js:923 | adminOnly, rejectSchemaProposal, authMiddleware |
-| GET | /admin/feedback | server.js:924 | adminOnly, getFeedbackHandler, authMiddleware |
-| PATCH | /admin/feedback/:id | server.js:925 | adminOnly, reviewFeedback, authMiddleware |
-| GET | /admin/gmail-forwarding | server.js:926 | adminOnly, getGmailForwardingHandler, authMiddleware |
-| POST | /admin/gmail-forwarding/:userId/approve | server.js:927 | adminOnly, approveGmailForwarding, authMiddleware |
-| POST | /admin/gmail-forwarding/:userId/reject | server.js:928 | adminOnly, rejectGmailForwarding, authMiddleware |
-| GET | /admin/extension-events | server.js:929 | adminOnly, getExtensionEventsHandler, authMiddleware, getExtensionEvents |
-| GET | /admin/proposals | server.js:930 | getProposalsHandler, adminOnly, authMiddleware, getProposal |
-| POST | /admin/proposals/run | server.js:931 | runSelfHealingHandler, adminOnly, authMiddleware, runSelfHealing |
-| POST | /admin/proposals/:id/accept | server.js:932 | acceptProposal, adminOnly, authMiddleware |
-| POST | /admin/proposals/:id/reject | server.js:933 | rejectProposal, adminOnly, authMiddleware |
-| PATCH | /admin/prompt-rules/:id | server.js:934 | togglePromptRule, adminOnly, authMiddleware |
-| GET | /jobs/:jobId/download | server.js:940 | renderCoverLetterDocx, renderResumePdf, renderResumeDocx |
-| POST | /gmail/request-forwarding | server.js:995 | requestGmailForwarding |
-| GET | /gmail/forwarding-status | server.js:1002 | getGmailForwardingStatus |
+| GET | /api/settings/openrouter-key | server.js:655 | getUserApiKey, canStoreKeys |
+| PUT | /api/settings/openrouter-key | server.js:662 | canStoreKeys, saveUserApiKey, encrypt, invalidateUserClient |
+| DELETE | /api/settings/openrouter-key | server.js:676 | deleteUserApiKey, invalidateUserClient |
+| DELETE | /api/account | server.js:687 | deleteAllUserData, deleteUser |
+| POST | /api/extension/job-insights | server.js:720 | getProfile, resolveFitEngine, analyzeJob, saveJobAnalysis, friendlyAiError |
+| POST | /api/extension/job-chat | server.js:792 | getProfile, getLatestTailored, chatAboutJob, addResumeFeedback, friendlyAiError |
+| GET | /api/extension/job-resume | server.js:818 | getJobCheck, getLatestTailored |
+| GET | /api/extension/job-insights | server.js:827 | — |
+| GET | /api/extension/info | server.js:848 | — |
+| GET | /api/extension/download | server.js:851 | zip |
+| GET | /api/skills | server.js:873 | getSkillsView |
+| PUT | /api/skills/:skill/notes | server.js:877 | updateSkillNotes, getSkillsView |
+| POST | /api/skills/regenerate | server.js:887 | getProfile, runRefresh, getSkillsView |
+| GET | /api/skills/export | server.js:896 | buildSkillsExport |
+| GET | /projects/arjun | server.js:906 | — |
+| GET | /admin/stats | server.js:941 | adminOnly, getStats, authMiddleware |
+| GET | /admin/users | server.js:942 | adminOnly, getUsers, authMiddleware |
+| PATCH | /admin/users/:userId | server.js:943 | adminOnly, updateUser, authMiddleware |
+| DELETE | /admin/users/:userId | server.js:944 | adminOnly, deleteUser, authMiddleware |
+| GET | /admin/jobs | server.js:945 | adminOnly, authMiddleware |
+| POST | /admin/jobs/:jobId/retry | server.js:946 | adminOnly, retryJob, authMiddleware |
+| POST | /admin/cron/run | server.js:947 | adminOnly, triggerCron, authMiddleware |
+| GET | /admin/settings | server.js:948 | adminOnly, getSettings, authMiddleware |
+| PATCH | /admin/settings | server.js:949 | adminOnly, updateSettings, authMiddleware |
+| GET | /admin/schema-proposals | server.js:950 | adminOnly, getSchemaProposalsHandler, authMiddleware, getSchemaProposals |
+| GET | /admin/unplaced-facts | server.js:951 | getUnplacedFactsHandler, adminOnly, authMiddleware, getUnplacedFacts |
+| POST | /admin/schema-proposals/:id/approve | server.js:952 | adminOnly, approveSchemaProposal, authMiddleware |
+| POST | /admin/schema-proposals/:id/reject | server.js:953 | adminOnly, rejectSchemaProposal, authMiddleware |
+| GET | /admin/feedback | server.js:954 | adminOnly, getFeedbackHandler, authMiddleware |
+| PATCH | /admin/feedback/:id | server.js:955 | adminOnly, reviewFeedback, authMiddleware |
+| GET | /admin/gmail-forwarding | server.js:956 | adminOnly, getGmailForwardingHandler, authMiddleware |
+| POST | /admin/gmail-forwarding/:userId/approve | server.js:957 | adminOnly, approveGmailForwarding, authMiddleware |
+| POST | /admin/gmail-forwarding/:userId/reject | server.js:958 | adminOnly, rejectGmailForwarding, authMiddleware |
+| GET | /admin/extension-events | server.js:959 | adminOnly, getExtensionEventsHandler, authMiddleware, getExtensionEvents |
+| GET | /admin/proposals | server.js:960 | getProposalsHandler, adminOnly, authMiddleware, getProposal |
+| POST | /admin/proposals/run | server.js:961 | runSelfHealingHandler, adminOnly, authMiddleware, runSelfHealing |
+| POST | /admin/proposals/:id/accept | server.js:962 | acceptProposal, adminOnly, authMiddleware |
+| POST | /admin/proposals/:id/reject | server.js:963 | rejectProposal, adminOnly, authMiddleware |
+| PATCH | /admin/prompt-rules/:id | server.js:964 | togglePromptRule, adminOnly, authMiddleware |
+| GET | /jobs/:jobId/download | server.js:970 | renderCoverLetterDocx, renderResumePdf, renderResumeDocx |
+| POST | /gmail/request-forwarding | server.js:1025 | requestGmailForwarding |
+| GET | /gmail/forwarding-status | server.js:1032 | getGmailForwardingStatus |
 
 ## Chat Flow (server.js:316)
 
@@ -84,7 +87,7 @@ POST /api/chat { message, mode, history }
   │
   ├─ mode=tailor + URL → scrapeLinkedInJob → processJob (background)
   │
-  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:1550]
+  ├─ STEP 1: classifyIntent(message, profile, ctx, history)  [llm.js:1579]
   │    ├─ URL structural detection (no LLM)
   │    │    ├─ url_job → "switch to Tailor tab" response
   │    │    └─ url_profile → save to contact field → done
@@ -94,7 +97,7 @@ POST /api/chat { message, mode, history }
   │         ├─ question → reply from intent gate using profile, done
   │         └─ add_info/delete/clarify → in_scope=true, continue ↓
   │
-  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:1602]
+  └─ STEP 2: chatEnrich(message, profile, ctx, history)  [llm.js:1631]
        └─ Returns { reply, extracted, deletions }
             → frontend shows pendingChanges for confirm/reject
 ```
@@ -103,7 +106,7 @@ POST /api/chat { message, mode, history }
 
 ```
 ingestText(text, userId) [profile.js:181]
-  → extractFacts(text) [llm.js:1380]  — LLM extracts structured profile
+  → extractFacts(text) [llm.js:1409]  — LLM extracts structured profile
   → applyPartial(partial, userId) [profile.js:433]
 
 ingestPdf(filePath, userId) [profile.js:186]
@@ -111,7 +114,7 @@ ingestPdf(filePath, userId) [profile.js:186]
        ├─ .pdf → pdf-parse + pdfjs hyperlink extraction
        ├─ .docx/.doc → mammoth (text + HTML hyperlink extraction)
        └─ .txt → fs.readFile
-  → extractFacts(text) [llm.js:1380]
+  → extractFacts(text) [llm.js:1409]
   → applyPartial(partial, userId) [profile.js:433]
 
 ingestFiles(files[], userId) [profile.js:197]
@@ -120,7 +123,7 @@ ingestFiles(files[], userId) [profile.js:197]
 applyPartial(partial, userId) [profile.js:433]
   → getProfile(userId)
   → if empty profile: mergeProfile (programmatic)
-  → if existing profile: smartMerge (LLM) [llm.js:1614]
+  → if existing profile: smartMerge (LLM) [llm.js:1643]
        └─ fallback: mergeProfile + detectConflicts
   → saveProfile(merged, userId)
   → returns merged (with _conflicts if any)
@@ -132,10 +135,10 @@ applyPartial(partial, userId) [profile.js:433]
 processJob(job, userId) [pipeline.js:312]
   → seenJobBefore(job) [db.js:506]
   → getProfile(userId) [db.js:274]
-  → tailorResume(profile, job, trace) [llm.js:1432]  — LLM
-  → calculateAtsScore(resume, job, trace) [llm.js:1535]  — LLM
+  → tailorResume(profile, job, trace) [llm.js:1461]  — LLM
+  → calculateAtsScore(resume, job, trace) [llm.js:1564]  — LLM
   → if ats < 95:
-       → improveResume(resume, job, ats, trace) [llm.js:1462]  — LLM
+       → improveResume(resume, job, ats, trace) [llm.js:1491]  — LLM
        → calculateAtsScore again
   → renderResumeDocx(resume, filePath) [renderDocx.js:260]
   → saveTailored(jobId, resume, filePath) [db.js:522]
@@ -174,15 +177,15 @@ mergeProfile(base, incoming, conflicts) [profile.js:764]
 
 | Function | Line | Purpose |
 |----------|------|---------|
-| extractFacts | 1380 | Parse raw text → structured profile JSON |
-| tailorResume | 1432 | Rewrite profile into job-tailored resume |
-| improveResume | 1462 | Rewrite bullets with missing JD keywords |
-| calculateAtsScore | 1535 | Score resume vs JD |
-| classifyIntent | 1550 | Intent gate: scope check + direct reply for questions |
-| chatEnrich | 1602 | Extract profile data from conversation |
-| smartMerge | 1614 | LLM-powered merge of existing + new profile |
+| extractFacts | 1409 | Parse raw text → structured profile JSON |
+| tailorResume | 1461 | Rewrite profile into job-tailored resume |
+| improveResume | 1491 | Rewrite bullets with missing JD keywords |
+| calculateAtsScore | 1564 | Score resume vs JD |
+| classifyIntent | 1579 | Intent gate: scope check + direct reply for questions |
+| chatEnrich | 1631 | Extract profile data from conversation |
+| smartMerge | 1643 | LLM-powered merge of existing + new profile |
 
-All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
+All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1245] — OpenRouter (gpt-4o-mini), JSON mode, Langfuse traced.
 
 ## Database (db.js)
 
@@ -300,14 +303,17 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 | api.rejectIngestion() | /api/ingest/reject | — |
 | api.getJevKey() | /api/settings/jev-key | server.js:625 |
 | api.saveJevKey() | /api/settings/jev-key | server.js:625 |
-| api.deleteAccount() | /api/account | server.js:657 |
+| api.deleteAccount() | /api/account | server.js:687 |
+| api.getOpenRouterKey() | /api/settings/openrouter-key | server.js:655 |
+| api.saveOpenRouterKey() | /api/settings/openrouter-key | server.js:655 |
+| api.deleteOpenRouterKey() | /api/settings/openrouter-key | server.js:655 |
 | api.deleteJevKey() | /api/settings/jev-key | server.js:625 |
-| api.getExtensionInfo() | /api/extension/info | server.js:818 |
-| api.downloadExtension() | /api/extension/download | server.js:821 |
-| api.getSkills() | /api/skills | server.js:843 |
+| api.getExtensionInfo() | /api/extension/info | server.js:848 |
+| api.downloadExtension() | /api/extension/download | server.js:851 |
+| api.getSkills() | /api/skills | server.js:873 |
 | api.saveSkillNotes() | /api/skills/:id/notes | — |
-| api.regenerateSkills() | /api/skills/regenerate | server.js:857 |
-| api.downloadSkills() | /api/skills/export | server.js:866 |
+| api.regenerateSkills() | /api/skills/regenerate | server.js:887 |
+| api.downloadSkills() | /api/skills/export | server.js:896 |
 | api.getResumeFormat() | /api/resume-format | server.js:283 |
 | api.deleteResumeFormat() | /api/resume-format | server.js:283 |
 | api.getProfileVersions() | /api/profile/versions | server.js:102 |
@@ -544,44 +550,46 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 
 | Function | Line | Exported |
 |----------|------|----------|
-| formatApprovedCategories | 36 | no |
-| syncPrompts | 1071 | yes |
-| learnedRules | 1095 | no |
-| invalidateRulesCache | 1107 | yes |
-| getPrompt | 1109 | yes |
-| evalExtraction | 1125 | no |
-| evalAtsScore | 1153 | no |
-| evalTailoring | 1165 | no |
-| evalImprovement | 1182 | no |
-| countProfileBullets | 1188 | no |
-| evalSmartMerge | 1192 | no |
-| askJson | 1223 | yes |
-| askJsonOnce | 1253 | no |
-| makeTrace | 1329 | yes |
-| createJobTrace | 1342 | yes |
-| recordSchemaSuggestions | 1351 | no |
-| looksLikeResume | 1371 | yes |
-| isNearlyEmpty | 1375 | yes |
-| extractFacts | 1380 | yes |
-| skillsBlock | 1415 | no |
-| feedbackBlock | 1425 | no |
-| tailorResume | 1432 | yes |
-| improveResume | 1462 | yes |
-| buildPersonalContext | 1487 | no |
-| coverLetter | 1501 | yes |
-| calculateAtsScore | 1535 | yes |
-| classifyIntent | 1550 | yes |
-| chatEnrich | 1602 | yes |
-| smartMerge | 1614 | yes |
-| classifyCustomFacts | 1627 | yes |
-| mapFormFieldsBatch | 1652 | no |
-| mapFormFields | 1684 | yes |
-| analyzeResumeFormat | 1728 | yes |
-| diagnoseChatFeedback | 1752 | yes |
-| diagnoseExtensionSite | 1759 | yes |
-| generateSkill | 1767 | yes |
-| attempt | 1775 | no |
-| scoreIngestionCoverage | 1813 | yes |
+| userClientFor | 41 | no |
+| invalidateUserClient | 56 | yes |
+| formatApprovedCategories | 58 | no |
+| syncPrompts | 1093 | yes |
+| learnedRules | 1117 | no |
+| invalidateRulesCache | 1129 | yes |
+| getPrompt | 1131 | yes |
+| evalExtraction | 1147 | no |
+| evalAtsScore | 1175 | no |
+| evalTailoring | 1187 | no |
+| evalImprovement | 1204 | no |
+| countProfileBullets | 1210 | no |
+| evalSmartMerge | 1214 | no |
+| askJson | 1245 | yes |
+| askJsonOnce | 1280 | no |
+| makeTrace | 1356 | yes |
+| createJobTrace | 1371 | yes |
+| recordSchemaSuggestions | 1380 | no |
+| looksLikeResume | 1400 | yes |
+| isNearlyEmpty | 1404 | yes |
+| extractFacts | 1409 | yes |
+| skillsBlock | 1444 | no |
+| feedbackBlock | 1454 | no |
+| tailorResume | 1461 | yes |
+| improveResume | 1491 | yes |
+| buildPersonalContext | 1516 | no |
+| coverLetter | 1530 | yes |
+| calculateAtsScore | 1564 | yes |
+| classifyIntent | 1579 | yes |
+| chatEnrich | 1631 | yes |
+| smartMerge | 1643 | yes |
+| classifyCustomFacts | 1656 | yes |
+| mapFormFieldsBatch | 1681 | no |
+| mapFormFields | 1713 | yes |
+| analyzeResumeFormat | 1757 | yes |
+| diagnoseChatFeedback | 1781 | yes |
+| diagnoseExtensionSite | 1788 | yes |
+| generateSkill | 1796 | yes |
+| attempt | 1804 | no |
+| scoreIngestionCoverage | 1847 | yes |
 
 ### mailer.js
 
@@ -717,12 +725,12 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 | normalizeJobUrl | 29 | no |
 | langfuseCtx | 71 | no |
 | userJevKey | 620 | no |
-| cachedInsights | 682 | no |
-| panelJobId | 716 | no |
-| resumeView | 721 | no |
-| resumeStateText | 740 | no |
-| startPanelResume | 748 | no |
-| extensionVersion | 815 | no |
+| cachedInsights | 712 | no |
+| panelJobId | 746 | no |
+| resumeView | 751 | no |
+| resumeStateText | 770 | no |
+| startPanelResume | 778 | no |
+| extensionVersion | 845 | no |
 
 ### skills.js
 
@@ -831,8 +839,10 @@ jev.js
   └── llm.js (langfuse)
 
 llm.js
-  ├── db.js (getApprovedCategories, upsertSchemaProposal, getActivePromptRules)
-  └── db.js (getApprovedCategories, upsertSchemaProposal, getActivePromptRules)
+  ├── db.js (getApprovedCategories, upsertSchemaProposal, getActivePromptRules, getUserApiKey)
+  ├── secrets.js
+  ├── db.js (getApprovedCategories, upsertSchemaProposal, getActivePromptRules, getUserApiKey)
+  └── secrets.js
 
 pipeline.js
   ├── db.js (getProfile, getResumeFormat, seenJobBefore, saveTailored, markDelivered, markJobFailed)
@@ -875,6 +885,9 @@ server.js
   ├── llm.js (classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts)
   ├── profile.js (mergeProfile, applyDeletions, resolveConflicts)
   ├── profile.js (ALLOWED_EXTENSIONS)
+  ├── llm.js
+  ├── llm.js
+  ├── llm.js
   ├── skills.js
   ├── admin.js
   ├── renderCoverLetter.js (renderCoverLetterDocx)
@@ -897,6 +910,9 @@ server.js
   ├── llm.js (classifyIntent, chatEnrich, mapFormFields, analyzeResumeFormat, langfuse, syncPrompts)
   ├── profile.js (mergeProfile, applyDeletions, resolveConflicts)
   ├── profile.js (ALLOWED_EXTENSIONS)
+  ├── llm.js
+  ├── llm.js
+  ├── llm.js
   ├── skills.js
   ├── admin.js
   ├── renderCoverLetter.js (renderCoverLetterDocx)

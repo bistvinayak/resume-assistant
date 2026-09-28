@@ -67,7 +67,8 @@ export default function GettingStarted({ profile, jobs, gmailStatus, goTo }) {
   useEffect(() => {
     api.getResumeFormat().then(setResumeFormat).catch(() => setResumeFormat(null));
     pingExtension().then(setExtension);
-    api.getJevKey().then(k => setJevKey(!!k?.hasKey)).catch(() => {});
+    Promise.all([api.getJevKey().catch(() => null), api.getOpenRouterKey().catch(() => null)])
+      .then(([j, o]) => setJevKey(!!(j?.hasKey || o?.hasKey)));
   }, []);
 
   const steps = [
@@ -127,8 +128,8 @@ export default function GettingStarted({ profile, jobs, gmailStatus, goTo }) {
         <Step n="6" done={done.gmail} optional title="Tailor from LinkedIn job alerts automatically" action="Set up" onAction={() => goTo('profile', 'gmail-forwarding')}>
           Forward your LinkedIn job alert emails and Arjun tailors a resume for each new job every 2 hours and emails it to you.
         </Step>
-        <Step n="7" done={done.jev} optional title="Add your Jev key for sharper job-fit scores" action="Add key" onAction={() => goTo('extension', 'jev-key')}>
-          Job-fit checks use a free AI model by default. Add your TypeSafe Jev key for more consistent scoring, billed to your TypeSafe account.
+        <Step n="7" done={done.jev} optional title="Add your own AI keys" action="Add keys" onAction={() => goTo('settings')}>
+          Arjun uses free AI models by default. Add an OpenRouter key for stronger resume writing, or a Jev key for job-fit scoring, billed to your own account.
         </Step>
       </div>
 

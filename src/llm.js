@@ -31,7 +31,29 @@ const langfuse = new Langfuse({
   baseUrl: process.env.LANGFUSE_BASE_URL || 'https://us.cloud.langfuse.com',
 });
 
-const { getApprovedCategories, upsertSchemaProposal, getActivePromptRules } = require('./db');
+const { getApprovedCategories, upsertSchemaProposal, getActivePromptRules, getUserApiKey } = require('./db');
+
+// ── Bring-your-own OpenRouter key ────────────────────────────────────────
+// A user who saves an OpenRouter key gets their AI tasks on a stronger paid model, billed
+// to their account. If that call fails (bad key, no credits), the free chain runs as usual.
+const USER_KEY_MODEL = process.env.OPENROUTER_USER_KEY_MODEL || 'google/gemini-3.7-flash';
+const userClients = new Map(); // userId -> { client|null, at }
+async function userClientFor(userId) {
+  if (!userId) return null;
+  const hit = userClients.get(userId);
+  if (hit && Date.now() - hit.at < 60_000) return hit.client;
+  let cli = null;
+  try {
+    const row = await getUserApiKey(userId, 'openrouter');
+    if (row) {
+      const apiKey = require('./secrets').decrypt(row.key_enc);
+      cli = new OpenAI({ apiKey, baseURL: 'https://openrouter.ai/api/v1', timeout: 60_000, maxRetries: 0 });
+    }
+  } catch (e) { console.error(`user key lookup failed for ${userId}: ${e.message}`); }
+  userClients.set(userId, { client: cli, at: Date.now() });
+  return cli;
+}
+function invalidateUserClient(userId) { userClients.delete(userId); }
 
 async function formatApprovedCategories() {
   const categories = await getApprovedCategories().catch(() => []);
@@ -1221,7 +1243,12 @@ const FALLBACK_MODEL = process.env.OPENROUTER_FALLBACK_MODEL || FREE_SECONDARY;
 const OWN_FALLBACK_CHAIN = new Set(['map_form_fields']);
 
 async function askJson(system, user, generationName, trace, langfusePrompt, history = [], model = MODEL, fileAttachment = null, maxTokens = 8000) {
-  const once = (m) => askJsonOnce(system, user, generationName, trace, langfusePrompt, history, m, fileAttachment, maxTokens);
+  const once = (m, cli) => askJsonOnce(system, user, generationName, trace, langfusePrompt, history, m, fileAttachment, maxTokens, cli);
+  const own = await userClientFor(trace?._arjunUserId);
+  if (own) {
+    try { return await once(USER_KEY_MODEL, own); }
+    catch (e) { console.error(`${generationName}: user's own key failed on ${USER_KEY_MODEL} (${e.message.slice(0, 160)}), using free models`); }
+  }
   if (OWN_FALLBACK_CHAIN.has(generationName)) return once(model);
 
   // Two different free models after the primary: a single free backup failed a real upload
@@ -1250,7 +1277,7 @@ async function askJson(system, user, generationName, trace, langfusePrompt, hist
   throw err;
 }
 
-async function askJsonOnce(system, user, generationName, trace, langfusePrompt, history, model, fileAttachment, maxTokens) {
+async function askJsonOnce(system, user, generationName, trace, langfusePrompt, history, model, fileAttachment, maxTokens, cli = client) {
   const userContent = fileAttachment
     ? [
         { type: 'text', text: user },
@@ -1272,7 +1299,7 @@ async function askJsonOnce(system, user, generationName, trace, langfusePrompt, 
   });
 
   try {
-    const res = await client.chat.completions.create({
+    const res = await cli.chat.completions.create({
       model,
       temperature: 0.2,
       response_format: { type: 'json_object' },
@@ -1327,7 +1354,7 @@ async function askJsonOnce(system, user, generationName, trace, langfusePrompt, 
 
 // ── TRACE HELPERS ───────────────────────────────────────────────────────
 function makeTrace(name, ctx = {}, extra = {}) {
-  return langfuse.trace({
+  const t = langfuse.trace({
     name,
     ...(ctx.userId ? { userId: ctx.userId } : {}),
     ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
@@ -1337,6 +1364,8 @@ function makeTrace(name, ctx = {}, extra = {}) {
       ...extra,
     },
   });
+  t._arjunUserId = ctx.userId; // lets askJson use this user's own OpenRouter key
+  return t;
 }
 
 function createJobTrace(job, ctx = {}) {
@@ -1772,10 +1801,10 @@ async function generateSkill(skillName, profileForSkill, userNotes, ctx = {}) {
     `CANDIDATE PROFILE JSON:\n${JSON.stringify(profileForSkill)}` +
     (userNotes ? `\n\nCANDIDATE'S OWN CORRECTIONS (follow these exactly; they override anything in the profile):\n${userNotes}` : '');
 
-  const attempt = async (model) => {
+  const attempt = async (model, cli = client) => {
     const generation = trace.generation({ name: promptName, model, input: [{ role: 'system', content: system }, { role: 'user', content: user }], ...(langfusePrompt ? { prompt: langfusePrompt } : {}) });
     try {
-      const res = await client.chat.completions.create({
+      const res = await cli.chat.completions.create({
         model,
         temperature: 0.3,
         max_tokens: 7000,
@@ -1796,6 +1825,11 @@ async function generateSkill(skillName, profileForSkill, userNotes, ctx = {}) {
   };
 
   const errors = [];
+  const own = await userClientFor(ctx.userId);
+  if (own) {
+    try { return { content: await attempt(USER_KEY_MODEL, own), model: USER_KEY_MODEL }; }
+    catch (e) { errors.push(`${USER_KEY_MODEL} (own key): ${e.message}`); }
+  }
   for (const model of [SKILLS_MODEL, SKILLS_MODEL, SKILLS_FALLBACK_MODEL]) {
     try {
       const content = await attempt(model);
@@ -1825,4 +1859,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { makeTrace, askJson, getPrompt, looksLikeResume, isNearlyEmpty, diagnoseChatFeedback, diagnoseExtensionSite, invalidateRulesCache, generateSkill, extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { invalidateUserClient, USER_KEY_MODEL, makeTrace, askJson, getPrompt, looksLikeResume, isNearlyEmpty, diagnoseChatFeedback, diagnoseExtensionSite, invalidateRulesCache, generateSkill, extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };

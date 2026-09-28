@@ -72,7 +72,9 @@ export const FEATURE_GROUPS = [
     features: [
       { title: 'Get started guide', where: 'Get started tab', added: '2026-09',
         what: 'Setup steps that tick themselves off, and a short tour of what Arjun does. Shown on your first login.' },
-      { title: 'Bring your own Jev key', where: 'Extension tab', added: '2026-09',
+      { title: 'Bring your own OpenRouter key', where: 'AI Settings tab', added: '2026-09',
+        what: 'Resume writing, cover letters, profile building, chat and form filling run on free models by default. Add your OpenRouter key to use a stronger model, billed to you; Arjun falls back to free models if your key fails.' },
+      { title: 'Bring your own Jev key', where: 'AI Settings tab', added: '2026-09',
         what: 'Job-fit checks run on a free AI model by default. You can add your own TypeSafe Jev key; it is stored encrypted.' },
       { title: 'Delete account', where: 'Top bar → delete account', added: '2026-09',
         what: 'Permanently deletes your profile, applications, resumes, skills, saved key, extension history and sign-in record.' },

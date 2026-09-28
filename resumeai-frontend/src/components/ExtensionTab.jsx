@@ -29,7 +29,7 @@ const Code = ({ children }) => (
   <code style={{ fontFamily: mono, fontSize: '12px', background: '#f5f5f4', borderRadius: '4px', padding: '1px 6px' }}>{children}</code>
 );
 
-function JevKeyCard() {
+export function JevKeyCard() {
   const [info, setInfo] = useState(null);
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);

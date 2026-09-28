@@ -651,6 +651,36 @@ app.delete('/api/settings/jev-key', async (req, res, next) => {
   try { await deleteUserApiKey(req.userId, 'typesafe'); res.json({ ok: true }); } catch (e) { next(e); }
 });
 
+// ── OWN OPENROUTER KEY (resume writing and other AI tasks) ─────────────────
+app.get('/api/settings/openrouter-key', async (req, res, next) => {
+  try {
+    const row = await getUserApiKey(req.userId, 'openrouter');
+    res.json({ hasKey: !!row, last4: row?.key_last4 || null, model: require('./llm').USER_KEY_MODEL, canStore: canStoreKeys() });
+  } catch (e) { next(e); }
+});
+
+app.put('/api/settings/openrouter-key', async (req, res, next) => {
+  try {
+    if (!canStoreKeys()) return res.status(503).json({ error: 'key_storage_unavailable' });
+    const key = String(req.body.key || '').trim();
+    if (!/^sk-or-/.test(key) || /\s/.test(key)) return res.status(400).json({ error: 'invalid_key' });
+    // OpenRouter's key endpoint proves the key works without spending credits.
+    const check = await fetch('https://openrouter.ai/api/v1/key', { headers: { Authorization: `Bearer ${key}` } });
+    if (!check.ok) return res.status(400).json({ error: 'invalid_key' });
+    await saveUserApiKey(req.userId, 'openrouter', encrypt(key), key.slice(-4));
+    require('./llm').invalidateUserClient(req.userId);
+    res.json({ ok: true, last4: key.slice(-4) });
+  } catch (e) { next(e); }
+});
+
+app.delete('/api/settings/openrouter-key', async (req, res, next) => {
+  try {
+    await deleteUserApiKey(req.userId, 'openrouter');
+    require('./llm').invalidateUserClient(req.userId);
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+});
+
 // ── ACCOUNT DELETION ─────────────────────────────────────────────────────
 // Permanently removes all of the signed-in user's data and their Firebase sign-in record.
 // Firebase-token users only: the legacy x-api-key path maps to the shared system user.

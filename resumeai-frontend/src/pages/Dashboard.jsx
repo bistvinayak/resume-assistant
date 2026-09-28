@@ -1,3 +1,4 @@
+import AiSettingsTab from '../components/AiSettingsTab';
 import Brand from '../components/Brand';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -211,7 +212,7 @@ export default function Dashboard() {
   // ?tab=extension (etc.) opens a tab directly, e.g. from the landing page's extension section.
   const [tab, setTab] = useState(() => {
     const t = new URLSearchParams(window.location.search).get('tab');
-    if (['start', 'profile', 'chat', 'submit', 'jobs', 'gaps', 'skills', 'extension'].includes(t)) return t;
+    if (['start', 'profile', 'chat', 'submit', 'jobs', 'gaps', 'skills', 'extension', 'settings'].includes(t)) return t;
     // New users land on Get started until they finish the core steps or dismiss it.
     let setupDone = false;
     // Keyed per account: a browser shared across accounts (or reused after deleting one) must not skip it.
@@ -1240,7 +1241,8 @@ export default function Dashboard() {
             { id: 'jobs', label: 'My Applications', desc: 'Track all your tailored resumes', info: 'Every resume Arjun made for you, with its score. Download them here.' },
             { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords', info: 'Skills jobs keep asking for that your profile lacks. Add them only if you have them.' },
             { id: 'skills', label: 'My Skills', desc: 'Your writing playbooks', info: 'Writing guides built from your profile that shape how Arjun writes for you.' },
-            { id: 'extension', label: 'Chrome Extension', desc: 'Job fit, analysis & autofill', info: 'Check job fit and autofill applications on job sites. Add your Jev key here.' },
+            { id: 'extension', label: 'Chrome Extension', desc: 'Job fit, analysis & autofill', info: 'Check job fit and autofill applications on job sites.' },
+            { id: 'settings', label: 'AI Settings', desc: 'Your own API keys (optional)', info: 'Free models by default. Add your OpenRouter key for stronger resume writing, or a Jev key for job-fit scoring.' },
           ].map(({ id, label, desc, info }) => (
             <div key={id} style={{ position: 'relative', marginBottom: '3px' }}>
               <button onClick={() => setTab(id)} style={{
@@ -2837,6 +2839,7 @@ export default function Dashboard() {
           {tab === 'skills' && <SkillsTab />}
 
           {tab === 'extension' && <ExtensionTab />}
+          {tab === 'settings' && <AiSettingsTab />}
           {tab === 'start' && <GettingStarted profile={profile} jobs={jobs} gmailStatus={gmailForwardingStatus} goTo={goToSection} />}
         </main>
       </div>
