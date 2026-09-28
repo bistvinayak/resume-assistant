@@ -129,10 +129,10 @@ applyPartial(partial, userId) [profile.js:433]
   → returns merged (with _conflicts if any)
 ```
 
-## Job Processing Pipeline (pipeline.js:450)
+## Job Processing Pipeline (pipeline.js:463)
 
 ```
-processJob(job, userId) [pipeline.js:450]
+processJob(job, userId) [pipeline.js:463]
   → seenJobBefore(job) [db.js:506]
   → getProfile(userId) [db.js:274]
   → tailorResume(profile, job, trace) [llm.js:1483]  — LLM
@@ -154,7 +154,7 @@ startCron() [cron.js:119]  — runs every 2 hours
   → runBatch(userId) [cron.js:10]
        → fetchLinkedInJobs() [gmail.js:33]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
-       → per job: processJob(job, userId) [pipeline.js:450]
+       → per job: processJob(job, userId) [pipeline.js:463]
 ```
 
 ## Merge Logic (profile.js:764)
@@ -616,15 +616,16 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | restoreBulletLabels | 179 | yes |
 | ensureResumeCompleteness | 201 | yes |
 | ensureBulletLabels | 224 | yes |
-| dropUntraceableBullets | 242 | yes |
-| validateResumeContent | 264 | no |
-| dedupBullets | 288 | no |
-| expandResume | 325 | no |
-| tightenResume | 384 | no |
-| pickLayoutOpts | 424 | no |
-| withRetry | 437 | no |
-| processJob | 450 | yes |
-| buildEmailBody | 846 | no |
+| pagesFromFeedback | 245 | yes |
+| dropUntraceableBullets | 255 | yes |
+| validateResumeContent | 277 | no |
+| dedupBullets | 301 | no |
+| expandResume | 338 | no |
+| tightenResume | 397 | no |
+| pickLayoutOpts | 437 | no |
+| withRetry | 450 | no |
+| processJob | 463 | yes |
+| buildEmailBody | 865 | no |
 
 ### profile.js
 

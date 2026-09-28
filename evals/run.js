@@ -179,7 +179,7 @@ async function pool(items, limit, fn) {
       const userSkills = skills[pair.candidate] && Object.values(skills[pair.candidate]).some(Boolean) ? skills[pair.candidate] : null;
       let resume;
       try {
-        const t = await timed('tailor', () => retry(() => tailorResume(profile, job, trace, null, userSkills)));
+        const t = await timed('tailor', () => retry(() => tailorResume(profile, job, trace, { target_pages: 1 }, userSkills)));
         const { tailoring_notes: notes = [], jd_requirements: reqs = [] } = t;
         delete t.tailoring_notes; delete t.jd_requirements;
         resume = t;

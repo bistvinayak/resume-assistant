@@ -41,6 +41,8 @@ export const FEATURE_GROUPS = [
         what: 'Personal writing guides generated from your profile (career profile, cover-letter story, writing voice) plus your resume format, used whenever Arjun writes for you. Downloadable for use with Claude.' },
       { title: 'Default resume layout', where: 'Every tailored resume', added: '2026-09',
         what: 'Without an uploaded layout, resumes use a clean one-page format: Education, Experience, Projects, Skills, with locations and dates right-aligned and bold bullet labels.' },
+      { title: 'Page length on request', where: 'Extension side panel chat, or My Profile → Resume format', added: '2026-09',
+        what: 'Resumes are one page by default. Say "make it one page" or "keep it to 2 pages" in the chat and that resume is fitted to it; an uploaded layout sets your default length.' },
     ],
   },
   {
