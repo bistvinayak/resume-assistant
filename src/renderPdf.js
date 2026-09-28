@@ -12,9 +12,27 @@ const pdfParse = require('pdf-parse');
 // (This app also uses Puppeteer for job-page scraping in scraper.js, but that
 // launches its own short-lived browser per scrape — kept separate on purpose so
 // a stuck/slow scrape can never block resume rendering, and vice versa.)
+// Carlito (Calibri-compatible metrics, OFL) is the reference resume's font. Linux servers lack
+// Helvetica/Calibri and fall back to the much wider Noto Sans, which pushed one-page resumes onto
+// two. Install it into the user's font folder (no root needed) before Chrome starts.
+function ensureResumeFonts() {
+  try {
+    const os = require('os');
+    const dir = path.join(os.homedir(), '.local', 'share', 'fonts', 'arjun');
+    const src = path.join(__dirname, 'fonts', 'carlito');
+    fs.mkdirSync(dir, { recursive: true });
+    let copied = false;
+    for (const f of fs.readdirSync(src).filter(n => n.endsWith('.ttf'))) {
+      if (!fs.existsSync(path.join(dir, f))) { fs.copyFileSync(path.join(src, f), path.join(dir, f)); copied = true; }
+    }
+    if (copied) require('child_process').execFileSync('fc-cache', ['-f', dir], { stdio: 'ignore', timeout: 20000 });
+  } catch (e) { console.warn(`⚠ resume font install skipped: ${e.message}`); }
+}
+
 let browserPromise = null;
 function getBrowser() {
   if (!browserPromise) {
+    ensureResumeFonts();
     browserPromise = puppeteer.launch({
       headless: 'new',
       // No --single-process here on purpose — this browser is long-lived and
@@ -29,25 +47,27 @@ function getBrowser() {
   return browserPromise;
 }
 
+// Point sizes from the owner's reference resume (Carlito): name 16, headings/entities 10,
+// body 9.5, contact 9.
 const BASE_FONTS = {
-  name: 18,
+  name: 16,
   contact: 9,
-  sectionHeading: 11,
-  roleTitle: 11,
-  roleDates: 9,
+  sectionHeading: 10.5,
+  roleTitle: 10,
+  roleDates: 9.5,
   tagline: 9,
-  bullet: 10,
-  skillLabel: 10,
-  skillValue: 10,
-  projectName: 10.5,
-  projectDesc: 10,
-  eduDegree: 10.5,
-  eduDates: 9,
+  bullet: 9.5,
+  skillLabel: 9.5,
+  skillValue: 9.5,
+  projectName: 9.5,
+  projectDesc: 9.5,
+  eduDegree: 9.5,
+  eduDates: 9.5,
   eduSchool: 10,
-  cert: 10,
-  activity: 10,
-  interest: 10,
-  summary: 10,
+  cert: 9.5,
+  activity: 9.5,
+  interest: 9.5,
+  summary: 9.5,
 };
 
 function scaledFonts(fontScale) {
@@ -262,7 +282,7 @@ function buildResumeHtml(resume, opts = {}) {
   return `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><style>
   * { box-sizing: border-box; }
-  body { font-family: Helvetica, Arial, sans-serif; color: #000; margin: 0; font-size: ${f.bullet}pt; line-height: ${lineHeight}; }
+  body { font-family: Carlito, Calibri, Helvetica, Arial, sans-serif; color: #000; margin: 0; font-size: ${f.bullet}pt; line-height: ${lineHeight}; }
   .center { text-align: center; }
   .name { font-size: ${f.name}pt; font-weight: bold; text-align: center; }
   .contact, .links { font-size: ${f.contact}pt; text-align: center; color: #222; }

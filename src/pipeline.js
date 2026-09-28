@@ -405,11 +405,39 @@ function expandResume(resume, profile, aggression) {
 // roles first), extra projects, optional sections, long skill lists, older roles' extra
 // bullets, education details, older company descriptions, the last project.
 const HAS_METRIC = /\$[\d,.]+|\d+%|\d+[KMB]\+|\d{2,}/;
-function tightenResume(resume) {
+// How much a piece of text speaks to the job: share of its content words the posting uses.
+const REL_STOP = new Set('the and for with from that this into over across our your their was were are has have had its using used by to of in on at as an or be we you they it'.split(' '));
+// Lowercased content words, singularised ("agents" -> "agent"), keeping short terms like AI, LLM.
+function relWords(text) {
+  return (String(text || '').toLowerCase().match(/[a-z][a-z0-9+#]*/g) || [])
+    .filter(w => w.length >= 2 && !REL_STOP.has(w))
+    .map(w => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w));
+}
+function jdRelevance(text, jdWords) {
+  const w = relWords(text);
+  if (!w.length || !jdWords.size) return 0;
+  return w.filter(x => jdWords.has(x)).length / Math.sqrt(w.length);
+}
+function tightenResume(resume, jdText = '') {
   const roles = resume.experience || [];
   const older = [...roles].reverse(); // resumes list newest first
   const text = (b) => (typeof b === 'string' ? b : (b?.text || ''));
   const drop = (arr, i) => { arr.splice(i, 1); return true; };
+  const jdWords = new Set(relWords(jdText));
+  // Index of the least job-relevant item among arr[from..] matching keep() (-1 if none).
+  // The tailoring model tags each bullet with the job requirement it serves (a semantic match);
+  // that ranks first, word overlap with the posting breaks ties.
+  const FILLER = /^(additional role detail|role coverage|general relevance)/i;
+  const semantic = (item) => (item && typeof item === 'object' && item.serves && !FILLER.test(item.serves) ? 10 : 0);
+  const leastRelevant = (arr, from, textOf, keep = () => true) => {
+    let best = -1, score = Infinity;
+    for (let i = from; i < arr.length; i++) {
+      if (!keep(arr[i])) continue;
+      const sc = semantic(arr[i]) + jdRelevance(`${textOf(arr[i])} ${arr[i]?.serves || ''}`, jdWords);
+      if (sc < score) { score = sc; best = i; }
+    }
+    return best;
+  };
 
   // 1. Patched/filler bullets
   for (const r of older) {
@@ -420,10 +448,12 @@ function tightenResume(resume) {
   for (const r of older) {
     const bs = r.bullets || [];
     if (bs.length <= 2) continue;
-    for (let i = bs.length - 1; i >= 2; i--) if (!HAS_METRIC.test(text(bs[i]))) return drop(bs, i);
+    const i = leastRelevant(bs, 0, text, b => !HAS_METRIC.test(text(b)));
+    if (i >= 0) return drop(bs, i);
   }
   // 3. Projects beyond 2
-  if ((resume.projects || []).length > 2) return drop(resume.projects, resume.projects.length - 1);
+  const projText = (p) => `${p.name} ${p.description} ${(p.tech_stack || []).join(' ')}`;
+  if ((resume.projects || []).length > 2) return drop(resume.projects, leastRelevant(resume.projects, 0, projText));
   // 4. Optional sections
   for (const k of ['interests', 'activities']) if ((resume[k] || []).length) { resume[k] = []; return true; }
   if ((resume.certifications || []).length > 2) return drop(resume.certifications, resume.certifications.length - 1);
@@ -433,7 +463,7 @@ function tightenResume(resume) {
   }
   // 6. Any bullet beyond 3 per role, then beyond 2, older roles first
   for (const cap of [3, 2]) {
-    for (const r of older) if ((r.bullets || []).length > cap) return drop(r.bullets, r.bullets.length - 1);
+    for (const r of older) if ((r.bullets || []).length > cap) return drop(r.bullets, leastRelevant(r.bullets, 0, text));
   }
   // 7. Education honors/GPA lines
   for (const e of resume.education || []) {
@@ -443,8 +473,8 @@ function tightenResume(resume) {
   // 8. Company descriptions, oldest role first (keep the most recent one)
   for (const r of older.slice(0, -1)) if (r.tagline) { r.tagline = ''; return true; }
   // 9. Projects down to one, then the oldest roles down to one bullet
-  if ((resume.projects || []).length > 1) return drop(resume.projects, resume.projects.length - 1);
-  for (const r of older.slice(0, -1)) if ((r.bullets || []).length > 1) return drop(r.bullets, r.bullets.length - 1);
+  if ((resume.projects || []).length > 1) return drop(resume.projects, leastRelevant(resume.projects, 0, projText));
+  for (const r of older.slice(0, -1)) if ((r.bullets || []).length > 1) return drop(r.bullets, leastRelevant(r.bullets, 0, text));
   if ((resume.certifications || []).length) { resume.certifications = []; return true; }
   return false;
 }
@@ -571,15 +601,30 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     console.log(`✂ Deduped ${dedupCount} near-duplicate bullet(s)`);
   }
 
+  // Links in the reference layout's order: LinkedIn, GitHub, then personal site/others.
+  if (Array.isArray(resume.contact?.links)) {
+    const rank = (l) => { const u = String(typeof l === 'string' ? l : l?.url || ''); return /linkedin/i.test(u) ? 0 : /github/i.test(u) ? 1 : 2; };
+    resume.contact.links = [...resume.contact.links].sort((a, b) => rank(a) - rank(b));
+  }
+
   // Step 1.55: Enrich projects — always merge outcomes from profile
   for (const resumeProj of (resume.projects || [])) {
-    const profileProj = (profile.projects || []).find(p => norm(p.name) === norm(resumeProj.name));
+    const firstWord = (n) => norm(String(n || '').split(/[:\s-]/)[0]);
+    const profileProj = (profile.projects || []).find(p => norm(p.name) === norm(resumeProj.name))
+      || (profile.projects || []).find(p => firstWord(p.name) && firstWord(p.name) === firstWord(resumeProj.name));
     if (profileProj) {
       const desc = (profileProj.description || '').replace(/[.\s]+$/, '');
       const outcome = (profileProj.outcome || '').replace(/[.\s]+$/, '');
       const parts = [desc, outcome].filter(Boolean);
       const fullDesc = parts.join('. ') + '.';
-      if (fullDesc.length > (resumeProj.description || '').length) {
+      // A rewritten description may not add claims (seen: "Claude Code for AI-enhanced safety
+      // scoring" when Claude Code was only the build tool). Any content word the profile's
+      // project never mentions sends it back to the profile's own description.
+      const known = JSON.stringify(profileProj).toLowerCase();
+      const added = (String(resumeProj.description || '').toLowerCase().match(/[a-z][a-z-]{4,}/g) || [])
+        .filter(w => !SUMMARY_GENERIC.has(w) && !known.includes(w.replace(/s$/, '')) && !['built', 'using', 'integrating', 'integrates', 'powered', 'enables', 'based'].includes(w));
+      if (added.length || fullDesc.length > (resumeProj.description || '').length) {
+        if (added.length) console.warn(`⚠ Project "${resumeProj.name}": reverted description (unsupported: ${[...new Set(added)].slice(0, 5).join(', ')})`);
         resumeProj.description = fullDesc;
       }
       if (profileProj.tags && profileProj.tags.length && !resumeProj.tags) {
@@ -626,7 +671,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
       while (m.pages !== targetPages && iterations < MAX_TARGET_ITERATIONS) {
         const changed = m.pages < targetPages
           ? expandResume(resume, profile, (targetPages - m.pages) >= 2 ? 'heavy' : 'medium')
-          : tightenResume(resume, targetPages);
+          : tightenResume(resume, job.jd_text);
         if (!changed) {
           console.log(`↕ Stopped at ${m.pages}/${targetPages} target pages — no more content to ${m.pages < targetPages ? 'add' : 'trim'}`);
           break;
@@ -679,7 +724,8 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
         // on dates/contact) reads as visibly cramped and undersized once printed
         // or reviewed by a human, even though the underlying text layer — which
         // is all an ATS parser actually reads — is identical at any scale.
-        const shrinkSteps = [0.95, 0.9];
+        // Body is 9.5pt; 0.95x keeps it at ~9pt, the readability floor.
+        const shrinkSteps = [0.97, 0.95];
         for (const scale of shrinkSteps) {
           const shrunk = {
             ...layoutOpts,
@@ -718,7 +764,7 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
       // Gap #1: Tighten — if content spills to an extra page with <40% fill, trim back
       if (m.pages > 2 && m.lastPageFill < 40) {
         console.log(`✂ ${m.pages} pages, last at ${m.lastPageFill}% — tightening`);
-        tightenResume(resume, m.pages - 1);
+        tightenResume(resume, job.jd_text);
         m = await measureResumePdf(resume, layoutOpts);
         console.log(`📐 After tighten: ${m.pages} page(s), ${m.lastPageFill}% filled`);
       }

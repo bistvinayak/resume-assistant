@@ -129,10 +129,10 @@ applyPartial(partial, userId) [profile.js:433]
   → returns merged (with _conflicts if any)
 ```
 
-## Job Processing Pipeline (pipeline.js:478)
+## Job Processing Pipeline (pipeline.js:508)
 
 ```
-processJob(job, userId) [pipeline.js:478]
+processJob(job, userId) [pipeline.js:508]
   → seenJobBefore(job) [db.js:509]
   → getProfile(userId) [db.js:277]
   → tailorResume(profile, job, trace) [llm.js:1483]  — LLM
@@ -140,7 +140,7 @@ processJob(job, userId) [pipeline.js:478]
   → if ats < 95:
        → improveResume(resume, job, ats, trace) [llm.js:1513]  — LLM
        → calculateAtsScore again
-  → renderResumeDocx(resume, filePath) [renderDocx.js:260]
+  → renderResumeDocx(resume, filePath) [renderDocx.js:261]
   → saveTailored(jobId, resume, filePath) [db.js:525]
   → markDelivered(tailoredId, jobId, atsData) [db.js:534]
   → sendResumeEmail (if source=cron) [mailer.js:60]
@@ -154,7 +154,7 @@ startCron() [cron.js:119]  — runs every 2 hours
   → runBatch(userId) [cron.js:10]
        → fetchLinkedInJobs() [gmail.js:33]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
-       → per job: processJob(job, userId) [pipeline.js:478]
+       → per job: processJob(job, userId) [pipeline.js:508]
 ```
 
 ## Merge Logic (profile.js:764)
@@ -625,11 +625,13 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | validateResumeContent | 282 | no |
 | dedupBullets | 306 | no |
 | expandResume | 343 | no |
-| tightenResume | 408 | yes |
-| pickLayoutOpts | 452 | no |
-| withRetry | 465 | no |
-| processJob | 478 | yes |
-| buildEmailBody | 880 | no |
+| relWords | 411 | no |
+| jdRelevance | 416 | no |
+| tightenResume | 421 | yes |
+| pickLayoutOpts | 482 | no |
+| withRetry | 495 | no |
+| processJob | 508 | yes |
+| buildEmailBody | 926 | no |
 
 ### profile.js
 
@@ -690,29 +692,30 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 
 | Function | Line | Exported |
 |----------|------|----------|
-| scaledFonts | 32 | no |
-| parseBoldSegments | 49 | no |
-| bulletRuns | 78 | no |
-| normalizeLinks | 84 | no |
-| heading | 93 | no |
-| splitLine | 103 | no |
-| renderResumeDocx | 260 | yes |
+| scaledFonts | 33 | no |
+| parseBoldSegments | 50 | no |
+| bulletRuns | 79 | no |
+| normalizeLinks | 85 | no |
+| heading | 94 | no |
+| splitLine | 104 | no |
+| renderResumeDocx | 261 | yes |
 
 ### renderPdf.js
 
 | Function | Line | Exported |
 |----------|------|----------|
-| getBrowser | 16 | no |
-| scaledFonts | 53 | no |
-| parseBoldSegments | 68 | no |
-| escapeHtml | 97 | no |
-| bulletHtml | 102 | no |
-| normalizeLinks | 109 | no |
-| sectionHeadingHtml | 118 | no |
-| buildResumeHtml | 235 | yes |
-| withPage | 320 | no |
-| renderResumePdf | 330 | yes |
-| measureResumePdf | 345 | yes |
+| ensureResumeFonts | 18 | no |
+| getBrowser | 33 | no |
+| scaledFonts | 73 | no |
+| parseBoldSegments | 88 | no |
+| escapeHtml | 117 | no |
+| bulletHtml | 122 | no |
+| normalizeLinks | 129 | no |
+| sectionHeadingHtml | 138 | no |
+| buildResumeHtml | 255 | yes |
+| withPage | 340 | no |
+| renderResumePdf | 350 | yes |
+| measureResumePdf | 365 | yes |
 
 ### scraper.js
 

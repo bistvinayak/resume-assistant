@@ -9,24 +9,25 @@ const {
 // Half-point sizes (docx TextRun `size` is in half-points, i.e. pt * 2) —
 // mirrors renderPdf.js's BASE_FONTS point values so a given fontScale/target
 // page count produces a visually consistent result across .docx and .pdf.
+// Same point sizes as renderPdf.js (x2 for half-points).
 const BASE_FONTS = {
-  name: 36,
-  contact: 20,
-  sectionHeading: 24,
-  roleTitle: 23,
-  roleDates: 20,
-  tagline: 19,
-  bullet: 21,
-  skillLabel: 21,
-  skillValue: 21,
-  projectName: 22,
-  eduDegree: 22,
-  eduDates: 20,
-  eduSchool: 21,
-  cert: 21,
-  activity: 21,
-  interest: 21,
-  summary: 21,
+  name: 32,
+  contact: 18,
+  sectionHeading: 21,
+  roleTitle: 20,
+  roleDates: 19,
+  tagline: 18,
+  bullet: 19,
+  skillLabel: 19,
+  skillValue: 19,
+  projectName: 19,
+  eduDegree: 19,
+  eduDates: 19,
+  eduSchool: 20,
+  cert: 19,
+  activity: 19,
+  interest: 19,
+  summary: 19,
 };
 
 function scaledFonts(fontScale) {
@@ -293,7 +294,8 @@ async function renderResumeDocx(resume, outPath, opts = {}) {
   }
 
   const doc = new Document({
-    styles: { default: { document: { run: { font: 'Arial' } } } },
+    // Calibri in Word; the PDF uses Carlito, its metric-compatible twin.
+    styles: { default: { document: { run: { font: 'Calibri' } } } },
     sections: [{
     properties: { page: { size: { width: PAGE.width, height: PAGE.height }, margin: { top: PAGE.marginTB, bottom: PAGE.marginTB, left: PAGE.marginLR, right: PAGE.marginLR } } },
     children,
