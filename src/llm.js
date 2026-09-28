@@ -388,6 +388,7 @@ tailoring_notes: 4-6 sentences. For each note: which profile bullet you reframed
   improve_resume: {
     prompt: `You previously tailored a resume and got an ATS score below target.
 Your task: improve the resume by incorporating missing keywords WHERE semantically equivalent experience already exists in the resume.
+Keep each bullet's structure: if a bullet starts with a short label and a colon ("Throughput & cycle time: …"), keep a label there.
 
 You're given MISSING KEYWORD PLACEMENT below — an analysis of exactly which existing bullet (if any) each missing keyword could genuinely attach to. For process/methodology keywords, trust that diagnosis: where it names a bullet, that's your starting point for a rephrase. Where it says no fit exists, leave that keyword alone — do not go looking for a workaround elsewhere in the resume. For PROPER-NOUN keywords (see rule below), don't just trust the diagnosis — independently re-check it yourself before using it, since this is the category most likely to get fabricated.
 
@@ -1459,6 +1460,26 @@ function feedbackBlock(feedback) {
     items.map((f, i) => `${i + 1}. ${f}`).join('\n');
 }
 
+// Style for users without an uploaded layout: Arjun's default layout (the owner's reference
+// resume, see skills.js defaultResumeFormatSkill). Its bullets carry a short bold label.
+const DEFAULT_STYLE_BLOCK = `\n\nSTYLE REFERENCE (Arjun's default layout; match it wherever it fits the actual facts, never fabricate to match it; every fact must still trace to CANDIDATE PROFILE above):
+Every experience bullet gets a short label of 2 to 5 words naming the skill or outcome. Put it in a separate "label" field on the bullet ({ "text": ..., "label": "Throughput & cycle time", "serves": ... }); keep "text" as the profile's bullet, without the label. Arjun renders it as "Label: text". Rendered examples:
+- Throughput & cycle time: Cut transaction time-to-completion 20% by redesigning workflows with routing rules, exception paths, and SLAs.
+- Product ownership at scale: Owned end-to-end product strategy for a transaction-automation portfolio processing 10K+ transactions/month.
+- Cost & spend analysis: Led price engineering and carrier negotiations, cutting cost per shipment 11–12%.
+Pick each label from the candidate's own work, not from the job posting's wording. Give every role a one-line company description (tagline) when the profile has one.\n`;
+
+// Short labels for bullets the tailoring model left unlabeled (default layout renders
+// "Label: text"). Labels only; the bullet text is never sent back or changed.
+async function labelBullets(bullets, trace) {
+  if (!bullets.length) return [];
+  const system = `You write short resume bullet labels. For each bullet, return a label of 2 to 5 words naming the skill or outcome it shows, in Title or sentence case, using the bullet's own subject matter (for example "Throughput & cycle time", "Cost & spend analysis", "Product ownership at scale"). No colon, no period, no numbers, no words the bullet doesn't support. Return ONLY JSON: {"labels": ["...", "..."]} with exactly one label per bullet, in order.`;
+  const user = bullets.map((b, i) => `${i + 1}. ${b}`).join('\n');
+  const out = await askJson(system, user, 'label_bullets', trace, null, [], MODEL, null, 1500);
+  const labels = Array.isArray(out.labels) ? out.labels : [];
+  return bullets.map((_, i) => String(labels[i] || '').replace(/[:.]+$/, '').trim());
+}
+
 async function tailorResume(profile, job, trace, resumeFormat, skills = null) {
   const { text: system, langfusePrompt } = await getPrompt('tailor_resume', {
     target_pages: resumeFormat?.target_pages || 'not specified',
@@ -1475,7 +1496,7 @@ async function tailorResume(profile, job, trace, resumeFormat, skills = null) {
       (sp.bold_label_bullets && sp.example_bullets?.length
         ? `Bullets use a bold functional/skill label prefix before a colon or dash. Examples from the reference:\n${sp.example_bullets.map(b => `- ${b}`).join('\n')}\nMatch this exact structural pattern in your own bullets.\n`
         : '')
-    : '';
+    : DEFAULT_STYLE_BLOCK;
 
   const user =
     `TARGET JOB:\nTitle: ${job.title}\nCompany: ${job.company}\nURL: ${job.url || 'N/A'}\n` +
@@ -1860,4 +1881,4 @@ function scoreIngestionCoverage(traceId, drops) {
   }
 }
 
-module.exports = { invalidateUserClient, USER_KEY_MODEL, makeTrace, askJson, getPrompt, looksLikeResume, isNearlyEmpty, diagnoseChatFeedback, diagnoseExtensionSite, invalidateRulesCache, generateSkill, extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };
+module.exports = { labelBullets, invalidateUserClient, USER_KEY_MODEL, makeTrace, askJson, getPrompt, looksLikeResume, isNearlyEmpty, diagnoseChatFeedback, diagnoseExtensionSite, invalidateRulesCache, generateSkill, extractFacts, tailorResume, improveResume, calculateAtsScore, createJobTrace, classifyIntent, chatEnrich, smartMerge, classifyCustomFacts, mapFormFields, analyzeResumeFormat, coverLetter, scoreIngestionCoverage, langfuse, syncPrompts };

@@ -58,7 +58,8 @@ const { assessFit } = require('../src/fitEngine');
 const FIT_ENGINE = args.fit === 'free' ? { engine: 'openrouter' } : { engine: 'jev', apiKey: process.env.TYPESAFE_API_KEY };
 const { ingestText, mergeProfile, applyDeletions } = require('../src/profile');
 const { classifyIntent, chatEnrich } = require('../src/llm');
-const { dropUntraceableBullets } = require('../src/pipeline');
+const { dropUntraceableBullets, cleanSummary, applyBulletLabels, restoreBulletLabels, ensureResumeCompleteness, ensureBulletLabels } = require('../src/pipeline');
+const { buildResumeHtml } = require('../src/renderPdf');
 const { profileForSkill, composeSkill, SKILL_NAMES } = require('../src/skills');
 const fx = require('./fixtures');
 const C = require('./checks');
@@ -187,6 +188,9 @@ async function pool(items, limit, fn) {
         const dropped = dropUntraceableBullets(JSON.parse(JSON.stringify(resume)), profile);
         record('tailor', label, C.tailoring(resume, profile, pair.forbidden), { rawBullets, guardDropped: dropped });
         dropUntraceableBullets(resume, profile);
+        applyBulletLabels(resume);
+        ensureResumeCompleteness(resume, profile);
+        await ensureBulletLabels(resume, trace).catch(() => 0);
         if (dropped.length) console.log(`  (guard dropped ${dropped.length} untraceable bullet(s) for ${label})`);
 
         let ats = await timed('ats', () => retry(() => calculateAtsScore(resume, job, trace)));
@@ -197,11 +201,26 @@ async function pool(items, limit, fn) {
             const r = await timed('improve', () => improveResume(resume, job, ats, trace, notes, reqs, userSkills));
             const candidate = r.resume || r;
             dropUntraceableBullets(candidate, profile);
+            restoreBulletLabels(resume, candidate);
+            ensureResumeCompleteness(candidate, profile);
             const ats2 = await timed('ats', () => calculateAtsScore(candidate, job, trace));
             if (ats2.score > ats.score) { resume = candidate; ats = ats2; improved = true; }
           } catch (e) { console.log(`  (improve pass failed for ${label}: ${e.message.slice(0, 80)})`); }
         }
         atsByPair[label] = { initial, final: ats.score, improved, fit: pair.fit, candidate: pair.candidate };
+
+        // Default layout + skill usage, after the same post-steps production applies.
+        if (want('format')) {
+          const final = JSON.parse(JSON.stringify(resume));
+          cleanSummary(final, profile, job.jd_text);
+          for (const e of final.education || []) {
+            const src = (profile.education || []).find(pe => (pe.school || '').toLowerCase() === (e.school || '').toLowerCase());
+            for (const k of ['major', 'honors', 'gpa', 'location']) if (src && !e[k] && src[k]) e[k] = src[k];
+          }
+          final.contact = final.contact || profile.contact;
+          const html = buildResumeHtml(final, {});
+          record('format', label, C.resumeFormat(final, html, profile, userSkills), { debug: { roles: (final.experience || []).length, keys: Object.keys(final) }, sample: (final.experience?.[0]?.bullets || []).slice(0, 2).map(b => (typeof b === 'string' ? b : b.text)).join(' || ').slice(0, 300) });
+        }
         if (improved) record('improve', label, C.tailoring(resume, profile, pair.forbidden), { ats: `${initial} → ${ats.score}` });
       } catch (e) { recordError('tailor', label, e); return; }
 

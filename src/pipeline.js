@@ -3,7 +3,7 @@
 const path = require('path');
 const os = require('os');
 const { getProfile, getResumeFormat, seenJobBefore, saveTailored, markDelivered, markJobFailed } = require('./db');
-const { tailorResume, calculateAtsScore, improveResume, coverLetter, createJobTrace, langfuse } = require('./llm');
+const { labelBullets, tailorResume, calculateAtsScore, improveResume, coverLetter, createJobTrace, langfuse } = require('./llm');
 const { getSkillsForWriting } = require('./skills');
 const { renderResumeDocx } = require('./renderDocx');
 const { renderCoverLetterDocx } = require('./renderCoverLetter');
@@ -157,6 +157,86 @@ function cleanSummary(resume, profile, jdText) {
   });
   if (removed.length) resume.summary = kept.join(' ').trim() || profile.summary || '';
   return removed;
+}
+
+// Default layout: bullets render as "Label: text". The model returns the label separately so
+// the bullet text stays verbatim (and traceable); prepend it once, after the trace checks.
+function applyBulletLabels(resume) {
+  for (const role of resume.experience || []) {
+    role.bullets = (role.bullets || []).map(b => {
+      if (!b || typeof b !== 'object' || !b.label) return b;
+      const label = String(b.label).replace(/[:\s]+$/, '').trim();
+      const text = String(b.text || '');
+      const { label: _l, ...rest } = b;
+      if (!label || label.split(/\s+/).length > 6 || text.toLowerCase().startsWith(label.toLowerCase())) return rest;
+      return { ...rest, text: `${label}: ${text}` };
+    });
+  }
+}
+
+// The improve pass rewrites bullets and can drop their "Label: " prefix. Put each role's
+// original label back on the rewritten bullet it most resembles.
+function restoreBulletLabels(before, after) {
+  const labelOf = (t) => (String(t).match(/^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5}):\s/) || [])[1];
+  const words = (t) => new Set(String(t).toLowerCase().match(/[a-z0-9%$]+/g) || []);
+  const sim = (a, b) => { const A = words(a), B = words(b); let n = 0; for (const w of A) if (B.has(w)) n++; return n / Math.max(1, Math.min(A.size, B.size)); };
+  for (const role of after.experience || []) {
+    const orig = (before.experience || []).find(r => (r.company || '').toLowerCase() === (role.company || '').toLowerCase());
+    if (!orig) continue;
+    const labeled = (orig.bullets || []).map(bulletStr).filter(labelOf);
+    role.bullets = (role.bullets || []).map(b => {
+      const text = bulletStr(b);
+      if (!text || labelOf(text)) return b;
+      let best = null, score = 0;
+      for (const o of labeled) { const s = sim(o.replace(/^[^:]+:\s/, ''), text); if (s > score) { score = s; best = o; } }
+      if (!best || score < 0.5) return b;
+      const withLabel = `${labelOf(best)}: ${text}`;
+      return typeof b === 'string' ? withLabel : { ...b, text: withLabel };
+    });
+  }
+}
+
+// The model sometimes returns roles with no bullets, or no skills, for a weak-fit job.
+// Never print an empty role or skills section: fall back to the profile's own content.
+function ensureResumeCompleteness(resume, profile) {
+  const fixes = [];
+  for (const role of resume.experience || []) {
+    if ((role.bullets || []).length) continue;
+    const src = (profile.experience || []).find(e => (e.company || '').toLowerCase() === (role.company || '').toLowerCase());
+    const bullets = (src?.bullets || []).map(bulletStr).filter(Boolean).slice(0, 2);
+    if (bullets.length) { role.bullets = bullets.map(text => ({ text, serves: 'role coverage (patched)' })); fixes.push(`bullets for ${role.company}`); }
+  }
+  const groups = ['skills_product', 'skills_technical', 'skills_ai_tools'];
+  if (!groups.some(k => (resume[k] || []).length)) {
+    const tech = (profile.technical_skills || []).map(s => (typeof s === 'string' ? s : s?.name)).filter(Boolean);
+    const soft = (profile.soft_skills || []);
+    const flat = (profile.skills || []);
+    resume.skills_technical = (tech.length ? tech : flat).slice(0, 10);
+    if (soft.length) resume.skills_product = soft.slice(0, 8);
+    if (resume.skills_technical.length || (resume.skills_product || []).length) fixes.push('skills');
+  }
+  return fixes;
+}
+
+// Default layout expects "Label: text" on every experience bullet. If the model skipped most
+// labels, ask for them in one short call (labels only, text untouched).
+const HAS_LABEL = /^[A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5}:\s/;
+async function ensureBulletLabels(resume, trace) {
+  const refs = [];
+  for (const role of resume.experience || []) (role.bullets || []).forEach((b, i) => refs.push({ role, i, text: bulletStr(b) }));
+  const missing = refs.filter(r => r.text && !HAS_LABEL.test(r.text));
+  if (!refs.length || missing.length / refs.length <= 0.2) return 0;
+  const labels = await labelBullets(missing.map(r => r.text), trace);
+  let added = 0;
+  missing.forEach((r, k) => {
+    const label = labels[k];
+    if (!label || label.split(/\s+/).length > 6) return;
+    const b = r.role.bullets[r.i];
+    const text = `${label}: ${r.text}`;
+    r.role.bullets[r.i] = typeof b === 'string' ? text : { ...b, text };
+    added++;
+  });
+  return added;
 }
 
 function dropUntraceableBullets(resume, profile) {
@@ -443,6 +523,16 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     console.log(`ℹ Thin roles (≤1 bullet): ${integrityIssues.thinRoles.join(', ')}`);
   }
 
+  // Step 1.51: "Label: text" bullets for the default layout (before page measurement)
+  applyBulletLabels(resume);
+  const completed = ensureResumeCompleteness(resume, profile);
+  if (completed.length) console.warn(`⚠ Filled empty resume parts from the profile: ${completed.join(', ')}`);
+  // Only for the default layout, or an uploaded one that uses labeled bullets.
+  if (!resumeFormat?.style_profile || resumeFormat.style_profile.bold_label_bullets) {
+    const added = await ensureBulletLabels(resume, trace).catch(e => { console.warn(`⚠ bullet labels skipped: ${e.message.slice(0, 80)}`); return 0; });
+    if (added) console.log(`🏷 Added labels to ${added} bullet(s)`);
+  }
+
   // Step 1.52: Dedup — remove near-duplicate bullets within the same role
   const dedupCount = dedupBullets(resume);
   if (dedupCount > 0) {
@@ -643,6 +733,8 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
       );
       const improvedResume = improveResult.resume || improveResult;
       const inventedByImprove = dropUntraceableBullets(improvedResume, profile);
+      restoreBulletLabels(resume, improvedResume);
+      ensureResumeCompleteness(improvedResume, profile);
       cleanSummary(improvedResume, profile, job.jd_text);
       if (inventedByImprove.length) console.warn(`⚠ Improve pass: dropped ${inventedByImprove.length} untraceable bullet(s)`);
       substitutions = improveResult.substitutions || [];
@@ -784,4 +876,4 @@ Generated by Resume Assistant`;
   return body.trim();
 }
 
-module.exports = { cleanSummary, yearsOf, processJob, queueJob, getQueueStats, dropUntraceableBullets };
+module.exports = { ensureBulletLabels, restoreBulletLabels, ensureResumeCompleteness, applyBulletLabels, cleanSummary, yearsOf, processJob, queueJob, getQueueStats, dropUntraceableBullets };

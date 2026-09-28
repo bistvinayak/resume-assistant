@@ -288,6 +288,45 @@ function guards({ enforceLabels, statusFor, looksLikeResume, isNearlyEmpty }, fx
   return out;
 }
 
+// Default layout (owner's reference resume) + how well Arjun Skills shaped the output.
+// `html` is the default-layout render (renderPdf.buildResumeHtml with no uploaded format).
+const LABEL_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5})(\s[—–]\s|:\s)/;
+function resumeFormat(resume, html, profile, skills) {
+  const text = html.replace(/<[^>]+>/g, '\n').replace(/&amp;/g, '&');
+  const pos = (h) => text.indexOf(`\n${h}\n`);
+  const order = ['EDUCATION', 'EXPERIENCE', 'PROJECTS', 'SKILLS'].map(pos);
+  const present = order.filter(p => p >= 0);
+  const bullets = (resume.experience || []).flatMap(e => (e.bullets || []).map(bulletText)).filter(Boolean);
+  const labeled = bullets.filter(b => LABEL_RE.test(b));
+  const roles = resume.experience || [];
+  const edu = resume.education || [];
+  const projects = resume.projects || [];
+  const groups = ['skills_product', 'skills_technical', 'skills_ai_tools'].filter(k => (resume[k] || []).length);
+  const words = text.split(/\s+/).filter(Boolean).length;
+  const all = JSON.stringify(resume);
+  // Skill usage
+  const voice = skills?.writing_voice || '';
+  const emDash = bullets.filter(b => /—/.test(b));
+  const banned = BANNED.filter(p => all.toLowerCase().includes(p));
+  const cp = (skills?.career_profile || '').toLowerCase();
+  const fromPlaybook = bullets.filter(b => cp && overlap(b, cp) >= 0.5);
+  return [
+    check('sections in order: Education, Experience, Projects, Skills', present.length >= 3 && present.every((p, i) => i === 0 || p > present[i - 1]), order.join(',')),
+    check('no summary section (default layout)', pos('SUMMARY') < 0),
+    check('name in capitals', text.includes(`\n${(resume.contact?.name || profile.contact?.name || '').toUpperCase()}\n`)),
+    check('every role has company, title, location and dates', roles.every(r => r.company && r.title && r.dates && r.location), roles.filter(r => !(r.company && r.title && r.dates && r.location)).map(r => r.company || '?').join(', ')),
+    check('every role has a one-line company description', roles.every(r => r.tagline), `${roles.filter(r => r.tagline).length}/${roles.length}`),
+    check('bullets start with a bold label (≥ 80%)', bullets.length && labeled.length / bullets.length >= 0.8, `${labeled.length}/${bullets.length}`),
+    check('education shows degree and major', edu.length && edu.every(e => e.degree && (e.major || /,/.test(e.degree))), edu.map(e => `${e.degree}${e.major ? ', ' + e.major : ''}`).join(' | ')),
+    check('projects list a tech stack', !projects.length || projects.every(p => (p.tech_stack || []).length), `${projects.filter(p => (p.tech_stack || []).length).length}/${projects.length}`),
+    check('skills in labeled groups (≥ 2 groups)', groups.length >= 2, groups.join(', ')),
+    check('fits one page (≈ 350-650 words)', words >= 350 && words <= 650, `${words} words`),
+    check('writing voice: no em dashes in bullets', emDash.length === 0, emDash.length ? `${emDash.length} bullet(s)` : ''),
+    check('writing voice: no banned clichés', banned.length === 0, banned.join(', ')),
+    check('career playbook used (≥ 60% of bullets match it)', !cp || (bullets.length && fromPlaybook.length / bullets.length >= 0.6), cp ? `${fromPlaybook.length}/${bullets.length}` : 'no playbook'),
+  ];
+}
+
 function profileChat(probe, intent, enrich, before, after) {
   const e = probe.expect;
   const ex = enrich?.extracted || {};
@@ -331,4 +370,4 @@ function profileChat(probe, intent, enrich, before, after) {
   return out;
 }
 
-module.exports = { profileChat, merge, extraction, skill, tailoring, coverLetter, formFill, insights, chatReply, guards, numbers, overlap };
+module.exports = { resumeFormat, profileChat, merge, extraction, skill, tailoring, coverLetter, formFill, insights, chatReply, guards, numbers, overlap };
