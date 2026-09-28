@@ -129,10 +129,10 @@ applyPartial(partial, userId) [profile.js:433]
   → returns merged (with _conflicts if any)
 ```
 
-## Job Processing Pipeline (pipeline.js:514)
+## Job Processing Pipeline (pipeline.js:653)
 
 ```
-processJob(job, userId) [pipeline.js:514]
+processJob(job, userId) [pipeline.js:653]
   → seenJobBefore(job) [db.js:509]
   → getProfile(userId) [db.js:277]
   → tailorResume(profile, job, trace) [llm.js:1483]  — LLM
@@ -154,7 +154,7 @@ startCron() [cron.js:119]  — runs every 2 hours
   → runBatch(userId) [cron.js:10]
        → fetchLinkedInJobs() [gmail.js:33]  — IMAP fetch
        → per job: scrapeLinkedInJob(url) [scraper.js:113]
-       → per job: processJob(job, userId) [pipeline.js:514]
+       → per job: processJob(job, userId) [pipeline.js:653]
 ```
 
 ## Merge Logic (profile.js:764)
@@ -630,8 +630,9 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | tightenResume | 426 | yes |
 | pickLayoutOpts | 488 | no |
 | withRetry | 501 | no |
-| processJob | 514 | yes |
-| buildEmailBody | 932 | no |
+| fitToPage | 517 | yes |
+| processJob | 653 | yes |
+| buildEmailBody | 939 | no |
 
 ### profile.js
 

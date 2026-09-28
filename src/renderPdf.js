@@ -390,4 +390,4 @@ async function measureResumePdf(resume, opts = {}) {
   return Promise.race([timeout, measure]);
 }
 
-module.exports = { renderResumePdf, measureResumePdf, buildResumeHtml };
+module.exports = { renderResumePdf, measureResumePdf, buildResumeHtml, PAGE_MARGIN_PT };

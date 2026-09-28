@@ -291,7 +291,7 @@ function guards({ enforceLabels, statusFor, looksLikeResume, isNearlyEmpty }, fx
 // Default layout (owner's reference resume) + how well Arjun Skills shaped the output.
 // `html` is the default-layout render (renderPdf.buildResumeHtml with no uploaded format).
 const LABEL_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){0,5})(\s[—–]\s|:\s)/;
-function resumeFormat(resume, html, profile, skills) {
+function resumeFormat(resume, html, profile, skills, page = null) {
   const text = html.replace(/<[^>]+>/g, '\n').replace(/&amp;/g, '&');
   const pos = (h) => text.indexOf(`\n${h}\n`);
   const order = ['EDUCATION', 'EXPERIENCE', 'PROJECTS', 'SKILLS'].map(pos);
@@ -320,11 +320,57 @@ function resumeFormat(resume, html, profile, skills) {
     check('education shows degree and major', edu.length && edu.every(e => e.degree && (e.major || /,/.test(e.degree))), edu.map(e => `${e.degree}${e.major ? ', ' + e.major : ''}`).join(' | ')),
     check('projects list a tech stack', !projects.length || projects.every(p => (p.tech_stack || []).length), `${projects.filter(p => (p.tech_stack || []).length).length}/${projects.length}`),
     check('skills in labeled groups (≥ 2 groups)', groups.length >= 2, groups.join(', ')),
-    check('fits one page (≈ 350-650 words)', words >= 350 && words <= 650, `${words} words`),
+    ...(page ? pageChecks(resume, html, profile, page) : [check('fits one page (≈ 350-650 words)', words >= 350 && words <= 650, `${words} words`)]),
     check('writing voice: no em dashes in bullets', emDash.length === 0, emDash.length ? `${emDash.length} bullet(s)` : ''),
     check('writing voice: no banned clichés', banned.length === 0, banned.join(', ')),
     check('career playbook used (≥ 60% of bullets match it)', !cp || (bullets.length && fromPlaybook.length / bullets.length >= 0.6), cp ? `${fromPlaybook.length}/${bullets.length}` : 'no playbook'),
   ];
+}
+
+// Rendered-page checks from the approved resume skill (its vet_resume.py), run on the final
+// resume after the page-fit step, the way users download it.
+const SKILL_GROUP_ORDER = ['AI & Automation', 'Product & Delivery', 'Technical'];
+function pageChecks(resume, html, profile, page) {
+  const out = [];
+  const { measure, margins } = page;
+  out.push(check('exactly 1 page (rendered)', measure.pages === 1, `${measure.pages} page(s)`));
+  out.push(check('page filled to ≥ 90% (skill: < 35pt empty at the bottom)', measure.pages === 1 && measure.lastPageFill >= 90, `${measure.lastPageFill}%`));
+
+  const profRoles = profile.experience || [];
+  const badRoles = (resume.experience || []).filter(r => {
+    const n = (r.bullets || []).length;
+    const src = profRoles.find(p => (p.company || '').toLowerCase() === (r.company || '').toLowerCase());
+    const available = (src?.bullets || []).length;
+    return available >= 2 ? (n < 2 || n > 5) : n !== available && n < 1;
+  });
+  out.push(check('2–5 bullets per role (fewer only if the profile has fewer)', !badRoles.length, (resume.experience || []).map(r => `${r.company}:${(r.bullets || []).length}`).join(' ')));
+
+  const bulletBodies = [...html.matchAll(/<div class="bullet"[^>]*><span class="bullet-dot">●<\/span><span>([\s\S]*?)<\/span><\/div>/g)].map(m => m[1]);
+  const extraBold = bulletBodies.filter(b => (b.match(/<strong>/g) || []).length > 1 || (/<strong>/.test(b) && !b.startsWith('<strong>')));
+  out.push(check('only the bullet label is bold (no bold metrics)', !extraBold.length, extraBold.slice(0, 2).map(b => b.replace(/<[^>]+>/g, '').slice(0, 60)).join(' | ')));
+
+  const lines = [...html.matchAll(/<p class="skill-line"><strong>([^<]+):<\/strong>\s*([^<]*)<\/p>/g)].map(m => ({ label: m[1], items: m[2].split(',').map(s => s.trim()).filter(Boolean) }));
+  const labels = lines.map(l => l.label);
+  const inOrder = labels.every(l => SKILL_GROUP_ORDER.includes(l)) && labels.every((l, i) => i === 0 || SKILL_GROUP_ORDER.indexOf(l) > SKILL_GROUP_ORDER.indexOf(labels[i - 1]));
+  out.push(check('skills use the skill’s labels, in its order', lines.length >= 2 && inOrder, labels.join(' → ')));
+  const allItems = lines.flatMap(l => l.items.map(i => i.toLowerCase()));
+  const dupes = [...new Set(allItems.filter((x, i) => allItems.indexOf(x) !== i))];
+  out.push(check('no skill listed twice', !dupes.length, dupes.join(', ')));
+  out.push(check('skills lines stay short (≤ 10 items each)', lines.every(l => l.items.length <= 10), lines.map(l => `${l.label}:${l.items.length}`).join(' ')));
+
+  const repeats = (resume.projects || []).filter(p => {
+    const sents = String(p.description || '').split(/(?<=[.!?])\s+/).filter(s => s.length > 12);
+    return sents.some((a, i) => sents.some((b, j) => j > i && overlap(b, a) >= 0.6));
+  });
+  out.push(check('project bullets don’t repeat themselves', !repeats.length, repeats.map(p => p.name).join(', ')));
+
+  const text = html.replace(/<[^>]+>/g, ' ');
+  const eduMissing = (profile.education || []).filter(e => e.location && !text.includes(e.location));
+  out.push(check('education shows location when the profile has one', !eduMissing.length, eduMissing.map(e => e.school).join(', ')));
+  const li = text.search(/linkedin\.com/i), gh = text.search(/github\.com/i);
+  out.push(check('contact line: LinkedIn before GitHub', li < 0 || gh < 0 || li < gh));
+  out.push(check('reference font (Carlito/Calibri) and margins (20pt / 29pt)', /font-family:\s*Carlito/.test(html) && margins.top === 20 && margins.bottom === 20 && margins.left === 29 && margins.right === 29, JSON.stringify(margins)));
+  return out;
 }
 
 function profileChat(probe, intent, enrich, before, after) {

@@ -511,6 +511,145 @@ async function withRetry(fn, label, retries = MAX_RETRIES) {
   }
 }
 
+// Step 1.6 of processJob, exported so the eval scores the same final resume users download:
+// measure → trim or fill toward the page target → shrink font slightly as a last resort.
+// Mutates `resume`; returns the layout options to render it with.
+async function fitToPage(resume, profile, job, { resumeFormat = null, targetPages = null } = {}) {
+  let layoutOpts = { fontScale: 1.0, lineGap: 1.5, sectionGap: 0.6, roleGap: 0.3 };
+  if (resumeFormat?.style_profile?.section_order) layoutOpts.sectionOrder = resumeFormat.style_profile.section_order;
+  if (resumeFormat?.style_profile?.heading_case) layoutOpts.headingCase = resumeFormat.style_profile.heading_case;
+  if (resumeFormat?.style_profile?.bullet_indent_pt) layoutOpts.bulletIndent = resumeFormat.style_profile.bullet_indent_pt;
+  if (resumeFormat?.style_profile?.role_header_style) layoutOpts.roleHeaderStyle = resumeFormat.style_profile.role_header_style;
+  if (resumeFormat?.style_profile?.company_case) layoutOpts.companyCase = resumeFormat.style_profile.company_case;
+
+  try {
+    let m = await measureResumePdf(resume, layoutOpts);
+    console.log(`📐 Initial: ${m.pages} page(s), last page ${m.lastPageFill}% filled`);
+
+    if (targetPages) {
+      // A saved format pins an explicit page count — converge on it instead of the
+      // reactive fill-based heuristic below. Bounded iterations since expand/tighten
+      // can run out of profile content to add/remove before hitting the exact target.
+      let iterations = 0;
+      const MAX_TARGET_ITERATIONS = 25; // tightenResume removes one small piece per call
+      while (m.pages !== targetPages && iterations < MAX_TARGET_ITERATIONS) {
+        const changed = m.pages < targetPages
+          ? expandResume(resume, profile, (targetPages - m.pages) >= 2 ? 'heavy' : 'medium')
+          : tightenResume(resume, job.jd_text);
+        if (!changed) {
+          console.log(`↕ Stopped at ${m.pages}/${targetPages} target pages — no more content to ${m.pages < targetPages ? 'add' : 'trim'}`);
+          break;
+        }
+        m = await measureResumePdf(resume, layoutOpts);
+        iterations++;
+        console.log(`📐 [target ${targetPages}pg, iteration ${iterations}] ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
+
+      // Hitting the target page count isn't the finish line by itself — a page
+      // that's only 73-78% full has real, already-vetted content sitting unused
+      // in the profile (bullets the tailoring pass didn't select, fuller project
+      // descriptions) that could occupy that space instead of leaving it blank.
+      // Pull it in a few bullets at a time, only keeping each step if it doesn't
+      // push the page count past the target — this never invents anything, it
+      // only surfaces real profile content expandResume() already knows is there.
+      const TARGET_FILL_FLOOR = 93; // skill: fill until bottom whitespace is under ~35pt
+      const MAX_FILL_ITERATIONS = 8;
+      if (m.pages === targetPages && m.lastPageFill < TARGET_FILL_FLOOR) {
+        let fillIterations = 0;
+        while (m.lastPageFill < TARGET_FILL_FLOOR && fillIterations < MAX_FILL_ITERATIONS) {
+          const snapshot = JSON.parse(JSON.stringify(resume));
+          const changed = expandResume(resume, profile, 'light');
+          if (!changed) {
+            console.log(`↕ Fill-up stopped at ${m.lastPageFill}% — no more unused profile content`);
+            break;
+          }
+          const trial = await measureResumePdf(resume, layoutOpts);
+          if (trial.pages > targetPages) {
+            Object.assign(resume, snapshot); // this step would've pushed past the target page — discard it
+            console.log(`↕ Fill-up stopped at ${m.lastPageFill}% — next addition would overflow to ${trial.pages} pages`);
+            break;
+          }
+          m = trial;
+          fillIterations++;
+          console.log(`📐 [fill-up ${fillIterations}] ${m.pages} page(s), ${m.lastPageFill}% filled`);
+        }
+      }
+
+      // Content-trimming ran out before hitting the target — the remaining lever
+      // is shrinking font/spacing, which nothing in this pipeline ever attempted.
+      // Especially worth it when the overflow is tiny (near-0% on the extra page):
+      // that's a case where a barely-perceptible font reduction is a much better
+      // trade than either cutting more real content or leaving a page that's
+      // almost entirely blank.
+      if (m.pages > targetPages) {
+        // Floor at 0.9x, not lower — base bullet text is 10pt, so 0.9x is the
+        // smallest step that keeps body text at the 9pt ATS/human-readability
+        // floor most resume style guides use. A 0.85x step (8.5pt body, ~7.65pt
+        // on dates/contact) reads as visibly cramped and undersized once printed
+        // or reviewed by a human, even though the underlying text layer — which
+        // is all an ATS parser actually reads — is identical at any scale.
+        // Body is 9.5pt; 0.95x keeps it at ~9pt, the readability floor.
+        const shrinkSteps = [0.97, 0.95];
+        for (const scale of shrinkSteps) {
+          const shrunk = {
+            ...layoutOpts,
+            fontScale: scale,
+            lineGap: 1.5 * scale,
+            sectionGap: 0.6 * scale,
+            roleGap: 0.3 * scale,
+          };
+          const trial = await measureResumePdf(resume, shrunk);
+          console.log(`📐 [shrink-to-fit ${scale}x] ${trial.pages} page(s), ${trial.lastPageFill}% filled`);
+          if (trial.pages <= targetPages) {
+            layoutOpts = shrunk;
+            m = trial;
+            break;
+          }
+        }
+      }
+    } else {
+      // Gap #5: 1-page underuse — if 1 page at <75%, pull more content
+      if (m.pages === 1 && m.lastPageFill < 75) {
+        console.log(`↕ 1-page at ${m.lastPageFill}% — expanding to use space`);
+        expandResume(resume, profile, 'medium');
+        m = await measureResumePdf(resume, layoutOpts);
+        console.log(`📐 After 1-page expand: ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
+
+      // Gap #2/#3: Multi-page underfill — aggressive expand based on how empty the last page is
+      if (m.pages > 1 && m.lastPageFill < 60) {
+        const aggression = m.lastPageFill < 30 ? 'heavy' : m.lastPageFill < 50 ? 'medium' : 'light';
+        console.log(`↕ Page ${m.pages} at ${m.lastPageFill}% — ${aggression} expand`);
+        expandResume(resume, profile, aggression);
+        m = await measureResumePdf(resume, layoutOpts);
+        console.log(`📐 After expand: ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
+
+      // Gap #1: Tighten — if content spills to an extra page with <40% fill, trim back
+      if (m.pages > 2 && m.lastPageFill < 40) {
+        console.log(`✂ ${m.pages} pages, last at ${m.lastPageFill}% — tightening`);
+        tightenResume(resume, job.jd_text);
+        m = await measureResumePdf(resume, layoutOpts);
+        console.log(`📐 After tighten: ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
+    }
+
+    // Gap #4: Pick layout opts — font scale, line spacing, section spacing. Only for
+    // the reactive (no explicit target) path — it's expand-only (fontScale >= 1.0),
+    // which would undo the shrink-to-fit step above if applied after a target was set.
+    if (!targetPages) {
+      layoutOpts = { ...layoutOpts, ...pickLayoutOpts(m.pages, m.lastPageFill) };
+      if (layoutOpts.fontScale !== 1.0 || layoutOpts.lineGap !== 1.5) {
+        m = await measureResumePdf(resume, layoutOpts);
+        console.log(`📐 Layout tuned (font ${layoutOpts.fontScale}, lineGap ${layoutOpts.lineGap}): ${m.pages} page(s), ${m.lastPageFill}% filled`);
+      }
+    }
+  } catch (e) {
+    console.error(`⚠ Page measurement failed (using defaults): ${e.message}`);
+  }
+  return layoutOpts;
+}
+
 async function processJob(job, userId = 'me', { source = 'app', sessionId, userEmail, userName, force = false, wantCoverLetter = false } = {}) {
   const t0 = Date.now();
   const elapsed = () => `${((Date.now() - t0) / 1000).toFixed(1)}s`;
@@ -654,141 +793,9 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
   }
 
   // Step 1.6: Measure → expand/tighten → pick layout
-  let layoutOpts = { fontScale: 1.0, lineGap: 1.5, sectionGap: 0.6, roleGap: 0.3 };
-  if (resumeFormat?.style_profile?.section_order) layoutOpts.sectionOrder = resumeFormat.style_profile.section_order;
-  if (resumeFormat?.style_profile?.heading_case) layoutOpts.headingCase = resumeFormat.style_profile.heading_case;
-  if (resumeFormat?.style_profile?.bullet_indent_pt) layoutOpts.bulletIndent = resumeFormat.style_profile.bullet_indent_pt;
-  if (resumeFormat?.style_profile?.role_header_style) layoutOpts.roleHeaderStyle = resumeFormat.style_profile.role_header_style;
-  if (resumeFormat?.style_profile?.company_case) layoutOpts.companyCase = resumeFormat.style_profile.company_case;
   // Page target: what the candidate asked for in the chat, else their uploaded layout's
   // count, else 1 page (the default layout is a one-pager).
-  const targetPages = formatForJob.target_pages;
-
-  try {
-    let m = await measureResumePdf(resume, layoutOpts);
-    console.log(`📐 Initial: ${m.pages} page(s), last page ${m.lastPageFill}% filled`);
-
-    if (targetPages) {
-      // A saved format pins an explicit page count — converge on it instead of the
-      // reactive fill-based heuristic below. Bounded iterations since expand/tighten
-      // can run out of profile content to add/remove before hitting the exact target.
-      let iterations = 0;
-      const MAX_TARGET_ITERATIONS = 25; // tightenResume removes one small piece per call
-      while (m.pages !== targetPages && iterations < MAX_TARGET_ITERATIONS) {
-        const changed = m.pages < targetPages
-          ? expandResume(resume, profile, (targetPages - m.pages) >= 2 ? 'heavy' : 'medium')
-          : tightenResume(resume, job.jd_text);
-        if (!changed) {
-          console.log(`↕ Stopped at ${m.pages}/${targetPages} target pages — no more content to ${m.pages < targetPages ? 'add' : 'trim'}`);
-          break;
-        }
-        m = await measureResumePdf(resume, layoutOpts);
-        iterations++;
-        console.log(`📐 [target ${targetPages}pg, iteration ${iterations}] ${m.pages} page(s), ${m.lastPageFill}% filled`);
-      }
-
-      // Hitting the target page count isn't the finish line by itself — a page
-      // that's only 73-78% full has real, already-vetted content sitting unused
-      // in the profile (bullets the tailoring pass didn't select, fuller project
-      // descriptions) that could occupy that space instead of leaving it blank.
-      // Pull it in a few bullets at a time, only keeping each step if it doesn't
-      // push the page count past the target — this never invents anything, it
-      // only surfaces real profile content expandResume() already knows is there.
-      const TARGET_FILL_FLOOR = 93; // skill: fill until bottom whitespace is under ~35pt
-      const MAX_FILL_ITERATIONS = 8;
-      if (m.pages === targetPages && m.lastPageFill < TARGET_FILL_FLOOR) {
-        let fillIterations = 0;
-        while (m.lastPageFill < TARGET_FILL_FLOOR && fillIterations < MAX_FILL_ITERATIONS) {
-          const snapshot = JSON.parse(JSON.stringify(resume));
-          const changed = expandResume(resume, profile, 'light');
-          if (!changed) {
-            console.log(`↕ Fill-up stopped at ${m.lastPageFill}% — no more unused profile content`);
-            break;
-          }
-          const trial = await measureResumePdf(resume, layoutOpts);
-          if (trial.pages > targetPages) {
-            Object.assign(resume, snapshot); // this step would've pushed past the target page — discard it
-            console.log(`↕ Fill-up stopped at ${m.lastPageFill}% — next addition would overflow to ${trial.pages} pages`);
-            break;
-          }
-          m = trial;
-          fillIterations++;
-          console.log(`📐 [fill-up ${fillIterations}] ${m.pages} page(s), ${m.lastPageFill}% filled`);
-        }
-      }
-
-      // Content-trimming ran out before hitting the target — the remaining lever
-      // is shrinking font/spacing, which nothing in this pipeline ever attempted.
-      // Especially worth it when the overflow is tiny (near-0% on the extra page):
-      // that's a case where a barely-perceptible font reduction is a much better
-      // trade than either cutting more real content or leaving a page that's
-      // almost entirely blank.
-      if (m.pages > targetPages) {
-        // Floor at 0.9x, not lower — base bullet text is 10pt, so 0.9x is the
-        // smallest step that keeps body text at the 9pt ATS/human-readability
-        // floor most resume style guides use. A 0.85x step (8.5pt body, ~7.65pt
-        // on dates/contact) reads as visibly cramped and undersized once printed
-        // or reviewed by a human, even though the underlying text layer — which
-        // is all an ATS parser actually reads — is identical at any scale.
-        // Body is 9.5pt; 0.95x keeps it at ~9pt, the readability floor.
-        const shrinkSteps = [0.97, 0.95];
-        for (const scale of shrinkSteps) {
-          const shrunk = {
-            ...layoutOpts,
-            fontScale: scale,
-            lineGap: 1.5 * scale,
-            sectionGap: 0.6 * scale,
-            roleGap: 0.3 * scale,
-          };
-          const trial = await measureResumePdf(resume, shrunk);
-          console.log(`📐 [shrink-to-fit ${scale}x] ${trial.pages} page(s), ${trial.lastPageFill}% filled`);
-          if (trial.pages <= targetPages) {
-            layoutOpts = shrunk;
-            m = trial;
-            break;
-          }
-        }
-      }
-    } else {
-      // Gap #5: 1-page underuse — if 1 page at <75%, pull more content
-      if (m.pages === 1 && m.lastPageFill < 75) {
-        console.log(`↕ 1-page at ${m.lastPageFill}% — expanding to use space`);
-        expandResume(resume, profile, 'medium');
-        m = await measureResumePdf(resume, layoutOpts);
-        console.log(`📐 After 1-page expand: ${m.pages} page(s), ${m.lastPageFill}% filled`);
-      }
-
-      // Gap #2/#3: Multi-page underfill — aggressive expand based on how empty the last page is
-      if (m.pages > 1 && m.lastPageFill < 60) {
-        const aggression = m.lastPageFill < 30 ? 'heavy' : m.lastPageFill < 50 ? 'medium' : 'light';
-        console.log(`↕ Page ${m.pages} at ${m.lastPageFill}% — ${aggression} expand`);
-        expandResume(resume, profile, aggression);
-        m = await measureResumePdf(resume, layoutOpts);
-        console.log(`📐 After expand: ${m.pages} page(s), ${m.lastPageFill}% filled`);
-      }
-
-      // Gap #1: Tighten — if content spills to an extra page with <40% fill, trim back
-      if (m.pages > 2 && m.lastPageFill < 40) {
-        console.log(`✂ ${m.pages} pages, last at ${m.lastPageFill}% — tightening`);
-        tightenResume(resume, job.jd_text);
-        m = await measureResumePdf(resume, layoutOpts);
-        console.log(`📐 After tighten: ${m.pages} page(s), ${m.lastPageFill}% filled`);
-      }
-    }
-
-    // Gap #4: Pick layout opts — font scale, line spacing, section spacing. Only for
-    // the reactive (no explicit target) path — it's expand-only (fontScale >= 1.0),
-    // which would undo the shrink-to-fit step above if applied after a target was set.
-    if (!targetPages) {
-      layoutOpts = { ...layoutOpts, ...pickLayoutOpts(m.pages, m.lastPageFill) };
-      if (layoutOpts.fontScale !== 1.0 || layoutOpts.lineGap !== 1.5) {
-        m = await measureResumePdf(resume, layoutOpts);
-        console.log(`📐 Layout tuned (font ${layoutOpts.fontScale}, lineGap ${layoutOpts.lineGap}): ${m.pages} page(s), ${m.lastPageFill}% filled`);
-      }
-    }
-  } catch (e) {
-    console.error(`⚠ Page measurement failed (using defaults): ${e.message}`);
-  }
+  let layoutOpts = await fitToPage(resume, profile, job, { resumeFormat, targetPages: formatForJob.target_pages });
 
   // Step 2: ATS score
   let ats;
@@ -962,4 +969,4 @@ Generated by Resume Assistant`;
   return body.trim();
 }
 
-module.exports = { tightenResume, pagesFromFeedback, ensureBulletLabels, restoreBulletLabels, ensureResumeCompleteness, applyBulletLabels, cleanSummary, yearsOf, processJob, queueJob, getQueueStats, dropUntraceableBullets };
+module.exports = { tightenResume, pagesFromFeedback, ensureBulletLabels, restoreBulletLabels, ensureResumeCompleteness, applyBulletLabels, cleanSummary, yearsOf, processJob, queueJob, getQueueStats, dropUntraceableBullets, fitToPage };

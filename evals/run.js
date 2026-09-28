@@ -58,8 +58,8 @@ const { assessFit } = require('../src/fitEngine');
 const FIT_ENGINE = args.fit === 'free' ? { engine: 'openrouter' } : { engine: 'jev', apiKey: process.env.TYPESAFE_API_KEY };
 const { ingestText, mergeProfile, applyDeletions } = require('../src/profile');
 const { classifyIntent, chatEnrich } = require('../src/llm');
-const { dropUntraceableBullets, cleanSummary, applyBulletLabels, restoreBulletLabels, ensureResumeCompleteness, ensureBulletLabels } = require('../src/pipeline');
-const { buildResumeHtml } = require('../src/renderPdf');
+const { dropUntraceableBullets, cleanSummary, applyBulletLabels, restoreBulletLabels, ensureResumeCompleteness, ensureBulletLabels, fitToPage } = require('../src/pipeline');
+const { buildResumeHtml, measureResumePdf, PAGE_MARGIN_PT } = require('../src/renderPdf');
 const { profileForSkill, composeSkill, SKILL_NAMES } = require('../src/skills');
 const fx = require('./fixtures');
 const C = require('./checks');
@@ -218,8 +218,11 @@ async function pool(items, limit, fn) {
             for (const k of ['major', 'honors', 'gpa', 'location']) if (src && !e[k] && src[k]) e[k] = src[k];
           }
           final.contact = final.contact || profile.contact;
-          const html = buildResumeHtml(final, {});
-          record('format', label, C.resumeFormat(final, html, profile, userSkills), { debug: { roles: (final.experience || []).length, keys: Object.keys(final) }, sample: (final.experience?.[0]?.bullets || []).slice(0, 2).map(b => (typeof b === 'string' ? b : b.text)).join(' || ').slice(0, 300) });
+          // Same page-fit step as production (trim/fill toward 1 page), then vet the rendered page.
+          const layoutOpts = await timed('page_fit', () => fitToPage(final, profile, { ...job, jd_text: job.jd_text }, { targetPages: 1 }));
+          const measure = await measureResumePdf(final, layoutOpts);
+          const html = buildResumeHtml(final, layoutOpts);
+          record('format', label, C.resumeFormat(final, html, profile, userSkills, { measure, margins: PAGE_MARGIN_PT }), { debug: { roles: (final.experience || []).length, keys: Object.keys(final) }, sample: (final.experience?.[0]?.bullets || []).slice(0, 2).map(b => (typeof b === 'string' ? b : b.text)).join(' || ').slice(0, 300) });
         }
         if (improved) record('improve', label, C.tailoring(resume, profile, pair.forbidden), { ats: `${initial} → ${ats.score}` });
       } catch (e) { recordError('tailor', label, e); return; }
