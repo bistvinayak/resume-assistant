@@ -279,10 +279,10 @@ function buildResumeHtml(resume, opts = {}) {
      OWN title being orphaned from all its bullets, or a single bullet splitting
      mid-sentence — so only those two narrower things are protected below. */
   .role-header, .tagline { break-after: avoid; }
-  .role-header { display: flex; justify-content: space-between; }
+  .role-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12pt; }
   .role-title { font-size: ${f.roleTitle}pt; font-weight: bold; }
   .role-title-plain { font-size: ${f.roleTitle}pt; font-style: italic; }
-  .entity-line { font-size: ${f.roleTitle}pt; font-weight: bold; break-after: avoid; display: flex; justify-content: space-between; }
+  .entity-line { font-size: ${f.roleTitle}pt; font-weight: bold; break-after: avoid; display: flex; justify-content: space-between; align-items: baseline; gap: 12pt; }
   .entity-loc { font-weight: normal; font-size: ${f.roleDates}pt; }
   .role-dates { font-size: ${f.roleDates}pt; }
   .tagline { font-size: ${f.tagline}pt; font-style: italic; color: #333; }
