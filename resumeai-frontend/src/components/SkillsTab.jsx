@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 
-// "My Skills" tab: per-user playbooks Arjun generates from the profile (career profile,
+// "Arjun Skills" tab: per-user playbooks Arjun generates from the profile (career profile,
 // cover-letter story, writing voice). Users read them, add corrections that take priority,
 // regenerate, and download them as Claude skills.
 
@@ -19,6 +19,7 @@ const SKILL_BLURBS = {
   career_profile: 'Your verified bullets, metrics and keyword evidence. Arjun uses it to pick and phrase content for every tailored resume.',
   cover_letter: 'Your story material and strongest achievement stories. Arjun uses it to give cover letters a real, personal voice.',
   writing_voice: 'How you write. Arjun uses it so resumes and letters sound like you, not like AI.',
+  resume_format: 'How your resumes are laid out: section order, headings, length. Taken from the layout you upload in My Profile, otherwise Arjun’s default.',
 };
 
 // Minimal markdown for the skill text: headings, bullets, tables, **bold**.
@@ -99,7 +100,9 @@ function SkillCard({ skill, onSaveNotes }) {
           <div style={{ fontSize: '15px', fontWeight: 700 }}>{skill.title}</div>
           <div style={{ fontSize: '12.5px', color: '#78716c', marginTop: '3px', maxWidth: '520px' }}>{SKILL_BLURBS[skill.id]}</div>
         </div>
-        {statusChip(skill)}
+        {skill.id === 'resume_format'
+          ? <span style={{ background: skill.source === 'uploaded' ? '#dcfce7' : '#f5f5f4', color: skill.source === 'uploaded' ? '#166534' : '#57534e', padding: '3px 10px', borderRadius: '999px', fontSize: '11px', fontWeight: 600 }}>{skill.source === 'uploaded' ? 'Your layout' : 'Arjun default'}</span>
+          : statusChip(skill)}
       </div>
 
       {skill.error && (
@@ -114,9 +117,9 @@ function SkillCard({ skill, onSaveNotes }) {
           {open && (
             <div style={{ borderTop: '1px solid #f0eeeb', paddingTop: '10px', maxHeight: '520px', overflowY: 'auto' }}>
               <Markdown text={skill.content} />
-              <button onClick={() => setShowRules(!showRules)} style={{ background: 'none', border: 'none', color: '#b45309', fontSize: '12px', cursor: 'pointer', padding: '10px 0 0' }}>
+              {skill.shared_rules && <button onClick={() => setShowRules(!showRules)} style={{ background: 'none', border: 'none', color: '#b45309', fontSize: '12px', cursor: 'pointer', padding: '10px 0 0' }}>
                 {showRules ? 'Hide' : 'Show'} the rules Arjun applies to everyone
-              </button>
+              </button>}
               {showRules && <div style={{ marginTop: '6px', opacity: 0.85 }}><Markdown text={skill.shared_rules} /></div>}
             </div>
           )}
@@ -127,6 +130,11 @@ function SkillCard({ skill, onSaveNotes }) {
         </div>
       )}
 
+      {skill.readonly ? (
+        <div style={{ fontSize: '12.5px', color: '#57534e' }}>
+          {skill.source === 'uploaded' ? 'To change it, upload a different layout' : 'To use your own layout, upload a resume in that format'} in <b>My Profile → Resume format</b>.
+        </div>
+      ) : (
       <div>
         <label htmlFor={`notes-${skill.id}`} style={{ fontSize: '10.5px', fontFamily: mono, letterSpacing: '0.08em', color: '#78716c' }}>YOUR CORRECTIONS (ALWAYS WIN)</label>
         <textarea
@@ -144,6 +152,7 @@ function SkillCard({ skill, onSaveNotes }) {
           {saved && <span style={{ fontSize: '12px', color: '#16a34a' }}>Saved. Arjun is updating this skill.</span>}
         </div>
       </div>
+      )}
     </div>
   );
 }
@@ -190,9 +199,9 @@ export default function SkillsTab() {
   return (
     <div style={{ animation: 'fadeIn 0.3s ease', display: 'grid', gap: '18px' }}>
       <div>
-        <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>My Skills</h2>
+        <h2 style={{ fontFamily: "'DM Serif Display', serif", fontSize: '26px', marginBottom: '6px' }}>Arjun Skills</h2>
         <p style={{ fontSize: '13px', color: '#78716c', maxWidth: '620px', lineHeight: 1.55 }}>
-          Arjun turns your profile into three writing playbooks and uses them for every resume and cover letter.
+          Arjun turns your profile into three writing playbooks, plus your resume format, and uses them for every resume and cover letter.
           They update automatically when your profile changes. Add corrections to steer them.
         </p>
       </div>

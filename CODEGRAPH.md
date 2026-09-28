@@ -616,7 +616,7 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1245] — 
 | pickLayoutOpts | 286 | no |
 | withRetry | 299 | no |
 | processJob | 312 | yes |
-| buildEmailBody | 682 | no |
+| buildEmailBody | 690 | no |
 
 ### profile.js
 
@@ -678,10 +678,11 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1245] — 
 | Function | Line | Exported |
 |----------|------|----------|
 | scaledFonts | 32 | no |
-| parseBoldSegments | 48 | no |
-| bulletRuns | 77 | no |
-| normalizeLinks | 83 | no |
-| heading | 88 | no |
+| parseBoldSegments | 49 | no |
+| bulletRuns | 78 | no |
+| normalizeLinks | 84 | no |
+| heading | 93 | no |
+| splitLine | 103 | no |
 | renderResumeDocx | 260 | yes |
 
 ### renderPdf.js
@@ -690,15 +691,15 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1245] — 
 |----------|------|----------|
 | getBrowser | 16 | no |
 | scaledFonts | 53 | no |
-| parseBoldSegments | 67 | no |
-| escapeHtml | 96 | no |
-| bulletHtml | 101 | no |
-| normalizeLinks | 108 | no |
-| sectionHeadingHtml | 115 | no |
-| buildResumeHtml | 231 | no |
-| withPage | 315 | no |
-| renderResumePdf | 325 | yes |
-| measureResumePdf | 340 | yes |
+| parseBoldSegments | 68 | no |
+| escapeHtml | 97 | no |
+| bulletHtml | 102 | no |
+| normalizeLinks | 109 | no |
+| sectionHeadingHtml | 118 | no |
+| buildResumeHtml | 235 | yes |
+| withPage | 320 | no |
+| renderResumePdf | 330 | yes |
+| measureResumePdf | 345 | yes |
 
 ### scraper.js
 
@@ -744,12 +745,13 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1245] — 
 | isStale | 139 | no |
 | getSkillsForWriting | 146 | yes |
 | getSkillsView | 156 | yes |
-| updateSkillNotes | 180 | yes |
-| resumeFormatSkill | 188 | no |
-| skillFile | 209 | no |
-| buildSkillsExport | 214 | yes |
-| crc32 | 246 | no |
-| zip | 251 | yes |
+| updateSkillNotes | 192 | yes |
+| defaultResumeFormatSkill | 201 | no |
+| resumeFormatSkill | 220 | no |
+| skillFile | 241 | no |
+| buildSkillsExport | 246 | yes |
+| crc32 | 277 | no |
+| zip | 282 | yes |
 
 ## File Dependencies
 

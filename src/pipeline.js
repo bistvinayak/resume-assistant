@@ -409,6 +409,14 @@ async function processJob(job, userId = 'me', { source = 'app', sessionId, userE
     }
   }
 
+  // Step 1.57: Education keeps the profile's major, honors and GPA (tailoring only returns
+  // school, degree and dates, which dropped "Artificial Intelligence for Business" etc.).
+  for (const e of (resume.education || [])) {
+    const src = (profile.education || []).find(pe => norm(pe.school) === norm(e.school));
+    if (!src) continue;
+    for (const k of ['major', 'honors', 'gpa', 'location']) if (!e[k] && src[k]) e[k] = src[k];
+  }
+
   // Step 1.6: Measure → expand/tighten → pick layout
   let layoutOpts = { fontScale: 1.0, lineGap: 1.5, sectionGap: 0.6, roleGap: 0.3 };
   if (resumeFormat?.style_profile?.section_order) layoutOpts.sectionOrder = resumeFormat.style_profile.section_order;

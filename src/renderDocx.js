@@ -3,7 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const {
-  Document, Packer, Paragraph, TextRun, HeadingLevel,
+  Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, TabStopType, BorderStyle,
 } = require('docx');
 
 // Half-point sizes (docx TextRun `size` is in half-points, i.e. pt * 2) —
@@ -43,7 +43,8 @@ function scaledFonts(fontScale) {
 // colon-separated ("Root-Cause Analysis: did X"), the latter being common in
 // uploaded resume templates with functional/skill-labeled bullets.
 const METRIC_RE = /(\$[\d,.]+[KMB]?\+?|[+~]?\d[\d,.]*[–-]\d[\d,.]*%|[+~]?\d[\d,.]*%\+?|\d[\d,.]*[KMB]\+|\d[\d,.]*\+)/g;
-const SUBPOINT_RE = /^([A-Z][A-Za-z0-9-]*(?:\s&\s[A-Z][A-Za-z0-9-]*|\s[A-Z][A-Za-z0-9-]*)+)(\s[—–]\s|:\s)/;
+// Also matches lowercase words ("Throughput & cycle time: …"), up to 6 words before the colon.
+const SUBPOINT_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5})(\s[—–]\s|:\s)/;
 
 function parseBoldSegments(text) {
   const segments = [];
@@ -85,15 +86,34 @@ function normalizeLinks(links) {
   return links.map(l => (typeof l === 'string' ? l : (l?.url || l?.href || ''))).filter(Boolean);
 }
 
+// US Letter with the PDF renderer's margins (50pt top/bottom, 55pt sides), in twips.
+const PAGE = { width: 12240, height: 15840, marginTB: 1000, marginLR: 1100 };
+const RIGHT_TAB = [{ type: TabStopType.RIGHT, position: PAGE.width - 2 * PAGE.marginLR }];
+
 function heading(text, headingCase, sectionGap) {
   return new Paragraph({
     heading: HeadingLevel.HEADING_2,
     spacing: { before: Math.round(220 * (sectionGap / 0.6)), after: 60 },
-    children: [new TextRun({ text: headingCase === 'title' ? text : text.toUpperCase(), bold: true })],
+    border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000', space: 1 } },
+    children: [new TextRun({ text: headingCase === 'title' ? text : text.toUpperCase(), bold: true, color: '000000' })],
   });
 }
 
-const DEFAULT_SECTION_ORDER = ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'activities', 'interests'];
+// Left text, right-aligned text on the same line (company | location, title | dates).
+function splitLine(left, right, leftRun = {}, rightRun = {}, extra = {}) {
+  return new Paragraph({
+    tabStops: RIGHT_TAB,
+    ...extra,
+    children: [
+      new TextRun({ text: left || '', ...leftRun }),
+      ...(right ? [new TextRun({ text: `\t${right}`, ...rightRun })] : []),
+    ],
+  });
+}
+
+// Default layout (owner's reference resume): Education, Experience, Projects, Skills; no summary
+// unless an uploaded template's section order asks for one.
+const DEFAULT_SECTION_ORDER = ['education', 'experience', 'projects', 'skills', 'certifications', 'activities', 'interests'];
 
 const SECTION_RENDERERS = {
   summary(resume, ctx) {
@@ -134,18 +154,9 @@ const SECTION_RENDERERS = {
     for (const job of resume.experience) {
       if (companyFirst) {
         const companyName = ctx.companyCase === 'upper' ? (job.company || '').toUpperCase() : (job.company || '');
-        out.push(new Paragraph({
-          spacing: { before: Math.round(120 * (ctx.roleGap / 0.3)) },
-          children: [
-            new TextRun({ text: `${companyName}${job.location ? '    ' + job.location : ''}`, bold: true, size: ctx.f.roleTitle }),
-          ],
-        }));
-        out.push(new Paragraph({
-          children: [
-            new TextRun({ text: job.title || '', size: ctx.f.roleTitle }),
-            new TextRun({ text: job.dates ? `    ${job.dates}` : '', italics: true, size: ctx.f.roleDates, color: '666666' }),
-          ],
-        }));
+        out.push(splitLine(companyName, job.location, { bold: true, size: ctx.f.roleTitle }, { size: ctx.f.roleDates },
+          { spacing: { before: Math.round(120 * (ctx.roleGap / 0.3)) } }));
+        out.push(splitLine(job.title, job.dates, { italics: true, size: ctx.f.roleTitle }, { size: ctx.f.roleDates }));
       } else {
         out.push(new Paragraph({
           spacing: { before: Math.round(120 * (ctx.roleGap / 0.3)) },
@@ -156,7 +167,7 @@ const SECTION_RENDERERS = {
         }));
       }
       if (job.tagline) {
-        out.push(new Paragraph({ children: [new TextRun({ text: job.tagline, italics: true, size: ctx.f.tagline, color: '666666' })] }));
+        out.push(new Paragraph({ children: [new TextRun({ text: job.tagline, italics: true, size: ctx.f.tagline, color: '333333' })] }));
       }
       for (const b of job.bullets || []) {
         const text = typeof b === 'string' ? b : (b.text || '');
@@ -176,21 +187,14 @@ const SECTION_RENDERERS = {
     if (!Array.isArray(resume.projects) || !resume.projects.length) return [];
     const out = [heading('Projects', ctx.headingCase, ctx.sectionGap)];
     for (const p of resume.projects) {
-      out.push(new Paragraph({
-        spacing: { before: Math.round(100 * (ctx.roleGap / 0.3)) },
-        children: [new TextRun({ text: p.name || '', bold: true, size: ctx.f.projectName })],
-      }));
-      if (Array.isArray(p.tags) && p.tags.length) {
-        out.push(new Paragraph({ children: [new TextRun({ text: `(${p.tags.join(', ')})`, size: ctx.f.tagline, color: '666666' })] }));
-      }
-      if (Array.isArray(p.tech_stack) && p.tech_stack.length) {
-        out.push(new Paragraph({ children: [new TextRun({ text: p.tech_stack.join('  •  '), bold: true, size: ctx.f.tagline, color: '444444' })] }));
-      }
+      const stack = Array.isArray(p.tech_stack) && p.tech_stack.length ? p.tech_stack.join(', ') : '';
+      out.push(splitLine(p.name, stack, { bold: true, size: ctx.f.projectName }, { italics: true, size: ctx.f.tagline },
+        { spacing: { before: Math.round(100 * (ctx.roleGap / 0.3)) } }));
       if (p.url) {
         out.push(new Paragraph({ children: [new TextRun({ text: p.url, size: ctx.f.tagline, color: '1A6ED8' })] }));
       }
       if (p.description) {
-        out.push(new Paragraph({ children: [new TextRun({ text: p.description, size: ctx.f.summary })] }));
+        out.push(new Paragraph({ bullet: { level: 0 }, indent: { left: ctx.bulletIndentTwips }, keepLines: true, children: bulletRuns(p.description, ctx.f.bullet) }));
       }
     }
     return out;
@@ -204,17 +208,13 @@ const SECTION_RENDERERS = {
       if (schoolFirst) {
         const schoolName = ctx.companyCase === 'upper' ? (e.school || '').toUpperCase() : (e.school || '');
         if (schoolName) {
-          out.push(new Paragraph({
-            spacing: { before: Math.round(80 * (ctx.roleGap / 0.3)) },
-            children: [new TextRun({ text: schoolName, bold: true, size: ctx.f.eduSchool })],
-          }));
+          out.push(splitLine(schoolName, e.location, { bold: true, size: ctx.f.eduSchool }, { size: ctx.f.eduDates },
+            { spacing: { before: Math.round(80 * (ctx.roleGap / 0.3)) } }));
         }
-        out.push(new Paragraph({
-          children: [
-            new TextRun({ text: e.degree || '', size: ctx.f.eduDegree }),
-            new TextRun({ text: e.dates ? `    ${e.dates}` : '', size: ctx.f.eduDates, color: '666666' }),
-          ],
-        }));
+        out.push(splitLine([e.degree, e.major].filter(Boolean).join(', '), e.dates, { italics: true, size: ctx.f.eduDegree }, { size: ctx.f.eduDates }));
+        for (const line of [e.honors, e.gpa ? `GPA: ${e.gpa}` : ''].filter(Boolean)) {
+          out.push(new Paragraph({ bullet: { level: 0 }, indent: { left: ctx.bulletIndentTwips }, children: bulletRuns(String(line), ctx.f.bullet) }));
+        }
       } else {
         out.push(new Paragraph({
           spacing: { before: Math.round(80 * (ctx.roleGap / 0.3)) },
@@ -271,8 +271,8 @@ async function renderResumeDocx(resume, outPath, opts = {}) {
   const sectionOrder = (Array.isArray(opts.sectionOrder) && opts.sectionOrder.length)
     ? opts.sectionOrder.filter(s => SECTION_RENDERERS[s])
     : DEFAULT_SECTION_ORDER;
-  const roleHeaderStyle = opts.roleHeaderStyle === 'company_first_two_line' ? 'company_first_two_line' : 'title_first_one_line';
-  const companyCase = opts.companyCase === 'upper' ? 'upper' : 'as_is';
+  const roleHeaderStyle = opts.roleHeaderStyle === 'title_first_one_line' ? 'title_first_one_line' : 'company_first_two_line';
+  const companyCase = opts.companyCase === 'as_is' ? 'as_is' : 'upper';
   const f = scaledFonts(fontScale);
   const ctx = { f, lineGap, sectionGap, roleGap, headingCase, bulletIndentTwips, roleHeaderStyle, companyCase };
 
@@ -280,20 +280,24 @@ async function renderResumeDocx(resume, outPath, opts = {}) {
   const children = [];
 
   children.push(new Paragraph({
-    children: [new TextRun({ text: c.name || 'Candidate', bold: true, size: f.name })],
+    alignment: AlignmentType.CENTER,
+    children: [new TextRun({ text: (c.name || 'Candidate').toUpperCase(), bold: true, size: f.name })],
   }));
-  const line = [c.email, c.phone, c.location].filter(Boolean).join('  |  ');
-  if (line) children.push(new Paragraph({ children: [new TextRun({ text: line, size: f.contact, color: '444444' })] }));
-  const links = normalizeLinks(c.links);
-  if (links.length) {
-    children.push(new Paragraph({ children: [new TextRun({ text: links.join('  |  '), size: f.contact, color: '1A6ED8' })] }));
-  }
+  // One centered line: location | phone | email | links (links shown without https://)
+  const links = normalizeLinks(c.links).map(l => l.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
+  const line = [c.location, c.phone, c.email, ...links].filter(Boolean).join('  |  ');
+  if (line) children.push(new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: line, size: f.contact, color: '222222' })] }));
 
   for (const section of sectionOrder) {
     children.push(...SECTION_RENDERERS[section](resume, ctx));
   }
 
-  const doc = new Document({ sections: [{ children }] });
+  const doc = new Document({
+    styles: { default: { document: { run: { font: 'Arial' } } } },
+    sections: [{
+    properties: { page: { size: { width: PAGE.width, height: PAGE.height }, margin: { top: PAGE.marginTB, bottom: PAGE.marginTB, left: PAGE.marginLR, right: PAGE.marginLR } } },
+    children,
+  }] });
   const buffer = await Packer.toBuffer(doc);
   fs.writeFileSync(outPath, buffer);
   return outPath;

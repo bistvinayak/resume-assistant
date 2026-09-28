@@ -1240,7 +1240,7 @@ export default function Dashboard() {
             { id: 'submit', label: 'Apply to Job', desc: 'Paste a job URL → get a tailored resume', info: 'Paste a job link to get a tailored resume, ATS score and optional cover letter.' },
             { id: 'jobs', label: 'My Applications', desc: 'Track all your tailored resumes', info: 'Every resume Arjun made for you, with its score. Download them here.' },
             { id: 'gaps', label: 'Skill Gaps', desc: 'Top missing keywords', info: 'Skills jobs keep asking for that your profile lacks. Add them only if you have them.' },
-            { id: 'skills', label: 'My Skills', desc: 'Your writing playbooks', info: 'Writing guides built from your profile that shape how Arjun writes for you.' },
+            { id: 'skills', label: 'Arjun Skills', desc: 'Playbooks & resume format', info: 'Writing guides and your resume format, built from your profile. They shape every resume Arjun writes.' },
             { id: 'extension', label: 'Chrome Extension', desc: 'Job fit, analysis & autofill', info: 'Check job fit and autofill applications on job sites.' },
             { id: 'settings', label: 'AI Settings', desc: 'Your own API keys (optional)', info: 'Free models by default. Add your OpenRouter key for stronger resume writing, or a Jev key for job-fit scoring.' },
           ].map(({ id, label, desc, info }) => (

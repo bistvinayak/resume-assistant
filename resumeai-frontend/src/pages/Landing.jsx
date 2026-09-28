@@ -48,7 +48,7 @@ const EXTENSION_FEATURES = [
   {
     tag: 'JOB FIT',
     title: 'Know before you apply',
-    desc: 'On any job posting, click "Check this job". In about a second you get a fit score against your real profile, your skills, domain and seniority match, and a visa verdict that flags the job only when the posting explicitly rules out sponsorship.',
+    desc: 'On any job posting, click "How well do I fit this job?". In about a second you get a fit score against your real profile, your skills, domain and seniority match, and a visa verdict that flags the job only when the posting explicitly rules out sponsorship.',
   },
 ];
 
@@ -378,7 +378,7 @@ export default function Landing() {
             </div>
           ))}
 
-          {/* Popup preview: a sample "Check this job" result, labelled as an example */}
+          {/* Popup preview: a sample job-fit result, labelled as an example */}
           <div data-idx={22} aria-label="Example of the extension popup" style={{
             border: '1px solid #e7e5e4', borderRadius: '12px', background: '#fff', padding: '18px',
             boxShadow: '0 12px 32px rgba(28,25,23,0.08)', ...fadeIn(22),

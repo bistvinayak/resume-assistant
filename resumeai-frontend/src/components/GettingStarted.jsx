@@ -52,7 +52,7 @@ function Step({ n, done, optional, title, children, action, onAction }) {
 }
 
 const EXTENSION_FEATURES = [
-  { title: 'Check this job', where: 'On any job posting', text: 'One click scores how well the job fits your profile (overall, skills, domain, seniority) and flags postings that explicitly rule out visa sponsorship.' },
+  { title: 'How well do I fit this job?', where: 'On any job posting', text: 'One click scores how well the job fits your profile (overall, skills, domain, seniority) and flags postings that explicitly rule out visa sponsorship.' },
   { title: 'Full analysis', where: 'Side panel', text: 'Lists what the job asks for and marks each requirement as strong, different wording, partial or not in your profile, with what to do about each.' },
   { title: 'Ask Arjun', where: 'Side panel chat', text: 'Ask anything about the job. Say “make my resume for this job” and refine it with feedback like “shorter summary”. It only uses facts from your profile.' },
   { title: 'Fill this page', where: 'On application forms', text: 'Fills the form by what each field means, outlines what it filled in green, asks you to check unsure answers, and lets you undo everything.' },
@@ -153,8 +153,8 @@ export default function GettingStarted({ profile, jobs, gmailStatus, goTo }) {
           <button onClick={() => goTo('gaps')} style={{ background: 'none', border: 'none', color: '#b45309', cursor: 'pointer', padding: 0, fontSize: '13px' }}>Open Skill Gaps</button>
         </div>
         <div style={{ fontSize: '13px', color: '#57534e', lineHeight: 1.6 }}>
-          <b>My Skills</b> holds the writing playbooks Arjun builds from your profile (career story, cover-letter story, writing voice) so tailored resumes sound like you. You can correct them.{' '}
-          <button onClick={() => goTo('skills')} style={{ background: 'none', border: 'none', color: '#b45309', cursor: 'pointer', padding: 0, fontSize: '13px' }}>Open My Skills</button>
+          <b>Arjun Skills</b> holds the writing playbooks Arjun builds from your profile (career story, cover-letter story, writing voice) and your resume format, so tailored resumes sound like you. You can correct them.{' '}
+          <button onClick={() => goTo('skills')} style={{ background: 'none', border: 'none', color: '#b45309', cursor: 'pointer', padding: 0, fontSize: '13px' }}>Open Arjun Skills</button>
         </div>
       </div>
     </div>

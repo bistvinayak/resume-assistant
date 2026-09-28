@@ -157,9 +157,21 @@ async function getSkillsView(userId) {
   const rows = await getUserSkills(userId);
   const version = await getProfileVersion(userId);
   const generating = inFlight.has(userId);
+  const [profile, rf] = await Promise.all([getProfile(userId).catch(() => null), getResumeFormat(userId).catch(() => null)]);
+  const name = profile?.contact?.name || 'the candidate';
+  const uploaded = !!rf?.style_profile;
+  const resumeFormat = {
+    id: 'resume_format',
+    title: 'Resume format',
+    status: 'ready',
+    readonly: true,
+    source: uploaded ? 'uploaded' : 'default',
+    content: uploaded ? resumeFormatSkill(name, rf) : defaultResumeFormatSkill(name),
+    updated_at: rf?.updated_at || null,
+  };
   return {
     generating,
-    skills: SKILL_NAMES.map(k => {
+    skills: [...SKILL_NAMES.map(k => {
       const r = rows[k] || {};
       return {
         id: k,
@@ -173,7 +185,7 @@ async function getSkillsView(userId) {
         updated_at: r.updated_at || null,
         stale: !!r.content && (r.profile_version || 0) < version,
       };
-    }),
+    }), resumeFormat],
   };
 }
 
@@ -182,6 +194,26 @@ async function updateSkillNotes(userId, skill, notes) {
   await saveUserSkillNotes(userId, skill, String(notes || '').slice(0, 4000));
   // Corrections should show up in the generated text too, not only in the appended section.
   runRefresh(userId, { only: [skill] });
+}
+
+// Arjun's default resume layout, used when the user hasn't uploaded their own (mirrors
+// DEFAULT_SECTION_ORDER and the default styles in renderPdf.js / renderDocx.js).
+function defaultResumeFormatSkill(name) {
+  return [
+    `# Resume Format: ${name}`,
+    '',
+    `Arjun's default layout. ${name} hasn't uploaded a resume layout, so every resume uses this. Upload one in My Profile to replace it.`,
+    '',
+    '- **Length:** 1 page, filled to at least 75%',
+    '- **Header:** name in capitals, centered; one centered line: location | phone | email | LinkedIn | GitHub | website',
+    '- **Section order:** Education, Experience, Projects, Skills (then Certifications, Activities, Interests if present). No summary.',
+    '- **Headings:** capitals, bold, with a rule underneath',
+    '- **Education:** school in capitals, location on the right; degree and major in italics, years on the right; bullets for coursework, honors or GPA',
+    '- **Experience:** company in capitals, location on the right; title in italics, dates on the right; a one-line italic company description; bullets',
+    '- **Bullets:** start with a short bold label and a colon ("Throughput & cycle time: Cut …"), lead with the result, keep every number',
+    '- **Projects:** project name in bold, tech stack in italics on the right; one bullet',
+    '- **Skills:** grouped under bold labels (Product, Technical & Analytics, AI & Tools)',
+  ].join('\n');
 }
 
 // ── Claude export ───────────────────────────────────────────────────────
@@ -221,9 +253,8 @@ async function buildSkillsExport(userId) {
     if (text) files.push(skillFile(SKILLS[k].folder, SKILLS[k].description(name), text));
   }
   const rf = await getResumeFormat(userId).catch(() => null);
-  if (rf?.style_profile) {
-    files.push(skillFile('arjun-resume-format', `${name}'s preferred resume layout and length. Use whenever producing or formatting a resume for ${name}.`, resumeFormatSkill(name, rf)));
-  }
+  files.push(skillFile('arjun-resume-format', `${name}'s preferred resume layout and length. Use whenever producing or formatting a resume for ${name}.`,
+    rf?.style_profile ? resumeFormatSkill(name, rf) : defaultResumeFormatSkill(name)));
   if (!files.length) return null;
   files.push({
     path: 'README.md',

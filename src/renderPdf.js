@@ -62,7 +62,8 @@ const METRIC_RE = /(\$[\d,.]+[KMB]?\+?|[+~]?\d[\d,.]*[–-]\d[\d,.]*%|[+~]?\d[\d
 // Matches a bold "label" prefix on a bullet, either dash-separated ("Root Cause — did X")
 // or colon-separated ("Root-Cause Analysis: did X") — the latter is common in
 // uploaded resume templates that use functional/skill-labeled bullets.
-const SUBPOINT_RE = /^([A-Z][A-Za-z0-9-]*(?:\s&\s[A-Z][A-Za-z0-9-]*|\s[A-Z][A-Za-z0-9-]*)+)(\s[—–]\s|:\s)/;
+// Also matches lowercase words ("Throughput & cycle time: …"), up to 6 words before the colon.
+const SUBPOINT_RE = /^([A-Z][A-Za-z0-9/-]*(?:\s(?:&|[A-Za-z0-9/-]+)){1,5})(\s[—–]\s|:\s)/;
 
 function parseBoldSegments(text) {
   const segments = [];
@@ -110,7 +111,9 @@ function normalizeLinks(links) {
   return links.map(l => (typeof l === 'string' ? l : (l?.url || l?.href || ''))).filter(Boolean);
 }
 
-const DEFAULT_SECTION_ORDER = ['summary', 'skills', 'experience', 'projects', 'education', 'certifications', 'activities', 'interests'];
+// Default layout (owner's reference resume): Education, Experience, Projects, Skills; no summary
+// unless an uploaded template's section order asks for one.
+const DEFAULT_SECTION_ORDER = ['education', 'experience', 'projects', 'skills', 'certifications', 'activities', 'interests'];
 
 function sectionHeadingHtml(text, headingCase) {
   const label = headingCase === 'title' ? text : text.toUpperCase();
@@ -150,8 +153,7 @@ const SECTION_RENDERERS = {
       html += `<div class="role" style="margin-top:${ctx.roleGap}em">`;
       if (companyFirst) {
         const companyName = ctx.companyCase === 'upper' ? (job.company || '').toUpperCase() : (job.company || '');
-        const companyLine = `${companyName}${job.location ? '  ' + job.location : ''}`;
-        html += `<div class="entity-line">${escapeHtml(companyLine)}</div>`;
+        html += `<div class="entity-line"><span>${escapeHtml(companyName)}</span>${job.location ? `<span class="entity-loc">${escapeHtml(job.location)}</span>` : ''}</div>`;
         html += `<div class="role-header"><span class="role-title-plain">${escapeHtml(job.title || '')}</span>${job.dates ? `<span class="role-dates">${escapeHtml(job.dates)}</span>` : ''}</div>`;
       } else {
         const titleLine = `${job.title || ''}${job.company ? ', ' + job.company : ''}`;
@@ -172,12 +174,10 @@ const SECTION_RENDERERS = {
     let html = sectionHeadingHtml('Projects', ctx.headingCase);
     for (const p of resume.projects) {
       html += `<div class="project" style="margin-top:${ctx.roleGap * 0.7}em">`;
-      html += `<div class="project-name">${escapeHtml(p.name || '')}${Array.isArray(p.tags) && p.tags.length ? ` <span class="muted">(${escapeHtml(p.tags.join(', '))})</span>` : ''}</div>`;
-      if (Array.isArray(p.tech_stack) && p.tech_stack.length) {
-        html += `<div class="tech-stack">${escapeHtml(p.tech_stack.join('  •  '))}</div>`;
-      }
+      const stack = Array.isArray(p.tech_stack) && p.tech_stack.length ? p.tech_stack.join(', ') : '';
+      html += `<div class="role-header"><span class="project-name">${escapeHtml(p.name || '')}</span>${stack ? `<span class="tech-stack">${escapeHtml(stack)}</span>` : ''}</div>`;
       if (p.url) html += `<div class="project-url">${escapeHtml(p.url)}</div>`;
-      if (p.description) html += `<p class="project-desc">${escapeHtml(p.description)}</p>`;
+      if (p.description) html += `<div class="bullet" style="padding-left:${ctx.bulletIndent}pt"><span class="bullet-dot">•</span><span>${bulletHtml(p.description)}</span></div>`;
       html += `</div>`;
     }
     return html;
@@ -191,8 +191,12 @@ const SECTION_RENDERERS = {
       html += `<div class="edu" style="margin-top:${ctx.roleGap * 0.7}em">`;
       if (schoolFirst) {
         const schoolName = ctx.companyCase === 'upper' ? (e.school || '').toUpperCase() : (e.school || '');
-        if (schoolName) html += `<div class="entity-line">${escapeHtml(schoolName)}</div>`;
-        html += `<div class="role-header"><span class="role-title-plain">${escapeHtml(e.degree || '')}</span>${e.dates ? `<span class="role-dates">${escapeHtml(e.dates)}</span>` : ''}</div>`;
+        if (schoolName) html += `<div class="entity-line"><span>${escapeHtml(schoolName)}</span>${e.location ? `<span class="entity-loc">${escapeHtml(e.location)}</span>` : ''}</div>`;
+        const degree = [e.degree, e.major].filter(Boolean).join(', ');
+        html += `<div class="role-header"><span class="role-title-plain">${escapeHtml(degree)}</span>${e.dates ? `<span class="role-dates">${escapeHtml(e.dates)}</span>` : ''}</div>`;
+        for (const line of [e.honors, e.gpa ? `GPA: ${e.gpa}` : ''].filter(Boolean)) {
+          html += `<div class="bullet" style="padding-left:${ctx.bulletIndent}pt"><span class="bullet-dot">•</span><span>${bulletHtml(String(line))}</span></div>`;
+        }
       } else {
         html += `<div class="role-header"><span class="role-title">${escapeHtml(e.degree || '')}</span>${e.dates ? `<span class="role-dates">${escapeHtml(e.dates)}</span>` : ''}</div>`;
         if (e.school) html += `<div class="edu-school">${escapeHtml(e.school)}</div>`;
@@ -238,14 +242,15 @@ function buildResumeHtml(resume, opts = {}) {
   const sectionOrder = (Array.isArray(opts.sectionOrder) && opts.sectionOrder.length)
     ? opts.sectionOrder.filter(s => SECTION_RENDERERS[s])
     : DEFAULT_SECTION_ORDER;
-  const roleHeaderStyle = opts.roleHeaderStyle === 'company_first_two_line' ? 'company_first_two_line' : 'title_first_one_line';
-  const companyCase = opts.companyCase === 'upper' ? 'upper' : 'as_is';
+  const roleHeaderStyle = opts.roleHeaderStyle === 'title_first_one_line' ? 'title_first_one_line' : 'company_first_two_line';
+  const companyCase = opts.companyCase === 'as_is' ? 'as_is' : 'upper';
   const f = scaledFonts(fontScale);
   const c = resume.contact || {};
   const ctx = { f, lineGap, sectionGap, roleGap, headingCase, bulletIndent, roleHeaderStyle, companyCase };
 
-  const contactParts = [c.email, c.phone, c.location].filter(Boolean);
-  const links = normalizeLinks(c.links);
+  // One centered line: location | phone | email | links (links shown without https://)
+  const links = normalizeLinks(c.links).map(l => l.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, ''));
+  const contactParts = [c.location, c.phone, c.email, ...links].filter(Boolean);
 
   const body = sectionOrder.map(s => SECTION_RENDERERS[s](resume, ctx)).join('');
 
@@ -260,11 +265,11 @@ function buildResumeHtml(resume, opts = {}) {
   body { font-family: Helvetica, Arial, sans-serif; color: #000; margin: 0; font-size: ${f.bullet}pt; line-height: ${lineHeight}; }
   .center { text-align: center; }
   .name { font-size: ${f.name}pt; font-weight: bold; text-align: center; }
-  .contact, .links { font-size: ${f.contact}pt; text-align: center; color: #444; }
+  .contact, .links { font-size: ${f.contact}pt; text-align: center; color: #222; }
   .links { color: #1a6ed8; }
   .section-heading {
     margin-top: ${sectionGap}em; font-size: ${f.sectionHeading}pt; font-weight: bold;
-    border-bottom: 0.5pt solid #ccc; padding-bottom: 2pt; margin-bottom: 4pt;
+    border-bottom: 0.75pt solid #000; padding-bottom: 1pt; margin-bottom: 4pt;
     break-after: avoid; /* a heading should never be orphaned alone at page bottom */
   }
   /* Deliberately NOT break-inside:avoid on .role/.project/.edu as a whole block —
@@ -276,16 +281,17 @@ function buildResumeHtml(resume, opts = {}) {
   .role-header, .tagline { break-after: avoid; }
   .role-header { display: flex; justify-content: space-between; }
   .role-title { font-size: ${f.roleTitle}pt; font-weight: bold; }
-  .role-title-plain { font-size: ${f.roleTitle}pt; }
-  .entity-line { font-size: ${f.roleTitle}pt; font-weight: bold; break-after: avoid; }
-  .role-dates { font-size: ${f.roleDates}pt; font-style: italic; color: #666; }
-  .tagline { font-size: ${f.tagline}pt; font-style: italic; color: #666; }
+  .role-title-plain { font-size: ${f.roleTitle}pt; font-style: italic; }
+  .entity-line { font-size: ${f.roleTitle}pt; font-weight: bold; break-after: avoid; display: flex; justify-content: space-between; }
+  .entity-loc { font-weight: normal; font-size: ${f.roleDates}pt; }
+  .role-dates { font-size: ${f.roleDates}pt; }
+  .tagline { font-size: ${f.tagline}pt; font-style: italic; color: #333; }
   .bullet { display: flex; gap: 4pt; break-inside: avoid; font-size: ${f.bullet}pt; margin-top: 2pt; }
   .bullet-dot { flex-shrink: 0; }
   .skill-line { font-size: ${f.skillValue}pt; margin: 3pt 0; }
   .project-name { font-size: ${f.projectName}pt; font-weight: bold; break-after: avoid; }
   .project-desc { font-size: ${f.projectDesc}pt; margin: 2pt 0; }
-  .tech-stack { font-size: ${f.tagline}pt; font-weight: bold; color: #444; }
+  .tech-stack { font-size: ${f.tagline}pt; font-style: italic; }
   .project-url { font-size: ${f.tagline}pt; color: #1a6ed8; }
   .edu-school { font-size: ${f.eduSchool}pt; }
   .summary { font-size: ${f.summary}pt; }
@@ -293,9 +299,8 @@ function buildResumeHtml(resume, opts = {}) {
   strong { font-weight: bold; }
 </style></head>
 <body>
-  <div class="name">${escapeHtml(c.name || 'Candidate')}</div>
+  <div class="name">${escapeHtml((c.name || 'Candidate').toUpperCase())}</div>
   ${contactParts.length ? `<div class="contact">${escapeHtml(contactParts.join('  |  '))}</div>` : ''}
-  ${links.length ? `<div class="links">${escapeHtml(links.join('  |  '))}</div>` : ''}
   ${body}
 </body></html>`;
 }
@@ -373,4 +378,4 @@ async function measureResumePdf(resume, opts = {}) {
   return Promise.race([timeout, measure]);
 }
 
-module.exports = { renderResumePdf, measureResumePdf };
+module.exports = { renderResumePdf, measureResumePdf, buildResumeHtml };

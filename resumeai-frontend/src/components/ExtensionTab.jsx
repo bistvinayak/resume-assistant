@@ -58,7 +58,7 @@ export function JevKeyCard() {
         {!info ? 'Checking…' : usingJev ? `Jev (TypeSafe)${info.keySource === 'user' ? ` · your key ····${info.last4}` : ''}` : 'Free AI model (OpenRouter)'}
       </div>
       <p style={{ fontSize: '13px', color: '#57534e', lineHeight: 1.6, margin: '0 0 12px' }}>
-        “Check this job” and the side panel analysis run on a free AI model by default. For sharper, more consistent scoring,
+        “How well do I fit this job?” and the side panel analysis run on a free AI model by default. For sharper, more consistent scoring,
         add your own TypeSafe Jev API key: checks then use Jev and are billed to your TypeSafe account. The key is encrypted and never shown again.
       </p>
       {info?.hasKey ? (
@@ -164,7 +164,7 @@ export default function ExtensionTab() {
       <div style={{ ...card, fontSize: '13px', color: '#57534e', lineHeight: 1.6 }}>
         <div style={{ fontSize: '10.5px', fontFamily: mono, letterSpacing: '0.08em', color: '#78716c', marginBottom: '6px' }}>USING IT</div>
         <b>Fill an application:</b> open the form, click the Arjun icon, then <b>Fill this page</b>. On Greenhouse, Lever, Workday and similar sites it starts on its own.<br />
-        <b>Check a job:</b> on any job posting, click the Arjun icon, then <b>Check this job</b> for your fit score and whether the posting rules out visa sponsorship.<br />
+        <b>Check a job:</b> on any job posting, click the Arjun icon, then <b>How well do I fit this job?</b> for your fit score and whether the posting rules out visa sponsorship.<br />
         <span style={{ color: '#a8a29e' }}>Chrome may show a "developer mode extensions" notice at startup. That's expected for extensions installed this way; a Chrome Web Store version is coming.</span>
       </div>
     </div>

@@ -18,7 +18,7 @@ const BADGES = {
 };
 const ERRORS = {
   not_logged_in: 'You’re signed out. Open vinayakbist.com/projects/arjun, then try again.',
-  job_not_checked: 'Check this job in the Arjun popup first.',
+  job_not_checked: 'Click “How well do I fit this job?” in the Arjun popup first.',
   insights_not_ready: 'The analysis isn’t ready yet.',
   chat_timeout: 'Arjun runs on free AI models, and they’re busy right now because many people are using them. Please try again in a minute.',
   ai_busy: 'Arjun runs on free AI models, and they’re busy right now because many people are using them. Please try again in a minute.',
