@@ -56,7 +56,8 @@ const { analyzeJob, chatAboutJob } = require('../src/insights');
 const { assessFit } = require('../src/fitEngine');
 // --fit=free runs job fit + requirement matching on the free OpenRouter engine instead of Jev.
 const FIT_ENGINE = args.fit === 'free' ? { engine: 'openrouter' } : { engine: 'jev', apiKey: process.env.TYPESAFE_API_KEY };
-const { ingestText } = require('../src/profile');
+const { ingestText, mergeProfile, applyDeletions } = require('../src/profile');
+const { classifyIntent, chatEnrich } = require('../src/llm');
 const { dropUntraceableBullets } = require('../src/pipeline');
 const { profileForSkill, composeSkill, SKILL_NAMES } = require('../src/skills');
 const fx = require('./fixtures');
@@ -128,6 +129,28 @@ async function pool(items, limit, fn) {
       const after = await timed('merge', () => retry(() => ingestText(fx.priyaV2.resume, 'eval-merge', ctx)));
       record('merge', 'priya v1 → reworded v2', C.merge(before, after, fx.priyaV2.expect, [...fx.candidates.priya.expect.metrics, '300']));
     } catch (e) { recordError('merge', 'priya v1 → reworded v2', e); }
+  }
+
+  // 1c. "Chat with Arjun": intent gate → chat_enrich → user confirms → merge, on Priya's profile
+  if (want('profilechat') && profiles.priya) {
+    await pool(fx.profileChat, 3, async (probe) => {
+      const subject = `priya · ${probe.kind}`;
+      try {
+        const before = JSON.parse(JSON.stringify(profiles.priya));
+        const intent = await timed('profilechat', () => retry(() => classifyIntent(probe.msg, before, ctx, [])));
+        let enrich = null;
+        let after = before;
+        if (intent.inScope && !(intent.intent === 'question' && intent.reply)) {
+          enrich = await timed('profilechat', () => retry(() => chatEnrich(probe.msg, before, ctx, [])));
+          after = JSON.parse(JSON.stringify(before));
+          if (enrich.extracted && Object.keys(enrich.extracted).length) after = mergeProfile(after, enrich.extracted);
+          if (enrich.deletions && Object.keys(enrich.deletions).length) after = applyDeletions(after, enrich.deletions);
+        }
+        record('profilechat', subject, C.profileChat(probe, intent, enrich, before, after), {
+          sample: `Q: ${probe.msg} → intent ${intent.intent}; reply: ${(enrich?.reply || intent.reply || '').slice(0, 200)}; extracted: ${JSON.stringify(enrich?.extracted || {}).slice(0, 200)}; deletions: ${JSON.stringify(enrich?.deletions || {})}`.slice(0, 600),
+        });
+      } catch (e) { recordError('profilechat', subject, e); }
+    });
   }
 
   // 2. Per-user skills

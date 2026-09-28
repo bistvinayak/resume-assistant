@@ -192,6 +192,11 @@ export default function Onboarding() {
                 {loading ? 'Analyzing your profile...' : 'Continue →'}
               </button>
             </div>
+            {loading && (
+              <p style={{ fontSize: '12px', color: '#78716c', marginTop: '12px', lineHeight: 1.5 }}>
+                Arjun runs on free AI models, so this can take a few minutes when they're busy. Please keep this page open until it finishes.
+              </p>
+            )}
           </>
         )}
 

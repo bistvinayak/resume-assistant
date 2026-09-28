@@ -1974,6 +1974,9 @@ export default function Dashboard() {
                               </div>
                             );
                           })}
+                          <div style={{ fontSize: '11px', color: '#78716c', marginTop: '10px', lineHeight: 1.5 }}>
+                            Arjun runs on free AI models, so this can take a few minutes when they're busy. Please keep this page open until it finishes.
+                          </div>
                         </div>
                       </div>
                     );

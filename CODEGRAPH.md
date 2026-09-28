@@ -159,12 +159,12 @@ startCron() [cron.js:119]  — runs every 2 hours
 ```
 mergeProfile(base, incoming, conflicts) [profile.js:764]
   ├─ contact: shallow merge
-  ├─ experience: upsertExperience [profile.js:922]
+  ├─ experience: upsertExperience [profile.js:934]
   │    └─ fuzzyMatchExperience (normCompany) [profile.js:869]
-  ├─ education: upsertById with fuzzyMatchEducation [profile.js:1031]
+  ├─ education: upsertById with fuzzyMatchEducation [profile.js:1044]
   │    └─ fuzzyMatchEducation (normSchool + normDegree) [profile.js:881]
-  ├─ projects: upsertProjects [profile.js:995]
-  ├─ certifications: upsertById [profile.js:1031]
+  ├─ projects: upsertProjects [profile.js:1008]
+  ├─ certifications: upsertById [profile.js:1044]
   ├─ technical_skills: upsertTechnicalSkills [profile.js:831]
   ├─ skills/soft_skills: unionCI [profile.js:894]
   └─ cross-array skill dedup (tech > soft > flat)
@@ -647,15 +647,16 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1223] — 
 | fuzzyMatchEducation | 881 | no |
 | unionCI | 894 | no |
 | mergeBullets | 903 | no |
-| upsertExperience | 922 | no |
-| bulletDedupKey | 958 | no |
-| mergeBulletArrays | 963 | no |
-| mergeCustomSections | 977 | no |
-| upsertProjects | 995 | no |
-| upsertById | 1031 | no |
-| applyDeletions | 1061 | yes |
-| resolveConflicts | 1112 | yes |
-| backfillApprovedCategory | 1155 | yes |
+| resolveExperienceRef | 924 | no |
+| upsertExperience | 934 | no |
+| bulletDedupKey | 971 | no |
+| mergeBulletArrays | 976 | no |
+| mergeCustomSections | 990 | no |
+| upsertProjects | 1008 | no |
+| upsertById | 1044 | no |
+| applyDeletions | 1074 | yes |
+| resolveConflicts | 1125 | yes |
+| backfillApprovedCategory | 1168 | yes |
 
 ### renderCoverLetter.js
 

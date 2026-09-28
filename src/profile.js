@@ -919,10 +919,23 @@ function mergeBullets(existing, incoming) {
   return result;
 }
 
+// chat_enrich sometimes names an existing role only by a slug id ("senior-product-manager-
+// ledgerloop") with no company/title; without this, the bullet lands in a new nameless role.
+function resolveExperienceRef(item, existing) {
+  if (item.company || !item.id) return item;
+  const slug = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const id = slug(item.id);
+  const match = existing.find(e => e.id && slug(e.id) === id)
+    || existing.find(e => slug(`${e.title}-${e.company}`) === id || slug(`${e.company}-${e.title}`) === id)
+    || existing.find(e => e.company && id.includes(slug(e.company)));
+  return match ? { ...item, company: match.company, title: item.title || match.title } : item;
+}
+
 function upsertExperience(existing = [], incoming = [], conflicts = null) {
   const out = [...(existing || [])];
   const index = new Map(out.map((item, i) => [keyExp(item), i]));
-  for (const item of incoming || []) {
+  for (const raw of incoming || []) {
+    const item = resolveExperienceRef(raw, out);
     const k = keyExp(item);
     if (index.has(k)) {
       const prev = out[index.get(k)];
