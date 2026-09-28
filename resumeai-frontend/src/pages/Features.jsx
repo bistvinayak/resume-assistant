@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { auth } from '../firebase';
 import { FEATURE_GROUPS } from '../features';
+import Brand from '../components/Brand';
 
 // Public feature list. Content lives in ../features.js; add new features there.
 
@@ -24,7 +25,7 @@ export default function Features() {
     <div style={{ minHeight: '100vh', background: '#fafaf9', color: '#1c1917' }}>
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px', borderBottom: '1px solid #e7e5e4', position: 'sticky', top: 0, background: '#fafaf9', zIndex: 10, gap: '12px', flexWrap: 'wrap' }}>
         <Link to="/" style={{ fontFamily: serif, fontSize: '20px', color: '#1c1917', textDecoration: 'none' }}>
-          arjun<span style={{ color: '#f59e0b' }}>.</span>
+          <Brand size={20} />
         </Link>
         <Link to={signedIn ? '/dashboard' : '/'} style={{ fontSize: '13px', color: '#1c1917', border: '1px solid #d6d3d1', borderRadius: '6px', padding: '7px 16px', textDecoration: 'none' }}>
           {signedIn ? 'Back to dashboard' : 'Get started'}

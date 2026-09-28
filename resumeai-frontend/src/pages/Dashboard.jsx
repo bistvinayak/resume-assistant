@@ -1,3 +1,4 @@
+import Brand from '../components/Brand';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, signOutUser } from '../firebase';
@@ -1175,9 +1176,7 @@ export default function Dashboard() {
         padding: '18px 40px', borderBottom: '1px solid #e7e5e4',
         position: 'sticky', top: 0, background: '#fafaf9', zIndex: 10,
       }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: '18px' }}>
-          resumai<span style={{ color: '#f59e0b' }}>.</span>
-        </span>
+        <Brand size={18} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#ffffff', border: '1px solid #e7e5e4', borderRadius: '100px', padding: '5px 14px' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s infinite' }} />
@@ -1187,9 +1186,6 @@ export default function Dashboard() {
             {user?.photoURL && <img src={user.photoURL} style={{ width: 28, height: 28, borderRadius: '50%' }} />}
             <button onClick={async () => { await signOutUser(); navigate('/'); }} style={{ background: 'none', border: 'none', color: '#a8a29e', fontSize: '12px', fontFamily: "'DM Mono', monospace" }}>
               sign out
-            </button>
-            <button onClick={() => navigate('/features')} style={{ background: 'none', border: 'none', color: '#78716c', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
-              features
             </button>
             <button onClick={() => setShowDeleteAccount(true)} style={{ background: 'none', border: 'none', color: '#ef4444', fontSize: '12px', fontFamily: "'DM Mono', monospace", cursor: 'pointer' }}>
               delete account
@@ -1273,6 +1269,14 @@ export default function Dashboard() {
               )}
             </div>
           ))}
+
+          <button onClick={() => navigate('/features')} style={{
+            width: '100%', textAlign: 'left', background: 'transparent', border: '1px dashed #d6d3d1',
+            borderRadius: '6px', padding: '9px 12px', marginTop: '8px', color: '#57534e', fontSize: '13px', cursor: 'pointer',
+          }}>
+            All features ↗
+            <div style={{ fontSize: '10px', color: '#a8a29e', fontFamily: "'DM Mono', monospace", marginTop: '2px' }}>Everything Arjun can do</div>
+          </button>
 
           {/* Quick stats */}
           <div style={{ marginTop: '20px', borderTop: '1px solid #e7e5e4', paddingTop: '16px' }}>

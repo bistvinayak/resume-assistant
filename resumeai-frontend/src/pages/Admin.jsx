@@ -1,3 +1,4 @@
+import Brand from '../components/Brand';
 import { useState, useEffect } from 'react';
 import UnplacedFacts from '../components/UnplacedFacts';
 import { useNavigate } from 'react-router-dom';
@@ -222,7 +223,7 @@ export default function Admin() {
       {/* Nav */}
       <nav style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 40px', borderBottom: '1px solid #e7e5e4', position: 'sticky', top: 0, background: '#fafaf9', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: '18px' }}>arjun<span style={{ color: '#f59e0b' }}>.</span></span>
+          <Brand size={18} />
           <span style={{ fontSize: '11px', color: '#ef4444', fontFamily: "'DM Mono', monospace", background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px', padding: '2px 8px' }}>ADMIN</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

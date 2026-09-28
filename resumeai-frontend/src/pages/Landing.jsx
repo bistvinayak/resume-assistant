@@ -1,3 +1,4 @@
+import Brand from '../components/Brand';
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { signInWithGoogle } from '../firebase';
@@ -134,9 +135,7 @@ export default function Landing() {
         padding: '22px 48px', borderBottom: '1px solid #e7e5e4',
         position: 'sticky', top: 0, background: '#fafaf9', zIndex: 10,
       }}>
-        <span style={{ fontFamily: "'DM Serif Display', serif", fontSize: '20px' }}>
-          arjun<span style={{ color: '#f59e0b' }}>.</span>
-        </span>
+        <Brand size={20} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
         <a href="#chrome-extension" style={{ fontSize: '13px', color: '#57534e', textDecoration: 'none' }}>Chrome extension</a>
         <Link to="/features" style={{ fontSize: '13px', color: '#57534e', textDecoration: 'none' }}>Features</Link>

@@ -1,3 +1,4 @@
+import Brand from '../components/Brand';
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
@@ -57,8 +58,8 @@ export default function Onboarding() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
       {/* Logo */}
-      <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '20px', marginBottom: '40px' }}>
-        resumai<span style={{ color: '#f59e0b' }}>.</span>
+      <div style={{ marginBottom: '40px' }}>
+        <Brand size={20} />
       </div>
 
       {/* Progress */}
