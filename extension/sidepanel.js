@@ -163,19 +163,41 @@ function renderResume(v) {
   show('resumeSection');
 }
 
+// A resume asked for in the chat is answered in the chat: its own message shows progress,
+// then the resume preview and download buttons. The card above stays hidden meanwhile.
+let chatResumeMsg = null;
+function renderResumeInChat(v) {
+  const m = chatResumeMsg;
+  m.className = 'msg assistant resume-msg';
+  if (v.status === 'processing' || v.status === 'none') {
+    m.innerHTML = '<div class="r-status"><span class="spinner"></span>Making your resume from your profile… usually about a minute.</div>';
+    return;
+  }
+  awaitingResume = false;
+  chatResumeMsg = null;
+  if (v.status === 'failed') {
+    m.textContent = `I couldn’t make the resume this time${v.error ? ` (${v.error})` : ''}. Ask me again to retry.`;
+    chat.push({ role: 'assistant', content: 'The resume failed to generate.' });
+    return;
+  }
+  const p = v.preview || {};
+  m.innerHTML = `<div class="r-title">Your resume is ready</div>
+    ${v.atsScore != null ? `<div class="r-score">Keyword match with the posting: ${esc(v.atsScore)}%</div>` : ''}
+    ${p.role ? `<div class="r-role">${esc(p.role)}</div><ul class="r-bullets">${(p.bullets || []).map((b) => `<li>${esc(b)}</li>`).join('')}</ul>` : ''}
+    <div class="hint">Want changes? Just tell me, e.g. “make it one page” or “lead with my payments work”.</div>`;
+  if (v.jobId) m.appendChild(downloadButtons(v));
+  m.scrollIntoView({ block: 'nearest' });
+  chat.push({ role: 'assistant', content: 'Here is your tailored resume, ready to download.' });
+}
+
 async function pollResume(jobKey, startedAt = Date.now()) {
   clearTimeout(resumeTimer);
   if (!current || current.jobKey !== jobKey) return;
   try {
     const v = await send({ type: 'JOB_RESUME_GET', jobKey });
     if (!current || current.jobKey !== jobKey) return;
-    renderResume(v);
-    if (v.status === 'delivered' && v.jobId && awaitingResume) {
-      awaitingResume = false;
-      const m = addMsg('assistant', `Your resume is ready${v.atsScore != null ? ` (keyword match ${v.atsScore}%)` : ''}. Download it here:`);
-      m.appendChild(downloadButtons(v));
-      chat.push({ role: 'assistant', content: 'Your resume is ready to download.' });
-    }
+    if (awaitingResume && chatResumeMsg) renderResumeInChat(v);
+    else renderResume(v);
     if (v.status === 'processing' && Date.now() - startedAt < 300000) resumeTimer = setTimeout(() => pollResume(jobKey, startedAt), 4000);
   } catch { /* the card just stays as it was */ }
 }
@@ -204,6 +226,8 @@ async function poll(jobKey, startedAt) {
 
 async function load(job) {
   resetView();
+  awaitingResume = false;
+  chatResumeMsg = null;
   current = job;
   if (!job?.jobKey) { show('empty'); return; }
   show('empty', false);
@@ -274,7 +298,13 @@ $('chatForm').addEventListener('submit', async (ev) => {
     pending.textContent = r.reply;
     chat.push({ role: 'assistant', content: r.reply });
     if (r.traceId) addFeedback(pending, r.traceId, q, r.reply);
-    if (r.resume) { awaitingResume = true; renderResume({ status: 'processing', feedback: [] }); setTimeout(() => pollResume(current.jobKey), 1500); }
+    if (r.resume) {
+      awaitingResume = true;
+      show('resumeSection', false);
+      chatResumeMsg = addMsg('assistant', '');
+      renderResumeInChat({ status: 'processing' });
+      setTimeout(() => pollResume(current.jobKey), 1500);
+    }
   } catch (e) {
     pending.textContent = errorText(e.message);
     chat.pop(); // drop the unanswered question so it can be asked again
