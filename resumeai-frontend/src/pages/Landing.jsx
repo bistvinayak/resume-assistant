@@ -8,54 +8,84 @@ const ADMIN_EMAIL = 'arjun.resumeai@gmail.com';
 
 const FEATURES = [
   {
-    tag: 'INGEST',
-    title: 'Smart ingestion',
-    desc: 'Drop in a PDF, DOCX, or just paste plain text about your work. Arjun pulls out every role, skill, metric, and achievement — and builds your profile intelligently. Add the same info twice? It catches duplicates instead of blindly stacking them.',
+    tag: 'REMEMBER',
+    title: 'Your whole career, in one place',
+    desc: 'Every role, project, metric and skill you have ever worked on, kept in one profile that grows with you. When a job asks for something you did three years ago, Arjun still knows it, so relevant experience never gets left off the page.',
   },
   {
-    tag: 'PROFILE',
-    title: 'Your professional repository',
-    desc: 'Think of it as a single place that holds your entire professional journey — every company, every project, every skill you\'ve picked up. When it\'s time to apply, you don\'t have to remember what you did three years ago. It\'s already here.',
+    tag: 'INGEST',
+    title: 'Upload, or just talk',
+    desc: 'Drop in resumes, notes or project write-ups (PDF, DOCX, text), or tell Arjun about your work in plain words. It pulls out each role, bullet and number, merges new uploads without duplicates, and asks when it is unsure where something belongs. Nothing is saved until you confirm.',
   },
   {
     tag: 'TAILOR',
-    title: 'Right data for the right job',
-    desc: 'Every JD asks for different things. Arjun reads the full job description and picks the most relevant parts of your profile to build a resume that actually matches what they\'re looking for — so you never leave the right experience off the page.',
+    title: 'A resume for every job, from real facts',
+    desc: 'Paste a job link. Arjun reads what the role needs and picks your most relevant experience for it. Every bullet has to trace back to your profile, and code removes anything that doesn\'t, including stretched summaries like "5+ years" when you have four.',
+  },
+  {
+    tag: 'ATS',
+    title: 'Scored against the posting',
+    desc: 'Each resume is scored for keyword match. Where your real experience already covers a requirement in different words, Arjun rewords it in the posting\'s language. Tools and methods you never used are listed as gaps, never slipped in.',
+  },
+  {
+    tag: 'LAYOUT',
+    title: 'One clean page, or your own format',
+    desc: 'By default you get a one-page resume: Education, Experience, Projects, Skills, with bold bullet labels and dates aligned right. Upload your own resume to use its layout instead, or say "keep it to 2 pages" in the chat. PDF, Word and a matching cover letter.',
+  },
+  {
+    tag: 'SKILLS',
+    title: 'Writes like you',
+    desc: 'Arjun Skills turns your profile into playbooks: your strongest evidence, your cover-letter story, your writing voice and your resume format. Every resume and letter follows them. Correct them any time, or download them to use with Claude.',
   },
   {
     tag: 'AUTOMATE',
     title: 'Runs while you sleep',
-    desc: 'Connect your Gmail. Arjun reads your LinkedIn job alerts every 2 hours, scrapes each listing, builds a tailored resume, and delivers it to your inbox. You wake up with resumes ready to send.',
+    desc: 'Forward your LinkedIn job alerts to Arjun. Every 2 hours it reads each posting, tailors a resume and emails it to you. If the AI models are busy, it keeps retrying in the background instead of giving up.',
   },
   {
-    tag: 'CHAT',
-    title: 'Just talk to it',
-    desc: 'Tell Arjun about your work the way you\'d tell a friend. "I led a team of 5 at Acme and shipped a payment system." It extracts the structured data, confirms what it found, and adds it to your profile.',
+    tag: 'FREE',
+    title: 'Free by default, faster with your key',
+    desc: 'Everything runs on free AI models, so it costs nothing to use. Add your own OpenRouter key for a stronger writing model, or a Jev key for sharper job-fit scoring, billed to your own account. If your key fails, Arjun falls back to the free models.',
   },
   {
-    tag: 'ATS',
-    title: 'ATS-ready, automatically',
-    desc: 'Every tailored resume is scored against the job description for ATS compatibility. If the score is below the bar, Arjun rewrites the weak spots and rescores — until your resume is actually ready to get through.',
+    tag: 'PRIVACY',
+    title: 'Your data stays yours',
+    desc: 'API keys are encrypted, passwords you save in the extension never leave your browser, and Arjun never guesses gender, race or other self-identification. Delete your account and every trace of your data goes with it.',
   },
 ];
 
 const EXTENSION_FEATURES = [
   {
-    tag: 'AUTOFILL',
-    title: 'Fill applications in one click',
-    desc: 'Open any application on Greenhouse, Lever, Workday, Ashby, iCIMS or SmartRecruiters and Arjun fills it from your profile: contact details, work history, education, links. It matches fields by meaning, not by label, so odd wordings still land in the right place. Anything it isn\'t sure about is left for you to review.',
+    tag: 'JOB FIT',
+    title: 'How well do I fit this job?',
+    desc: 'On any job posting, one click gives a fit score against your real profile, your skills, domain and seniority match, and a visa verdict that flags a job only when the posting rules out sponsorship.',
   },
   {
-    tag: 'JOB FIT',
-    title: 'Know before you apply',
-    desc: 'On any job posting, click "How well do I fit this job?". In about a second you get a fit score against your real profile, your skills, domain and seniority match, and a visa verdict that flags the job only when the posting explicitly rules out sponsorship.',
+    tag: 'ANALYSIS',
+    title: 'Requirement by requirement',
+    desc: 'The side panel lists what the job asks for and where you stand on each: strong, only worded differently, partial, or a real gap. Then ask follow-up questions in the chat, grounded in your profile.',
+  },
+  {
+    tag: 'RESUME',
+    title: 'Make the resume right in the chat',
+    desc: 'Say "make my resume for this job" and it arrives as a chat reply with PDF, Word and cover-letter downloads. Want changes? "Make it one page" or "lead with my payments work". Rate replies and copy the conversation.',
+  },
+  {
+    tag: 'AUTOFILL',
+    title: 'Fill applications in one click',
+    desc: 'On Workday, Greenhouse, Lever, Ashby, iCIMS and more, Arjun fills contact details, work history, education and links, matching fields by meaning. Repeated job and school rows are filled in order, dates in the form\'s format. Anything uncertain is left for you.',
+  },
+  {
+    tag: 'FOCUSED',
+    title: 'Only where it helps',
+    desc: 'The popup checks the page first. Job-fit is offered on postings, autofill on application forms, and everywhere else it simply says Arjun isn\'t needed here.',
   },
 ];
 
 const HOW_IT_WORKS = [
-  { step: 'Add your work', detail: 'Upload a resume, paste some text, or just chat about your experience. Arjun pulls out everything — roles, skills, metrics, impact — and builds a structured profile that holds your full professional journey.' },
-  { step: 'Point it at jobs', detail: 'Paste a job URL or connect Gmail to your LinkedIn alerts. Arjun reads the full job description and understands what they\'re actually looking for.' },
-  { step: 'Get the right resume', detail: 'Arjun picks the most relevant parts of your profile, builds a resume tailored to that specific role, scores it for ATS, and rewrites until the score clears the bar.' },
+  { step: 'Build your profile once', detail: 'Upload a resume, paste notes, or chat about your work. Arjun turns it into a structured profile of every role, project, metric and skill, and keeps adding to it over time.' },
+  { step: 'Find a job', detail: 'Paste a job link, forward LinkedIn alerts, or open a posting with the Chrome extension to see how well you fit before you apply.' },
+  { step: 'Apply with the right resume', detail: 'Arjun picks your most relevant experience, writes a one-page resume and cover letter from real facts only, scores it against the posting, and fills the application form for you.' },
 ];
 
 export default function Landing() {
@@ -167,7 +197,7 @@ export default function Landing() {
         }}>
           <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', animation: 'pulse 2s infinite' }} />
           <span style={{ fontSize: '12px', color: '#78716c', fontFamily: "'DM Mono', monospace" }}>
-            powered by LLM — ingestion, tailoring, scoring
+            career memory · tailored resumes · job-site extension
           </span>
         </div>
 
@@ -184,10 +214,9 @@ export default function Landing() {
           fontSize: '17px', color: '#78716c', maxWidth: '520px',
           lineHeight: 1.7, marginBottom: '48px', fontWeight: 300,
         }}>
-          Arjun keeps your entire professional journey in one place — every role, project, and skill
-          you've ever worked on. When you apply for a job, it picks the right experience for that
-          specific role and builds an ATS-ready resume. You never have to worry about forgetting
-          what's relevant again.
+          Arjun keeps your whole career in one place, every role, project and number you have ever
+          worked on. For each job, it picks the experience that matters, writes a one-page resume and
+          cover letter from real facts only, and fills the application for you.
         </p>
 
         <button
@@ -218,9 +247,9 @@ export default function Landing() {
           borderTop: '1px solid #e7e5e4', paddingTop: '48px',
         }}>
           {[
-            { n: '2hr', label: 'auto-refresh' },
-            { n: '95+', label: 'target ATS score' },
-            { n: '<$0.01', label: 'per resume' },
+            { n: '0', label: 'invented claims' },
+            { n: '1 page', label: 'fitted by default' },
+            { n: 'Free', label: 'to use' },
           ].map(({ n, label }) => (
             <div key={label} style={{ textAlign: 'center' }}>
               <div style={{ fontFamily: "'DM Serif Display', serif", fontSize: '30px' }}>{n}</div>
@@ -252,10 +281,10 @@ export default function Landing() {
           fontSize: '15px', color: '#78716c', maxWidth: '520px',
           margin: '0 auto 64px', lineHeight: 1.7, fontWeight: 300,
         }}>
-          You've worked at multiple companies, shipped real projects, picked up skills along the way.
-          When it's time to apply, you sit down and forget half of it. Every JD wants different things,
-          and there's a good chance the right experience is sitting in your head — just not on the page.
-          Arjun holds all of it, so the right data shows up for the right job.
+          You have worked at several companies, shipped real projects and picked up skills along the way.
+          When it is time to apply, you forget half of it, and asking an AI to "improve" your resume only
+          rewords what is already there. Arjun holds everything you have done, so the right experience
+          shows up for the right job, and nothing on the page is made up.
         </p>
 
         {/* FEATURES GRID */}
@@ -364,7 +393,7 @@ export default function Landing() {
         </div>
 
         <div className="ext-grid" style={{
-          display: 'grid', gridTemplateColumns: '1fr 1fr 300px',
+          display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
           gap: '20px', maxWidth: '1040px', margin: '0 auto', alignItems: 'stretch',
         }}>
           {EXTENSION_FEATURES.map((f, i) => (
@@ -388,8 +417,8 @@ export default function Landing() {
               <span style={{ fontSize: '13px', fontWeight: 600 }}>Arjun</span>
               <span style={{ marginLeft: 'auto', fontSize: '9.5px', fontFamily: "'DM Mono', monospace", color: '#a8a29e' }}>EXAMPLE</span>
             </div>
-            <div style={{ background: '#f59e0b', color: '#fff', borderRadius: '7px', padding: '8px', fontSize: '12px', fontWeight: 600, textAlign: 'center', marginBottom: '14px' }}>Fill this page</div>
             <div style={{ fontSize: '9.5px', fontFamily: "'DM Mono', monospace", color: '#a8a29e', letterSpacing: '0.06em', marginBottom: '6px' }}>JOB FIT &amp; SPONSORSHIP</div>
+            <div style={{ background: '#1c1917', color: '#fff', borderRadius: '7px', padding: '8px', fontSize: '12px', fontWeight: 600, textAlign: 'center', marginBottom: '12px' }}>How well do I fit this job?</div>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: '6px' }}>
               <span style={{ fontSize: '26px', fontWeight: 700 }}>92%</span>
               <span style={{ fontSize: '11px', color: '#57534e' }}>Excellent fit</span>
@@ -405,6 +434,8 @@ export default function Landing() {
                 <span style={{ color: '#78716c' }}>{k}</span><span style={{ fontWeight: 600 }}>{v}</span>
               </div>
             ))}
+            <div style={{ fontSize: '9.5px', fontFamily: "'DM Mono', monospace", color: '#a8a29e', letterSpacing: '0.06em', margin: '12px 0 6px' }}>APPLICATION FORM</div>
+            <div style={{ background: '#f59e0b', color: '#fff', borderRadius: '7px', padding: '8px', fontSize: '12px', fontWeight: 600, textAlign: 'center' }}>Fill this page</div>
           </div>
         </div>
 
@@ -421,7 +452,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* THE PIPELINE — VISUAL */}
+      {/* THE PIPELINE (visual) */}
       <section className="section-pad" style={{ padding: '80px 48px', textAlign: 'center' }}>
         <span style={{
           fontSize: '11px', fontFamily: "'DM Mono', monospace",
@@ -442,14 +473,16 @@ export default function Landing() {
           fontFamily: "'DM Mono', monospace", fontSize: '12px',
         }}>
           {[
-            'Gmail alert',
-            'Scrape JD',
-            'Tailor resume',
+            'Alert forwarded',
+            'Read the job',
+            'Tailor from your profile',
+            'Fact check',
             'ATS score',
             'Score < 95?',
-            'Rewrite & rescore',
-            'Deliver',
-          ].map((label, i) => (
+            'Improve wording',
+            'One-page PDF + Word',
+            'Emailed to you',
+          ].map((label, i, all) => (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <span style={{
                 padding: '10px 18px', borderRadius: '8px',
@@ -458,7 +491,7 @@ export default function Landing() {
                 color: label === 'Score < 95?' ? '#92400e' : '#1c1917',
                 whiteSpace: 'nowrap',
               }}>{label}</span>
-              {i < 6 && <span style={{ color: '#d6d3d1', fontSize: '16px' }}>&rarr;</span>}
+              {i < all.length - 1 && <span style={{ color: '#d6d3d1', fontSize: '16px' }}>&rarr;</span>}
             </div>
           ))}
         </div>
@@ -466,7 +499,7 @@ export default function Landing() {
           fontSize: '13px', color: '#a8a29e', marginTop: '24px',
           fontFamily: "'DM Mono', monospace",
         }}>
-          Runs automatically every 2 hours. No manual work.
+          Runs every 2 hours on its own. If the AI models are busy, it retries in the background.
         </p>
       </section>
 
@@ -485,8 +518,8 @@ export default function Landing() {
           fontSize: '15px', color: '#78716c', maxWidth: '420px',
           margin: '0 auto 36px', lineHeight: 1.7, fontWeight: 300,
         }}>
-          Your professional journey deserves better than a static document you rewrite every time.
-          Let Arjun hold it all, and put the right story forward for every role.
+          Your career deserves better than a document you rewrite for every application.
+          Let Arjun hold it all, and put your true, strongest story forward for every role.
         </p>
         <button
           className="g-btn"
@@ -506,7 +539,7 @@ export default function Landing() {
             <path fill="#FBBC05" d="M4.51 10.52A4.8 4.8 0 0 1 4.26 9c0-.53.09-1.04.25-1.52V5.41H1.83A8 8 0 0 0 .98 9c0 1.29.31 2.51.85 3.59l2.68-2.07z"/>
             <path fill="#EA4335" d="M8.98 3.58c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 .98 9l2.85 2.07c.63-1.9 2.39-3.3 4.47-3.3-.02 0-.01.01-.32-.19z"/>
           </svg>
-          {loading ? 'Signing in...' : 'Get started — free'}
+          {loading ? 'Signing in...' : 'Get started, it’s free'}
         </button>
         {error && <p style={{ color: '#ef4444', fontSize: '13px', marginTop: '12px' }}>{error}</p>}
       </section>
