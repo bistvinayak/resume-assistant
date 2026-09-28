@@ -213,7 +213,8 @@ export default function Dashboard() {
     if (['start', 'profile', 'chat', 'submit', 'jobs', 'gaps', 'skills', 'extension'].includes(t)) return t;
     // New users land on Get started until they finish the core steps or dismiss it.
     let setupDone = false;
-    try { setupDone = localStorage.getItem('arjun_getting_started_done') === '1'; } catch { /* storage blocked */ }
+    // Keyed per account: a browser shared across accounts (or reused after deleting one) must not skip it.
+    try { setupDone = localStorage.getItem(`arjun_getting_started_done:${auth.currentUser?.uid}`) === '1'; } catch { /* storage blocked */ }
     return setupDone ? 'profile' : 'start';
   });
   const [profile, setProfile] = useState(null);

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
+import { auth } from '../firebase';
 import { pingExtension } from '../extensionBridge';
 
 // Dashboard "Get started" tab: setup steps that tick themselves off from real data, plus a short
@@ -72,9 +73,9 @@ export default function GettingStarted({ profile, jobs, gmailStatus, goTo }) {
   const doneCount = steps.filter(s => s.done).length;
   const coreDone = steps.filter(s => s.core).every(s => s.done);
 
-  useEffect(() => { if (coreDone) setFlag('arjun_getting_started_done'); }, [coreDone]);
+  useEffect(() => { if (coreDone) setFlag(`arjun_getting_started_done:${auth.currentUser?.uid}`); }, [coreDone]);
 
-  const finish = () => { setFlag('arjun_getting_started_done'); goTo('profile'); };
+  const finish = () => { setFlag(`arjun_getting_started_done:${auth.currentUser?.uid}`); goTo('profile'); };
 
   return (
     <div style={{ animation: 'fadeIn 0.3s ease', display: 'grid', gap: '18px', maxWidth: '780px' }}>
