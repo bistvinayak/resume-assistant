@@ -149,8 +149,15 @@ function cleanSummary(resume, profile, jdText) {
   const pm = yearsOf(profile, /product/i);
   const removed = [];
   const sentences = resume.summary.match(/[^.!?]+[.!?]*/g) || [resume.summary];
+  const ownSummary = String(profile.summary || '').toLowerCase();
   const kept = sentences.filter(sentence => {
+    // Writing-voice rule: no clichés, even in a summary the default layout doesn't print.
+    if (/proven track record|results-driven|detail-oriented|self-starter|team player|dynamic professional/i.test(sentence)) {
+      removed.push(`${sentence.trim()} [cliché]`); return false;
+    }
     const claim = sentence.match(/(\d+)\+?\s*(?:years?|yrs?)/i);
+    // The candidate's own summary states it ("6 years across fintech and B2B SaaS"): theirs to claim.
+    if (claim && ownSummary && new RegExp(`\\b${claim[1]}\\+?\\s*(?:years?|yrs?)`, 'i').test(ownSummary)) return true;
     if (claim) {
       const limit = /product manag|\bPM\b/i.test(sentence) ? pm : total;
       if (Number(claim[1]) > Math.floor(limit + 0.05)) { removed.push(sentence.trim()); return false; }
