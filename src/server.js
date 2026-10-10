@@ -16,6 +16,7 @@ const { authMiddleware } = require('./auth');
 const { connectGmail } = require('./gmail-connect');
 const { scrapeLinkedInJob } = require('./scraper');
 const { analyzeJob, chatAboutJob } = require('./insights');
+const { extractSalary } = require('./salary');
 const { friendlyAiError } = require('./aiErrors');
 const { resolveFitEngine, assessFit } = require('./fitEngine');
 const { encrypt, decrypt, canStoreKeys } = require('./secrets');
@@ -604,7 +605,7 @@ app.post('/api/extension/job-fit', async (req, res, next) => {
     const profile = await getProfile(req.userId);
     if (!profile._onboarded) return res.status(400).json({ error: 'no_profile' });
     const engine = await resolveFitEngine(req, userJevKey);
-    const result = { ...(await assessFit(profile, { url, title, company, text, jobId, source }, langfuseCtx(req), engine)), engine: engine.engine };
+    const result = { ...(await assessFit(profile, { url, title, company, text, jobId, source }, langfuseCtx(req), engine)), engine: engine.engine, salary: extractSalary(text) };
     // Saved so the side panel can build insights without the extension resending the posting.
     const jobKey = String(jobId || url || '').slice(0, 300);
     if (jobKey) {

@@ -178,6 +178,7 @@ function renderFit(r, job) {
     <div class="row"><span>Skills</span><span>${r.skills.percent}% <span class="conf">${esc(r.skills.label)}</span></span></div>
     <div class="row"><span>Domain</span><span>${r.domain.percent}% <span class="conf">${esc(r.domain.label)}</span></span></div>
     <div class="row"><span>Seniority</span><span>${seniority} <span class="conf">${pct(r.seniority.confidence)}</span></span></div>
+    ${r.salary ? `<div class="row"><span>Salary</span><span>${esc(r.salary.text)} <span class="conf">from the posting</span></span></div>` : ''}
     ${degree ? `<div class="row"><span>Degree</span><span>${degree} <span class="conf">${pct(r.education.confidence)}</span></span></div>` : ''}
     <div class="fit-note">Scored by ${esc(r.model)} in ${r.durationMs} ms. Visa is flagged only when the posting explicitly rules you out.${r.engine === 'openrouter' ? ' For sharper scoring, add your own Jev key in Arjun’s Chrome Extension tab.' : ''}</div>
     ${r.jobKey ? '<button id="insightsBtn" class="secondary">Open full analysis</button>' : ''}`;
@@ -192,7 +193,7 @@ chrome.windows.getCurrent().then((w) => { popupWindowId = w.id; });
 // Opens the side panel for this job. sidePanel.open must run inside the click, before any await.
 function openInsights(r, job) {
   chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
-    chrome.storage.session.set({ arjunPanelJob: { jobKey: r.jobKey, title: job?.title || '', company: job?.company || '', fit: { overall: r.overallFit, skills: r.skills, domain: r.domain, seniority: r.seniority, education: r.education, visa: r.visa }, at: Date.now() } });
+    chrome.storage.session.set({ arjunPanelJob: { jobKey: r.jobKey, title: job?.title || '', company: job?.company || '', fit: { overall: r.overallFit, skills: r.skills, domain: r.domain, seniority: r.seniority, education: r.education, salary: r.salary, visa: r.visa }, at: Date.now() } });
   });
   chrome.sidePanel.open({ windowId: popupWindowId })
     .then(() => window.close())
