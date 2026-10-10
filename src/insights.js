@@ -69,7 +69,7 @@ async function extractRequirements(check, trace) {
 async function explain(check, profile, rows, trace) {
   const fit = check.fit || {};
   const fitSummary = fit.overallFit
-    ? `overall ${fit.overallFit.percent}% (${fit.overallFit.label}, confidence ${Math.round(fit.overallFit.confidence * 100)}%); skills ${fit.skills?.percent}%; domain ${fit.domain?.percent}% (${fit.domain?.label}); seniority ${fit.seniority?.value}`
+    ? `overall ${fit.overallFit.percent}% (${fit.overallFit.label}, confidence ${Math.round(fit.overallFit.confidence * 100)}%); skills ${fit.skills?.percent}%; domain ${fit.domain?.percent}% (${fit.domain?.label}); seniority ${fit.seniority?.value}${fit.education ? `; degree ${fit.education.value}` : ''}`
     : 'not available';
   const { text: system, langfusePrompt } = await getPrompt('explain_job_fit', {
     job_title: check.title || '',
@@ -181,7 +181,7 @@ async function chatAboutJob(profile, check, analysis, messages, ctx = {}, resume
       job_title: check.title || '',
       company: check.company || '',
       analysis_json: JSON.stringify({
-        fit: check.fit ? { overall: check.fit.overallFit, skills: check.fit.skills, domain: check.fit.domain, seniority: check.fit.seniority } : null,
+        fit: check.fit ? { overall: check.fit.overallFit, skills: check.fit.skills, domain: check.fit.domain, seniority: check.fit.seniority, education: check.fit.education } : null,
         requirements: (analysis.requirements || []).map(r => ({ requirement: r.text, level: r.level, status: r.status, confidence: r.confidence })),
         summary: analysis.explanation?.summary, strengths: analysis.explanation?.strengths, watch_outs: analysis.explanation?.watchOuts,
       }),

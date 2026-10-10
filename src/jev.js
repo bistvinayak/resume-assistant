@@ -36,7 +36,7 @@ function compactProfile(p) {
 const QUESTIONS = {
   overall_fit: {
     type: 'score',
-    instructions: 'How well do `candidate`\'s qualifications fit the role described in `job_posting`, considering skills, experience level, domain and required qualifications? Ignore work authorization, visa sponsorship and citizenship entirely — those are assessed separately.',
+    instructions: 'How well do `candidate`\'s qualifications fit the role described in `job_posting`, considering skills, experience level, domain and required qualifications, including the degree the posting asks for? A degree `candidate` is still pursuing counts as held when its expected completion (from its dates, compared with `today`) fits the posting. Ignore work authorization, visa sponsorship and citizenship entirely — those are assessed separately.',
     criteria: [
       'Not a fit — misses most core requirements',
       'Weak fit — meets a few requirements, major gaps',
@@ -57,11 +57,24 @@ const QUESTIONS = {
   },
   seniority: {
     type: 'choice',
-    instructions: "Compare `candidate`'s years and level of experience to what `job_posting` asks for.",
+    instructions: "Compare `candidate`'s years and level of experience to what `job_posting` asks for. For a student, intern or new-graduate program (such as an MBA graduate hire), compare against the candidates that program targets, not a years-of-experience bar.",
     criteria: {
       under_qualified: 'Candidate has noticeably less experience or a lower level than required',
       good_match: 'Candidate experience level matches the requirement',
       over_qualified: 'Candidate is clearly more senior than the role',
+    },
+  },
+  // Degree fit, read from the candidate's own education entries (degree, major, dates).
+  // `today` lets a degree in progress (e.g. an MBA expected in 2027) count for a role
+  // aimed at that graduating class.
+  education: {
+    type: 'choice',
+    instructions: "Does `candidate`'s education meet the degree requirement in `job_posting`? Use only the degrees, majors and dates listed in `candidate`'s education. A degree whose end date is after `today` is in progress: count it as meeting the requirement when its expected completion fits the posting (for example, a role for 2027 MBA graduates and an MBA ending in 2027).",
+    criteria: {
+      meets: 'Candidate holds, or is pursuing with a fitting completion date, the degree level and field the posting requires or prefers',
+      partial: 'Candidate has a related degree, a lower level than required, or a fitting degree whose timing does not match the posting',
+      missing: 'Candidate lacks the degree the posting requires',
+      not_required: 'Posting states no degree requirement',
     },
   },
   sponsorship: {
@@ -138,6 +151,8 @@ function visaVerdict(a) {
 function buildJevRequest(profile, job) {
   return {
     state: {
+      // Lets the questions tell a degree in progress from a finished one.
+      today: new Date().toISOString().slice(0, 10),
       candidate: compactProfile(profile),
       job_posting: {
         title: job.title || '',
@@ -174,6 +189,7 @@ function fitResult(a, model, durationMs, usage) {
       confidence: a.domain_match.confidence,
     },
     seniority: { value: a.seniority.choice, confidence: a.seniority.confidence },
+    education: a.education ? { value: a.education.choice, confidence: a.education.confidence } : null,
     sponsorship: {
       value: a.sponsorship.choice,
       probabilities: a.sponsorship.probabilities,

@@ -40,7 +40,7 @@ function toJevAnswers(raw) {
     } else if (q.type === 'choice') {
       const keys = Object.keys(q.criteria);
       // Unknown answers fall back to the most conservative option with low confidence.
-      const safe = id === 'sponsorship' ? 'not_mentioned' : keys.includes('good_match') ? 'good_match' : keys[0];
+      const safe = id === 'sponsorship' ? 'not_mentioned' : id === 'education' ? 'not_required' : keys.includes('good_match') ? 'good_match' : keys[0];
       const choice = keys.includes(r.choice) ? r.choice : safe;
       out[id] = { type: 'choice', choice, confidence: keys.includes(r.choice) ? conf(r.confidence) : 0.3, probabilities: { [choice]: 1 } };
     } else {
@@ -61,7 +61,7 @@ async function assessJobFitFree(profile, job, ctx = {}) {
       job_json: JSON.stringify(state.job_posting),
     });
     const t0 = Date.now();
-    const raw = await askJson(system, 'Answer the questions.', 'fit_check_free', trace, langfusePrompt, [], undefined, null, 1500);
+    const raw = await askJson(system, `Answer the questions. Today is ${state.today}.`, 'fit_check_free', trace, langfusePrompt, [], undefined, null, 1500);
     return fitResult(toJevAnswers(raw), FREE_MODEL_LABEL, Date.now() - t0, null);
   } finally {
     await langfuse.flushAsync().catch(() => {});

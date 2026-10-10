@@ -541,14 +541,14 @@ All use `askJson(system, user, name, trace, prompt, history)` [llm.js:1247] — 
 | Function | Line | Exported |
 |----------|------|----------|
 | compactProfile | 11 | yes |
-| callJev | 87 | yes |
-| fetchJev | 97 | no |
-| handleJev | 109 | no |
-| visaVerdict | 123 | no |
-| buildJevRequest | 138 | yes |
-| fitResult | 156 | yes |
-| assessJobFit | 188 | yes |
-| assessRequirements | 226 | yes |
+| callJev | 100 | yes |
+| fetchJev | 110 | no |
+| handleJev | 122 | no |
+| visaVerdict | 136 | no |
+| buildJevRequest | 151 | yes |
+| fitResult | 171 | yes |
+| assessJobFit | 204 | yes |
+| assessRequirements | 242 | yes |
 
 ### llm.js
 

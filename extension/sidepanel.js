@@ -59,6 +59,7 @@ function renderFit(job) {
     f.skills && `Skills ${f.skills.percent}%`,
     f.domain && `Domain ${f.domain.percent}%`,
     f.seniority && `Seniority: ${String(f.seniority.value).replace('_', ' ')}`,
+    f.education && `Degree: ${String(f.education.value).replace('_', ' ')}`,
     f.visa && (f.visa.status === 'blocked' ? 'Visa: not eligible' : 'Visa: OK to apply'),
   ].filter(Boolean);
   $('fitChips').innerHTML = chips.map((c) => `<span class="chip">${esc(c)}</span>`).join('');
